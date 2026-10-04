@@ -13,7 +13,6 @@
 .story-topline, .story-bottom { position: absolute; z-index: 6; left: 3.2%; right: 3.2%; display: flex; justify-content: space-between; align-items: center; color: var(--scene-ink-2); font: 500 .62rem var(--mono); letter-spacing: .18em; }
 .story-topline { top: calc(var(--header-h) + 22px); }
 .story-bottom { bottom: 32px; }
-.story-bottom b { font-size: 1rem; font-weight: 400; margin-left: 12px; }
 .replay-control { border: 1px solid color-mix(in srgb, var(--scene-ink) 30%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--scene-bg) 70%, transparent); color: var(--scene-ink); padding: 9px 13px; font: 500 .62rem var(--mono); letter-spacing: .12em; transition: background .2s, color .2s; }
 .replay-control:hover { background: var(--scene-ink); color: var(--scene-bg); }
 
@@ -137,7 +136,7 @@
   .story-scene.scene-0 p, .story-scene.scene-1 p, .story-scene.scene-2 p { margin: auto; }
 }
 @media (max-width: 700px) {
-  .story-topline span:last-child, .story-bottom span:last-child { display: none; }
+  .story-topline span:last-child { display: none; }
   .story-bottom { left: 5%; right: 5%; gap: 10px; }
   .story-chapters { right: 5px; gap: 10px; }
   .story-chapters button { font-size: 0; gap: 5px; }

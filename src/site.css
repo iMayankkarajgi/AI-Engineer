@@ -167,7 +167,7 @@
 .site-footer { border-top: 1px solid var(--line); background: var(--surface); }
 .footer-inner { max-width: var(--max); margin: 0 auto; padding: 36px var(--gutter); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; }
 .footer-inner p { color: var(--ink-3); font-size: .9rem; margin-top: 6px; }
-.footer-links { display: flex; gap: 24px; color: var(--ink-2); font-size: .9rem; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 10px 24px; color: var(--ink-2); font-size: .9rem; }
 .footer-links a:hover { color: var(--ink); }
 .footer-inner small { color: var(--ink-3); }
 

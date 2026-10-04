@@ -206,7 +206,7 @@ export default function Practice() {
     </div>
     <div className="ide container">
       <aside className="ide-files" aria-label="Files">
-        <button className="button primary small" onClick={() => open(blank())}>+ New file</button>
+        <button className="button primary small" onClick={() => open(blank())}>New file</button>
         <h2>Your files</h2>
         {snippets.error && <p className="ide-hint bad">{snippets.error}</p>}
         {snippets.loading ? <p className="ide-hint">Loading…</p> : snippets.list.length === 0 ? <p className="ide-hint">Nothing saved yet. Press Save to keep a file.</p>

@@ -79,7 +79,7 @@ export default function ExplodedCore({frame=0}){
     try{renderer=new THREE.WebGLRenderer({alpha:true,antialias:false,powerPreference:'high-performance'})}catch{host.classList.add('universe-fallback');return}
     renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setClearColor(0x000000,0);host.appendChild(renderer.domElement);
     const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(47,1,.1,100);camera.position.set(0,0,mobile?10.5:8.8);
-    const root=new THREE.Group();scene.add(root);if(mobile){root.scale.setScalar(.59);root.position.y=-2.65}
+    const root=new THREE.Group();scene.add(root);if(mobile){root.scale.setScalar(.59);root.position.y=-2.25}
     // Wide screens: keep the closed core to the right of the headline, shrinking it if the window is narrow.
     let wideX=1.8,wideScale=1;
     const geometry=geometryFor(mobile?6500:18000,mobile);

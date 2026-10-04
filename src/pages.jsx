@@ -39,12 +39,13 @@ export function Header() {
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
       <NavLink onClick={close} to="/resources">Useful links</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
+      {ACCOUNTS && <NavLink className="nav-account" onClick={close} to={user ? '/profile' : '/account'}>{user ? 'Your profile' : 'Sign in'}</NavLink>}
     </nav>
     <div className="header-actions">
       <ThemeToggle/>
       {user && <Link className="avatar-link" to="/profile" aria-label="Your profile" title={user.name}><Avatar user={user} size={34}/></Link>}
       {!ACCOUNTS || user
-        ? <Link className="button primary small" to={`/lesson/${nextLesson}`}>Continue</Link>
+        ? <Link className="button primary small continue" to={`/lesson/${nextLesson}`}>Continue</Link>
         : <Link className="button primary small" to="/account">Sign In</Link>}
       <button className="menu-toggle" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button>
     </div>

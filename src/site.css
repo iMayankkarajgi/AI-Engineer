@@ -9,6 +9,7 @@
 .logo { display: inline-flex; align-items: center; gap: 9px; font-weight: 680; font-size: 1rem; letter-spacing: -.01em; white-space: nowrap; }
 .logo-symbol { color: var(--accent); font-size: 1.3rem; line-height: 1; }
 .site-header nav { display: flex; gap: 4px; }
+.site-header nav .nav-account { display: none; }
 .site-header nav a { white-space: nowrap; color: var(--ink-2); font-size: .9rem; font-weight: 520; padding: 7px 11px; border-radius: var(--r-sm); transition: color .15s, background .15s; }
 .site-header nav a:hover { color: var(--ink); background: var(--surface-2); }
 .site-header nav a.active { color: var(--ink); background: var(--surface-2); }
@@ -184,9 +185,10 @@
   .menu-toggle { display: inline-grid; }
   .site-header nav { display: none; position: absolute; top: var(--header-h); left: 0; right: 0; flex-direction: column; padding: 10px var(--gutter) 16px; background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); }
   .site-header nav.menu-open { display: flex; }
+  .site-header nav .nav-account { display: block; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); border-radius: 0; color: var(--accent); font-weight: 600; }
 }
 @media (max-width: 720px) {
-  .header-actions .button { display: none; }
+  .header-actions .button.continue { display: none; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 4px; }
   .dashboard-tracks a { grid-template-columns: 36px minmax(0, 1fr) 56px; }
   .dashboard-tracks .meter { display: none; }

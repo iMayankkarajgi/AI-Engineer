@@ -31,9 +31,9 @@
 
 /* Pricing */
 .pricing-page { display: grid; gap: 8px; align-content: start; }
-.pricing-intro { text-align: center; border-bottom: 0; margin-bottom: 0; padding-bottom: 20px; }
-.pricing-intro h1, .pricing-intro .dek { margin-inline: auto; }
-.pricing-intro h1 { max-width: none; text-wrap: balance; }
+.page-intro.pricing-intro { text-align: center; border-bottom: 0; margin-bottom: 0; padding-bottom: 20px; }
+.page-intro.pricing-intro h1, .page-intro.pricing-intro .dek { margin-inline: auto; }
+.page-intro.pricing-intro h1 { max-width: none; text-wrap: balance; }
 .pricing-intro .dek { max-width: 58ch; }
 .period-toggle { justify-self: center; display: inline-flex; padding: 4px; gap: 2px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); }
 .period-toggle button { border: 0; background: none; color: var(--ink-2); font-size: .9rem; font-weight: 600; padding: 9px 18px; border-radius: 999px; white-space: nowrap; }

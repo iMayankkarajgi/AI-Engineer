@@ -124,6 +124,7 @@
 
 @media (max-width: 900px) {
   .cinematic-intro, .cinematic-path, .cinematic-spotlight { padding: 110px 6vw; }
+  .cinematic-intro { padding-top: 48px; }
   .cinematic-track { grid-template-columns: 50px 150px 1fr; gap: 16px; }
   .track-constellation { width: 140px; height: 140px; }
   .track-open { display: none; }

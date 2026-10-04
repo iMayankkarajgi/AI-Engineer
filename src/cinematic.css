@@ -1,12 +1,12 @@
 /* Home page: a 400vh scroll story over a sticky WebGL core, then editorial
    sections. Every color comes from tokens so both themes get their own look:
-   luminous points on near-black in dark mode, ink-blue points on paper in light. */
+   luminous points on near-black in dark mode, violet points on paper in light. */
 .cinematic-home { background: var(--scene-bg); color: var(--scene-ink); overflow: clip; }
 .story-scroll { position: relative; height: 400vh; }
 .story-sticky { position: sticky; top: 0; height: 100vh; min-height: 600px; overflow: hidden; background: var(--scene-bg); transition: background-color .4s ease; }
 .universe-fallback { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 22%, var(--scene-bg)) 0, var(--scene-bg) 65%); }
 .exploded-core { inset: 0; z-index: 1; filter: drop-shadow(0 0 30px var(--glow)); }
-[data-theme='light'] .exploded-core { filter: drop-shadow(0 6px 22px #3352d61f); }
+[data-theme='light'] .exploded-core { filter: drop-shadow(0 6px 22px #6b3fd41f); }
 .story-vignette { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(ellipse at center, transparent 12%, color-mix(in srgb, var(--scene-bg) 15%, transparent) 44%, color-mix(in srgb, var(--scene-bg) 82%, transparent) 92%), linear-gradient(0deg, color-mix(in srgb, var(--scene-bg) 62%, transparent), transparent 28%, transparent 70%, color-mix(in srgb, var(--scene-bg) 52%, transparent)); }
 .story-noise { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: .05; background-image: radial-gradient(var(--scene-ink-2) .45px, transparent .45px); background-size: 8px 8px; mask-image: radial-gradient(circle, transparent 15%, #000 75%); }
 
@@ -54,8 +54,6 @@
 .story-chapters button i { display: block; width: 13px; height: 1px; background: currentColor; transition: width .3s; }
 .story-chapters button.active { color: var(--scene-ink); opacity: 1; }
 .story-chapters button.active i { width: 28px; background: var(--accent); box-shadow: 0 0 12px var(--glow); }
-.story-progress { position: absolute; z-index: 9; left: 0; right: 0; bottom: 0; height: 2px; background: color-mix(in srgb, var(--scene-ink) 10%, transparent); }
-.story-progress span { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 18px var(--glow); }
 
 /* Editorial sections below the story */
 .cinematic-home h2 { margin: 24px 0; color: var(--scene-ink); font-size: clamp(42px, 5.4vw, 80px); font-weight: 520; line-height: 1.04; letter-spacing: -.045em; }
@@ -171,7 +169,7 @@
   .story-scene { display: none; transition: none; }
   .story-scene.scene-0 { display: block; opacity: 1; filter: none; transform: translate(0, -50%); }
   .story-scene .title-character { opacity: 1 !important; filter: none !important; transform: none !important; transition: none; }
-  .story-chapters, .story-progress { display: none; }
+  .story-chapters { display: none; }
   .cinematic-reveal { opacity: 1; transform: none; filter: none; }
   .spotlight-visual path, .ending-halo { animation: none; }
 }

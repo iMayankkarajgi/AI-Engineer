@@ -27,6 +27,7 @@ export function Header() {
       <NavLink onClick={close} to="/curriculum">Curriculum</NavLink>
       <NavLink onClick={close} to="/guide">Course guide</NavLink>
       <NavLink onClick={close} to="/lab">Lab</NavLink>
+      <NavLink onClick={close} to="/practice">Practice</NavLink>
       <NavLink onClick={close} to="/glossary">Glossary</NavLink>
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
@@ -45,7 +46,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>Understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/dashboard">Your progress</Link></div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/dashboard">Your progress</Link></div>
     <small>Lessons and interactives © {new Date().getFullYear()} AI Atlas. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }

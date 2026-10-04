@@ -16,9 +16,9 @@ const users = new Map();      // id -> { user, password }
 const tokens = new Map();     // access token -> user id
 const refresh = new Map();    // refresh token -> user id
 const codes = new Map();      // oauth code -> user id
-const tables = { profiles: [], lesson_progress: [] };
-const OWNER = { profiles: 'id', lesson_progress: 'user_id' };
-const KEYS = { profiles: ['id'], lesson_progress: ['user_id', 'lesson_id'] };
+const tables = { profiles: [], lesson_progress: [], code_snippets: [] };
+const OWNER = { profiles: 'id', lesson_progress: 'user_id', code_snippets: 'user_id' };
+const KEYS = { profiles: ['id'], lesson_progress: ['user_id', 'lesson_id'], code_snippets: ['id'] };
 
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 function createUser({ email, password, meta, provider }) {
@@ -87,7 +87,8 @@ async function rest(req, res, url) {
   if (req.method === 'POST') {
     const out = [];
     for (const input of [].concat(body)) {
-      const row = { ...input }; if (name === 'lesson_progress' && !row.user_id) row.user_id = uid;
+      const row = { ...input }; if (owner === 'user_id' && !row.user_id) row.user_id = uid;
+      if (name === 'code_snippets' && !row.id) row.id = randomUUID();
       if (row[owner] !== uid) return send(res, 403, { code: '42501', message: `new row violates row-level security policy for table "${name}"` });
       if (name === 'lesson_progress' && (!/^[a-z0-9-]{1,80}$/.test(row.lesson_id || '') || !(row.best_score >= 0 && row.best_score <= 5))) return send(res, 400, { code: '23514', message: 'new row violates check constraint' });
       if (name === 'profiles' && ((row.full_name || '').length > 80 || (row.bio || '').length > 280)) return send(res, 400, { code: '23514', message: 'new row violates check constraint' });
@@ -98,7 +99,7 @@ async function rest(req, res, url) {
     return wants ? reply(201, out) : send(res, 201);
   }
   if (req.method === 'PATCH') { const out = visible(); out.forEach(r => Object.assign(r, body)); return wants ? reply(200, out) : send(res, 204); }
-  if (req.method === 'DELETE') { const gone = visible(); tables[name] = rows.filter(r => !gone.includes(r)); return wants ? reply(200, gone) : send(res, 204); }
+  if (req.method === 'DELETE') { const gone = visible(); gone.forEach(r => rows.splice(rows.indexOf(r), 1)); return wants ? reply(200, gone) : send(res, 204); }
   send(res, 405, { message: 'Method not allowed' });
 }
 

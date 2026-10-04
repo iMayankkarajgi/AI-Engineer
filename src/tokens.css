@@ -13,59 +13,59 @@
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #f6f7f9;
+  --bg: #f7f6fb;
   --surface: #ffffff;
-  --surface-2: #eff1f5;
-  --surface-3: #e3e7ee;
-  --ink: #111827;
-  --ink-2: #3b4456;
-  --ink-3: #5f6b80;
-  --line: #e2e6ec;
-  --line-2: #cfd5df;
-  --accent: #3352d6;
+  --surface-2: #f1eff7;
+  --surface-3: #e6e2f0;
+  --ink: #17122a;
+  --ink-2: #423b58;
+  --ink-3: #665f80;
+  --line: #e5e2ee;
+  --line-2: #d3cfe0;
+  --accent: #6b3fd4;
   --accent-ink: #ffffff;
   --ok: #13804f;
   --warn: #9a5b00;
   --bad: #c0392b;
-  --code-bg: #0f1623;
+  --code-bg: #130f23;
   --code-ink: #e6eaf2;
   --code-muted: #8d99ad;
   --shadow: 0 1px 2px #1118270d, 0 10px 30px -14px #11182730;
-  --header-bg: #f6f7f9d9;
+  --header-bg: #f7f6fbd9;
   /* Home scene */
-  --scene-bg: #f3f5f9;
-  --scene-ink: #0f1830;
-  --scene-ink-2: #46516a;
-  --scene-scrim: #f3f5f9d9;
-  --glow: #3352d633;
+  --scene-bg: #f5f3fa;
+  --scene-ink: #170f30;
+  --scene-ink-2: #4f466a;
+  --scene-scrim: #f5f3fad9;
+  --glow: #6b3fd433;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0a0e17;
-  --surface: #101624;
-  --surface-2: #161d2c;
-  --surface-3: #212a3b;
-  --ink: #ecf0f7;
-  --ink-2: #b4bdcc;
-  --ink-3: #8f9ab0;
-  --line: #1d2433;
-  --line-2: #2b3446;
-  --accent: #8da6ff;
-  --accent-ink: #0a0e17;
+  --bg: #0c0a17;
+  --surface: #141124;
+  --surface-2: #1b172e;
+  --surface-3: #272140;
+  --ink: #efecf8;
+  --ink-2: #bbb5cf;
+  --ink-3: #968fb2;
+  --line: #221d35;
+  --line-2: #322b4a;
+  --accent: #b79cff;
+  --accent-ink: #0c0a17;
   --ok: #52c98a;
   --warn: #f0ae4c;
   --bad: #f27d7d;
-  --code-bg: #070b13;
+  --code-bg: #090713;
   --code-ink: #e6eaf2;
   --code-muted: #8d99ad;
   --shadow: 0 1px 2px #0006, 0 16px 40px -18px #000c;
-  --header-bg: #0a0e17d9;
-  --scene-bg: #05070c;
-  --scene-ink: #eef3fb;
-  --scene-ink-2: #b8c4d6;
-  --scene-scrim: #05070cc9;
-  --glow: #a8dfff40;
+  --header-bg: #0c0a17d9;
+  --scene-bg: #07050d;
+  --scene-ink: #f1eefb;
+  --scene-ink-2: #c0b8d8;
+  --scene-scrim: #07050dc9;
+  --glow: #c9b0ff40;
 }
 
 :root {
@@ -75,7 +75,7 @@
 
 /* Per-course accent: pastels read well on dark; darken them on light paper. */
 [style*='--track'] { --t: var(--track); }
-[data-theme='light'] [style*='--track'] { --t: color-mix(in srgb, var(--track) 42%, #141a29); }
+[data-theme='light'] [style*='--track'] { --t: color-mix(in srgb, var(--track) 42%, #1a1429); }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 24px); }

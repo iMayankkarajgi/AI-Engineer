@@ -65,10 +65,10 @@
 .b-code pre { margin: 0; padding: 14px 0; overflow-x: auto; color: var(--code-ink); font: .85rem/1.65 var(--mono); tab-size: 4; }
 .b-code .ln { display: block; padding: 0 18px 0 0; transition: opacity .25s, background .25s; }
 .b-code .ln-n { display: inline-block; width: 3.2em; padding-right: 1em; text-align: right; color: #ffffff38; user-select: none; }
-.b-code .ln.on { background: #8da6ff22; box-shadow: inset 3px 0 0 #8da6ff; }
+.b-code .ln.on { background: #b79cff22; box-shadow: inset 3px 0 0 #b79cff; }
 .b-code .ln.dim { opacity: .38; }
 .tk-k { color: #c792ea; } .tk-s { color: #c3e88d; } .tk-n { color: #f78c6c; } .tk-c { color: #7f8ba3; font-style: italic; } .tk-f { color: #82aaff; }
-.b-code-note { margin: 0 14px 14px; padding: 12px 14px; border-radius: 10px; background: #8da6ff1c; border: 1px solid #8da6ff44; animation: b-rise .3s ease both; }
+.b-code-note { margin: 0 14px 14px; padding: 12px 14px; border-radius: 10px; background: #b79cff1c; border: 1px solid #b79cff44; animation: b-rise .3s ease both; }
 .b-code-note span { font: 600 .7rem var(--mono); color: #a9bcff; text-transform: uppercase; letter-spacing: .06em; }
 .lesson-section .b-code-note p { color: var(--code-ink); font: .95rem/1.55 var(--sans); margin-top: 4px; }
 .b-code-note code { background: #ffffff14 !important; border-color: #ffffff22 !important; color: var(--code-ink); }

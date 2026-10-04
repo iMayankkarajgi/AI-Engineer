@@ -81,12 +81,12 @@ export default function ExplodedCore({frame=0}){
     const material=new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{uFrame:{value:0},uPixelRatio:{value:renderer.getPixelRatio()},uColorA:{value:new THREE.Color()},uColorB:{value:new THREE.Color()},uAlpha:{value:1}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
     root.add(new THREE.Points(geometry,material));
     const shells=[
-      new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(.83,1)),new THREE.LineBasicMaterial({color:0xc9eaff,transparent:true,opacity:.18,depthWrite:false})),
-      new THREE.Mesh(new THREE.TorusGeometry(.95,.006,6,140),new THREE.MeshBasicMaterial({color:0xa8d8f6,transparent:true,opacity:.32,depthWrite:false})),
-      new THREE.Mesh(new THREE.TorusGeometry(1.08,.007,6,140),new THREE.MeshBasicMaterial({color:0xd3f3ff,transparent:true,opacity:.4,depthWrite:false})),
-      new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1.05,0)),new THREE.LineBasicMaterial({color:0xa8d8f6,transparent:true,opacity:.16,depthWrite:false}))
+      new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(.83,1)),new THREE.LineBasicMaterial({color:0xdccdff,transparent:true,opacity:.18,depthWrite:false})),
+      new THREE.Mesh(new THREE.TorusGeometry(.95,.006,6,140),new THREE.MeshBasicMaterial({color:0xc3adf6,transparent:true,opacity:.32,depthWrite:false})),
+      new THREE.Mesh(new THREE.TorusGeometry(1.08,.007,6,140),new THREE.MeshBasicMaterial({color:0xe6dcff,transparent:true,opacity:.4,depthWrite:false})),
+      new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1.05,0)),new THREE.LineBasicMaterial({color:0xc3adf6,transparent:true,opacity:.16,depthWrite:false}))
     ];shells.forEach((s,i)=>{s.userData.index=i;s.userData.opacity=s.material.opacity;root.add(s)});
-    const ambient=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({color:0x90b7c9,size:.01}));
+    const ambient=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({color:0xa594c9,size:.01}));
     let raf=0,lastFrame=-1;
     const ro=new ResizeObserver(()=>{renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/Math.max(1,host.clientHeight);camera.updateProjectionMatrix();lastFrame=-1});ro.observe(host);
     function draw(){const f=reduce?0:Math.max(0,Math.min(120,Math.round(frameRef.current)));if(f!==lastFrame){lastFrame=f;material.uniforms.uFrame.value=f;const p=f/120;root.position.x=mobile?0:1.35*(1-smooth(0,.36,p));root.position.y=mobile?0:-1.25*smooth(.12,.36,p)-.15*smooth(.72,1,p);root.rotation.y=p*.22;root.rotation.x=.13+p*.1;shells.forEach((shell,i)=>{const shift=smooth(i*.2,Math.min(1,i*.2+.39),p),positions=mobile?[[0,-2.12],[0,-.72],[0,.72],[0,2.12]]:[[-3.35,0],[-1.12,0],[1.12,0],[3.35,0]];shell.position.set(positions[i][0]*shift,positions[i][1]*shift,0);shell.rotation.x=.3+p*(i+1)*.35;shell.rotation.y=p*(i%2?-1:1)*.7;shell.scale.setScalar(1-.12*p)});renderer.render(scene,camera)}raf=requestAnimationFrame(draw)}

@@ -63,3 +63,24 @@ $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Practice page: Python files a learner saves from the in-browser editor.
+create table if not exists public.code_snippets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  title text not null default 'untitled.py' check (char_length(title) between 1 and 80),
+  code text not null default '' check (char_length(code) <= 100000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists code_snippets_user_recent on public.code_snippets (user_id, updated_at desc);
+
+alter table public.code_snippets enable row level security;
+drop policy if exists "snippets: read own" on public.code_snippets;
+create policy "snippets: read own" on public.code_snippets for select using (auth.uid() = user_id);
+drop policy if exists "snippets: insert own" on public.code_snippets;
+create policy "snippets: insert own" on public.code_snippets for insert with check (auth.uid() = user_id);
+drop policy if exists "snippets: update own" on public.code_snippets;
+create policy "snippets: update own" on public.code_snippets for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "snippets: delete own" on public.code_snippets;
+create policy "snippets: delete own" on public.code_snippets for delete using (auth.uid() = user_id);

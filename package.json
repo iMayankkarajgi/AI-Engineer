@@ -12,7 +12,14 @@
     "dev:mock": "concurrently \"node scripts/mock-supabase.mjs\" \"vite --host 127.0.0.1 --port 5174 --strictPort --mode mock\""
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.5",
     "@supabase/supabase-js": "^2.117.2",
+    "codemirror": "^6.0.2",
     "concurrently": "^9.2.1",
     "express": "^5.1.0",
     "react": "^19.1.1",

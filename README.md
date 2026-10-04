@@ -33,7 +33,7 @@ With Supabase configured, learners sign in with Google (or email), get a profile
 3. In Google Cloud Console create an OAuth client (type: Web application) with the authorised redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`. Paste its client ID and secret into Supabase under **Authentication → Providers → Google**.
 4. In Supabase under **Authentication → URL Configuration**, add every address the site is served from to **Redirect URLs**, for example `http://127.0.0.1:5173/**` and your production URL.
 
-Tables: `profiles` (one row per account) and `lesson_progress` (one row per learner per lesson). Row-level security limits every learner to their own rows.
+Tables: `profiles` (one row per account), `lesson_progress` (one row per learner per lesson) and `code_snippets` (Python files saved from the Practice page). Row-level security limits every learner to their own rows.
 
 To exercise the whole flow offline, `npm run dev:mock` starts the site on http://127.0.0.1:5174 against `scripts/mock-supabase.mjs`, a small in-memory stand-in for Supabase Auth and the two tables (with a simulated Google account). `npm run build:static` leaves Supabase out unless you pass `--with-supabase`.
 
@@ -43,6 +43,7 @@ To exercise the whole flow offline, `npm run dev:mock` starts the site on http:/
 - **Course guide** (`/guide`): about the course, what AI engineering is, who it is for, what we learn, prerequisites, how to use it.
 - **Lessons** (`/lesson/:id`): intuition, step-by-step mechanism, math with small numbers, runnable code with a line-by-line walkthrough and real output, side-by-side comparisons, animated charts and flows, interactive widgets, inline "pause and think" checks, key terms, takeaways.
 - **Quiz gating**: every lesson ends with 5 multiple-choice questions. Scoring 4/5 or better marks the lesson as passed and unlocks the next one. Wrong answers show explanations; retries shuffle the options.
+- **Practice** (`/practice`): a Python editor that runs code in the browser with Pyodide (output, `input()` text, Stop for runaway programs) and saves files to the learner's account, or to the browser for guests.
 - **Glossary** and **FAQ** pages.
 - Guest progress and best quiz scores are stored in `localStorage`; signed-in progress is stored in SQLite.
 

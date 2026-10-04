@@ -13,7 +13,7 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || storedTheme() || systemTheme());
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', theme === 'light' ? '#f6f7f9' : '#0a0e17'));
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', theme === 'light' ? '#f7f6fb' : '#0c0a17'));
   }, [theme]);
   // Follow the operating system until the user picks a theme explicitly.
   useEffect(() => {
@@ -37,7 +37,7 @@ export function ThemeToggle() {
 }
 
 // Shader-friendly palettes for the WebGL scenes. Light mode swaps additive
-// glow (invisible on white) for normal blending with deep ink-blue points.
+// glow (invisible on white) for normal blending with deep violet points.
 export const scenePalette = theme => theme === 'light'
-  ? { light: true, a: [0.11, 0.2, 0.62], b: [0.24, 0.36, 0.86], line: 0x3150c8, lineOpacity: 1.6, alpha: 0.95 }
-  : { light: false, a: [0.89, 0.97, 1.0], b: [0.72, 0.89, 1.0], line: 0xc9eaff, lineOpacity: 1, alpha: 1 };
+  ? { light: true, a: [0.3, 0.14, 0.66], b: [0.46, 0.28, 0.88], line: 0x6b3fd4, lineOpacity: 1.6, alpha: 0.95 }
+  : { light: false, a: [0.95, 0.91, 1.0], b: [0.8, 0.7, 1.0], line: 0xdccdff, lineOpacity: 1, alpha: 1 };

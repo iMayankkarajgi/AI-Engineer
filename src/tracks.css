@@ -38,10 +38,16 @@
 .period-toggle { justify-self: center; display: inline-flex; padding: 4px; gap: 2px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); }
 .period-toggle button { border: 0; background: none; color: var(--ink-2); font-size: .9rem; font-weight: 600; padding: 9px 18px; border-radius: 999px; white-space: nowrap; }
 .period-toggle button.active { background: var(--accent); color: var(--accent-ink); }
+.best-pill { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 16%, var(--surface)); color: var(--ok); font-size: .68rem; font-weight: 700; letter-spacing: .03em; white-space: nowrap; vertical-align: middle; }
+.period-toggle button.active .best-pill { background: var(--accent-ink); color: var(--accent); }
+.plan.best .plan-price strong { color: var(--accent); }
+.lifetime-nudge { text-align: left; border: 1px dashed color-mix(in srgb, var(--ok) 45%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--ok) 7%, var(--surface)); color: var(--ink-2); font-size: .84rem; font-weight: 550; padding: 9px 11px; line-height: 1.45; }
+.lifetime-nudge:hover { color: var(--ink); border-style: solid; }
+.lifetime-nudge .best-pill { margin: 0 8px 0 0; }
 .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 0 18px; margin-top: 28px; align-items: stretch; }
 .plan-grid > .plan { margin-bottom: 18px; }
 /* Cards share row tracks, so prices and buttons line up across the three plans. */
-.plan { position: relative; display: grid; grid-row: span 6; grid-template-rows: subgrid; gap: 14px; padding: 26px; }
+.plan { position: relative; display: grid; grid-row: span 7; grid-template-rows: subgrid; gap: 14px; padding: 26px; }
 .plan.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
 .plan > .track-badge { position: absolute; top: -12px; right: 22px; }
 .plan-head { display: flex; align-items: center; gap: 12px; }

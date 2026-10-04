@@ -91,7 +91,7 @@ create policy "snippets: delete own" on public.code_snippets for delete using (a
 create table if not exists public.entitlements (
   user_id uuid not null references auth.users (id) on delete cascade,
   track text not null check (track in ('ml', 'ai', 'complete')),
-  period text not null default 'lifetime' check (period in ('monthly', 'half', 'lifetime')),
+  period text not null default 'lifetime' check (period in ('monthly', 'quarter', 'lifetime')),
   expires_at timestamptz,            -- null means it never expires
   created_at timestamptz not null default now(),
   primary key (user_id, track)

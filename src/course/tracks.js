@@ -6,12 +6,12 @@ import { VIZ } from './vizNames';
 // interactives those modules use. The Starter Kit opens every track.
 //
 // PRICES ARE PLACEHOLDERS: edit the numbers below. Amounts are whole units of
-// CURRENCY; `half` is the price for six months, `lifetime` is paid once.
+// CURRENCY; `quarter` is the price for three months, `lifetime` is paid once.
 export const CURRENCY = { code: 'INR', locale: 'en-IN' };
 export const PERIODS = [
   { id: 'monthly', label: 'Monthly', unit: 'per month', months: 1 },
-  { id: 'half', label: '6 Months', unit: 'for 6 months', months: 6 },
-  { id: 'lifetime', label: 'Lifetime', unit: 'one-time payment', months: null },
+  { id: 'quarter', label: '3 Months', unit: 'for 3 months', months: 3 },
+  { id: 'lifetime', label: 'Lifetime', unit: 'one-time payment', months: null, best: true },
 ];
 
 const ML_MODULES = ['must-know', 'ml-foundations', 'deep-learning'];
@@ -23,21 +23,21 @@ const DEFS = [
     id: 'ml', name: 'ML & Deep Learning', short: 'ML / DL', icon: '∑', accent: '#7ee0a8',
     blurb: 'How machines learn from data: regression, losses, regularisation, neural networks, backpropagation and the road to Transformers.',
     moduleIds: ML_MODULES, labs: 'ml',
-    prices: { monthly: 499, half: 2499, lifetime: 5999 },
+    prices: { monthly: 499, quarter: 2499, lifetime: 5999 },
     extras: [],
   },
   {
     id: 'ai', name: 'Generative AI Engineering', short: 'AI', icon: '✦', accent: '#b79cff',
     blurb: 'Inside LLMs and the systems around them: Transformers, prompting, RAG, agents, inference, evaluation, safety and infrastructure.',
     moduleIds: AI_MODULES, labs: 'ai',
-    prices: { monthly: 799, half: 3999, lifetime: 9999 },
+    prices: { monthly: 799, quarter: 3999, lifetime: 9999 },
     extras: [],
   },
   {
     id: 'complete', name: 'Complete AI Engineer', short: 'Complete', icon: '◎', accent: '#ffd9a8', featured: true,
     blurb: 'Everything in both tracks, in order, plus AI engineer career preparation: interview questions, system design and a study plan.',
     moduleIds: modules.map(m => m.id), labs: 'all',
-    prices: { monthly: 1199, half: 5999, lifetime: 14999 },
+    prices: { monthly: 1199, quarter: 5999, lifetime: 14999 },
     extras: ['AI engineer career prep module', 'Certificate of completion'],
   },
 ];
@@ -61,8 +61,8 @@ export const trackById = Object.fromEntries(tracks.map(t => [t.id, t]));
 export const entryLessonIds = tracks.map(t => t.modules.find(m => m.id !== 'must-know')?.lessons[0].id).filter(Boolean);
 
 export const formatPrice = amount => new Intl.NumberFormat(CURRENCY.locale, { style: 'currency', currency: CURRENCY.code, maximumFractionDigits: 0 }).format(amount);
-// How much cheaper six months is than paying monthly for six months, as a whole percentage.
-export const halfYearSaving = t => Math.round((1 - t.prices.half / (t.prices.monthly * 6)) * 100);
+// How much cheaper three months is than paying monthly for three months, as a whole percentage (negative when it costs more).
+export const quarterSaving = t => Math.round((1 - t.prices.quarter / (t.prices.monthly * 3)) * 100);
 
 // Lab access. One lab is free for everyone; the rest need a plan whose track
 // includes that lab. `plans` is the list of track ids the learner has bought.

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { modules } from './course/curriculum';
-import { tracks, trackById, PERIODS, formatPrice, halfYearSaving } from './course/tracks';
+import { tracks, trackById, PERIODS, formatPrice, quarterSaving } from './course/tracks';
 import { useApp, PASS_MARK } from './app';
 import Modal from './Modal';
 import './tracks.css';
@@ -51,28 +51,29 @@ export function TrackShowcase() {
 
 export function Pricing() {
   const nav = useNavigate();
-  const [period, setPeriod] = useState('half'), [picked, setPicked] = useState(null);
+  const [period, setPeriod] = useState('lifetime'), [picked, setPicked] = useState(null);
   const p = PERIODS.find(x => x.id === period);
   const start = t => { try { localStorage.setItem(KEY, t.id); } catch {} nav(`/curriculum?track=${t.id}`); };
   return <main className="page container pricing-page">
     <div className="page-intro pricing-intro">
       <div className="eyebrow">Pricing</div>
       <h1>Pick the track that fits your goal</h1>
-      <p className="dek">Three tracks, each with its lessons, quizzes and hands-on labs. Pay monthly, for six months, or once for lifetime access.</p>
+      <p className="dek">Three tracks, each with its lessons, quizzes and hands-on labs. Pay monthly, for three months, or once for lifetime access.</p>
     </div>
     <div className="period-toggle" role="radiogroup" aria-label="Billing period">{PERIODS.map(x =>
-      <button key={x.id} role="radio" aria-checked={period === x.id} className={period === x.id ? 'active' : ''} onClick={() => setPeriod(x.id)}>{x.label}</button>)}
+      <button key={x.id} role="radio" aria-checked={period === x.id} className={period === x.id ? 'active' : ''} onClick={() => setPeriod(x.id)}>{x.label}{x.best && <span className="best-pill">Best Value</span>}</button>)}
     </div>
     <div className="plan-grid">{tracks.map((t, i) => {
-      const price = t.prices[period], saving = halfYearSaving(t);
-      return <section key={t.id} className={'plan card' + (t.featured ? ' featured' : '')} style={{ '--track': t.accent }} aria-label={t.name}>
+      const price = t.prices[period], saving = quarterSaving(t);
+      return <section key={t.id} className={'plan card' + (t.featured ? ' featured' : '') + (period === 'lifetime' ? ' best' : '')} style={{ '--track': t.accent }} aria-label={t.name}>
         {t.featured && <span className="track-badge">Most Complete</span>}
         <div className="plan-head"><span className="course-icon">{t.icon}</span><div><small>Track {i + 1}</small><h2>{t.name}</h2></div></div>
         <p className="plan-blurb">{t.blurb}</p>
         <div className="plan-price"><strong>{formatPrice(price)}</strong><span>{p.unit}</span></div>
         <p className="plan-note">{period === 'monthly' ? 'Billed every month.'
-          : period === 'half' ? <>About {formatPrice(Math.round(price / 6))} a month{saving > 0 ? <> · <b>save {saving}%</b> against monthly</> : ''}.</>
-          : <>Pay once, keep access. Equal to {(price / t.prices.monthly).toFixed(0)} months of monthly billing.</>}</p>
+          : period === 'quarter' ? <>One payment for 3 months of access{saving > 0 ? <> · <b>save {saving}%</b> against monthly</> : ''}.</>
+          : <><b>Best value.</b> Pay once and keep access for good, for the cost of about {Math.round(price / t.prices.monthly)} months.</>}</p>
+        {period !== 'lifetime' && <button className="lifetime-nudge" onClick={() => setPeriod('lifetime')}><span className="best-pill">Best Value</span>Lifetime access for {formatPrice(t.prices.lifetime)}, paid once →</button>}
         <button className={'button ' + (t.featured ? 'primary' : 'ghost')} onClick={() => setPicked(t)}>Choose {t.short}</button>
         <ul className="check-list plan-features">
           <li><b>{t.modules.length} modules</b>, {t.lessons.length} lessons</li>

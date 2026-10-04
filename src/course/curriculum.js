@@ -3,7 +3,7 @@
 export const modules = [
  {
   "id": "must-know",
-  "number": 0,
+  "number": 1,
   "title": "AI Engineering Starter Kit",
   "short": "Starter Kit",
   "icon": "◎",
@@ -15,7 +15,7 @@ export const modules = [
   "lessons": [
    {
     "id": "six-words-of-ai-engineering",
-    "num": "0.1",
+    "num": "1.1",
     "title": "Six Concepts Every AI Engineer Must Know",
     "source": "",
     "covers": [
@@ -32,7 +32,7 @@ export const modules = [
  },
  {
   "id": "ml-foundations",
-  "number": 1,
+  "number": 2,
   "title": "Learning from Data",
   "short": "ML Basics",
   "icon": "∿",
@@ -45,14 +45,14 @@ export const modules = [
   "lessons": [
    {
     "id": "machine-learning",
-    "num": "1.1",
+    "num": "2.1",
     "title": "Machine Learning from First Principles",
     "source": "",
     "covers": []
    },
    {
     "id": "supervised-vs-unsupervised-learning",
-    "num": "1.2",
+    "num": "2.2",
     "title": "Labeled vs Unlabeled: Two Ways Machines Learn",
     "source": "",
     "covers": [
@@ -63,7 +63,7 @@ export const modules = [
    },
    {
     "id": "linear-regression-vs-logistic-regression",
-    "num": "1.3",
+    "num": "2.3",
     "title": "Predicting Numbers vs Categories: Regression Compared",
     "source": "",
     "covers": [
@@ -74,14 +74,14 @@ export const modules = [
    },
    {
     "id": "feature-engineering",
-    "num": "1.4",
+    "num": "2.4",
     "title": "Feature Engineering: Turning Raw Data into Signal",
     "source": "",
     "covers": []
    },
    {
     "id": "precision-vs-recall",
-    "num": "1.5",
+    "num": "2.5",
     "title": "Precision and Recall: Picking the Right Metric",
     "source": "",
     "covers": [
@@ -97,7 +97,7 @@ export const modules = [
    },
    {
     "id": "l1-and-l2-loss-functions",
-    "num": "1.6",
+    "num": "2.6",
     "title": "L1 vs L2 Loss: Choosing Your Error Penalty",
     "source": "",
     "covers": [
@@ -108,7 +108,7 @@ export const modules = [
    },
    {
     "id": "regularization-in-machine-learning",
-    "num": "1.7",
+    "num": "2.7",
     "title": "Regularization: Stopping Overfitting with L1 and L2",
     "source": "",
     "covers": [
@@ -119,7 +119,7 @@ export const modules = [
    },
    {
     "id": "reinforcement-learning",
-    "num": "1.8",
+    "num": "2.8",
     "title": "Reinforcement Learning: Teaching Agents Through Reward",
     "source": "",
     "covers": [
@@ -139,7 +139,7 @@ export const modules = [
    },
    {
     "id": "contrastive-learning",
-    "num": "1.9",
+    "num": "2.9",
     "title": "Contrastive Learning: Training by Comparison",
     "source": "",
     "covers": [
@@ -159,7 +159,7 @@ export const modules = [
  },
  {
   "id": "deep-learning",
-  "number": 2,
+  "number": 3,
   "title": "Neural Architectures Deep Dive",
   "short": "Neural Nets",
   "icon": "⬡",
@@ -172,14 +172,14 @@ export const modules = [
   "lessons": [
    {
     "id": "bias-in-artificial-neural-network",
-    "num": "2.1",
+    "num": "3.1",
     "title": "Neural Network Bias: What It Is and Why It Matters",
     "source": "",
     "covers": []
    },
    {
     "id": "math-behind-gradient-descent",
-    "num": "2.2",
+    "num": "3.2",
     "title": "Gradient Descent: Rolling Downhill to the Optimum",
     "source": "",
     "covers": [
@@ -198,7 +198,7 @@ export const modules = [
    },
    {
     "id": "math-behind-backpropagation",
-    "num": "2.3",
+    "num": "3.3",
     "title": "Backpropagation: How Neural Networks Learn from Mistakes",
     "source": "",
     "covers": [
@@ -214,7 +214,7 @@ export const modules = [
    },
    {
     "id": "math-behind-cross-entropy-loss",
-    "num": "2.4",
+    "num": "3.4",
     "title": "Cross-Entropy Loss: Scoring Probability Predictions",
     "source": "",
     "covers": [
@@ -232,7 +232,7 @@ export const modules = [
    },
    {
     "id": "dropout-in-neural-networks",
-    "num": "2.5",
+    "num": "3.5",
     "title": "Dropout: Controlled Forgetting as Regularization",
     "source": "",
     "covers": [
@@ -250,7 +250,7 @@ export const modules = [
    },
    {
     "id": "batch-normalization-vs-layer-normalization",
-    "num": "2.6",
+    "num": "3.6",
     "title": "Batch Norm vs Layer Norm: When to Use Each",
     "source": "",
     "covers": [
@@ -264,7 +264,7 @@ export const modules = [
    },
    {
     "id": "rmsnorm-root-mean-square-layer-normalization",
-    "num": "2.7",
+    "num": "3.7",
     "title": "RMSNorm: Simpler Normalization for Transformers",
     "source": "",
     "covers": [
@@ -281,14 +281,14 @@ export const modules = [
    },
    {
     "id": "recurrent-neural-network",
-    "num": "2.8",
+    "num": "3.8",
     "title": "Recurrent Neural Networks: Processing Sequences in Order",
     "source": "",
     "covers": []
    },
    {
     "id": "how-does-pytorch-work",
-    "num": "2.9",
+    "num": "3.9",
     "title": "PyTorch Internals: Dynamic Graphs and Autograd",
     "source": "",
     "covers": [
@@ -304,7 +304,7 @@ export const modules = [
    },
    {
     "id": "how-does-the-machine-learning-library-tensorflow-work",
-    "num": "2.10",
+    "num": "3.10",
     "title": "TensorFlow Explained: Static Graphs and Production ML",
     "source": "",
     "covers": []
@@ -313,7 +313,7 @@ export const modules = [
  },
  {
   "id": "transformers",
-  "number": 3,
+  "number": 4,
   "title": "Transformers and How They Think",
   "short": "Transformers",
   "icon": "✳",
@@ -326,7 +326,7 @@ export const modules = [
   "lessons": [
    {
     "id": "what-is-generative-ai",
-    "num": "3.1",
+    "num": "4.1",
     "title": "Generative AI: Creating Instead of Classifying",
     "source": "",
     "covers": [
@@ -346,7 +346,7 @@ export const modules = [
    },
    {
     "id": "autoregressive-models",
-    "num": "3.2",
+    "num": "4.2",
     "title": "Autoregressive Models: Predicting One Token at a Time",
     "source": "",
     "covers": [
@@ -365,7 +365,7 @@ export const modules = [
    },
    {
     "id": "bpe-in-llms",
-    "num": "3.3",
+    "num": "4.3",
     "title": "BPE Tokenization: How LLMs Split Text into Tokens",
     "source": "",
     "covers": [
@@ -379,7 +379,7 @@ export const modules = [
    },
    {
     "id": "what-are-embeddings",
-    "num": "3.4",
+    "num": "4.4",
     "title": "Embeddings: Encoding Meaning as Vectors",
     "source": "",
     "covers": [
@@ -398,7 +398,7 @@ export const modules = [
    },
    {
     "id": "how-do-rnns-and-transformers-differ",
-    "num": "3.5",
+    "num": "4.5",
     "title": "RNNs vs Transformers: A Fundamental Architecture Shift",
     "source": "",
     "covers": [
@@ -415,7 +415,7 @@ export const modules = [
    },
    {
     "id": "decoding-transformer-architecture",
-    "num": "3.6",
+    "num": "4.6",
     "title": "The Transformer Architecture: Built on Attention",
     "source": "",
     "covers": [
@@ -432,7 +432,7 @@ export const modules = [
    },
    {
     "id": "encoder-vs-decoder-in-transformers",
-    "num": "3.7",
+    "num": "4.7",
     "title": "Encoder vs Decoder: Two Sides of the Transformer",
     "source": "",
     "covers": [
@@ -449,7 +449,7 @@ export const modules = [
    },
    {
     "id": "self-attention-in-transformers",
-    "num": "3.8",
+    "num": "4.8",
     "title": "Self-Attention: How Tokens See One Another",
     "source": "",
     "covers": [
@@ -465,7 +465,7 @@ export const modules = [
    },
    {
     "id": "math-behind-attention-qkv",
-    "num": "3.9",
+    "num": "4.9",
     "title": "Attention Math: Queries, Keys, and Values Unpacked",
     "source": "",
     "covers": [
@@ -481,7 +481,7 @@ export const modules = [
    },
    {
     "id": "scaling-dot-product-attention",
-    "num": "3.10",
+    "num": "4.10",
     "title": "Scaled Dot-Product Attention: Why We Divide by √dₖ",
     "source": "",
     "covers": [
@@ -498,7 +498,7 @@ export const modules = [
    },
    {
     "id": "causal-masking-in-attention",
-    "num": "3.11",
+    "num": "4.11",
     "title": "Causal Masking: Preventing the Model from Seeing the Future",
     "source": "",
     "covers": [
@@ -510,7 +510,7 @@ export const modules = [
    },
    {
     "id": "multi-head-attention-in-transformers",
-    "num": "3.12",
+    "num": "4.12",
     "title": "Multi-Head Attention: Many Perspectives at Once",
     "source": "",
     "covers": [
@@ -525,7 +525,7 @@ export const modules = [
    },
    {
     "id": "cross-attention-in-transformers",
-    "num": "3.13",
+    "num": "4.13",
     "title": "Cross-Attention: Connecting Encoder Output to the Decoder",
     "source": "",
     "covers": [
@@ -541,7 +541,7 @@ export const modules = [
    },
    {
     "id": "math-behind-rope-rotary-position-embedding",
-    "num": "3.14",
+    "num": "4.14",
     "title": "Rotary Position Encoding: Position Without Fixed Lookup Tables",
     "source": "",
     "covers": [
@@ -559,7 +559,7 @@ export const modules = [
    },
    {
     "id": "feed-forward-networks-in-llms",
-    "num": "3.15",
+    "num": "4.15",
     "title": "Feed-Forward Networks: The Transformer's Memory Layer",
     "source": "",
     "covers": [
@@ -585,7 +585,7 @@ export const modules = [
  },
  {
   "id": "generation",
-  "number": 4,
+  "number": 5,
   "title": "Inside the LLM Output Pipeline",
   "short": "Output Pipeline",
   "icon": "⌁",
@@ -598,7 +598,7 @@ export const modules = [
   "lessons": [
    {
     "id": "how-does-temperature-control-llm-output",
-    "num": "4.1",
+    "num": "5.1",
     "title": "Temperature Sampling: Dialing Up or Down Creativity",
     "source": "",
     "covers": [
@@ -617,7 +617,7 @@ export const modules = [
    },
    {
     "id": "how-do-top-k-and-top-p-sampling-work",
-    "num": "4.2",
+    "num": "5.2",
     "title": "Nucleus Sampling: Top-k and Top-p Demystified",
     "source": "",
     "covers": [
@@ -636,7 +636,7 @@ export const modules = [
    },
    {
     "id": "how-does-token-streaming-work",
-    "num": "4.3",
+    "num": "5.3",
     "title": "Token Streaming: Rendering Outputs as They Arrive",
     "source": "",
     "covers": [
@@ -654,7 +654,7 @@ export const modules = [
    },
    {
     "id": "lost-in-the-middle-problem-in-llms",
-    "num": "4.4",
+    "num": "5.4",
     "title": "Lost in the Middle: Why LLMs Miss Central Context",
     "source": "",
     "covers": [
@@ -674,7 +674,7 @@ export const modules = [
  },
  {
   "id": "modern-architecture",
-  "number": 5,
+  "number": 6,
   "title": "Next-Gen LLM Architectures",
   "short": "Modern Architectures",
   "icon": "▦",
@@ -687,7 +687,7 @@ export const modules = [
   "lessons": [
    {
     "id": "evolution-of-llm-architecture",
-    "num": "5.1",
+    "num": "6.1",
     "title": "A Timeline of LLM Architecture Improvements",
     "source": "",
     "covers": [
@@ -703,7 +703,7 @@ export const modules = [
    },
    {
     "id": "mixture-of-experts",
-    "num": "5.2",
+    "num": "6.2",
     "title": "Mixture of Experts: Routing Tokens to Specialists",
     "source": "",
     "covers": [
@@ -719,7 +719,7 @@ export const modules = [
    },
    {
     "id": "grouped-query-attention",
-    "num": "5.3",
+    "num": "6.3",
     "title": "Grouped Query Attention: Fewer KV Heads, Same Quality",
     "source": "",
     "covers": [
@@ -739,7 +739,7 @@ export const modules = [
    },
    {
     "id": "how-does-sliding-window-attention-work",
-    "num": "5.4",
+    "num": "6.4",
     "title": "Sliding Window Attention: Taming Very Long Contexts",
     "source": "",
     "covers": [
@@ -755,7 +755,7 @@ export const modules = [
    },
    {
     "id": "how-do-attention-sinks-work",
-    "num": "5.5",
+    "num": "6.5",
     "title": "Attention Sinks: The Hidden Cost of Extended Context",
     "source": "",
     "covers": [
@@ -773,7 +773,7 @@ export const modules = [
    },
    {
     "id": "decoding-flash-attention",
-    "num": "5.6",
+    "num": "6.6",
     "title": "Flash Attention: Memory-Efficient Attention at Scale",
     "source": "",
     "covers": [
@@ -791,7 +791,7 @@ export const modules = [
    },
    {
     "id": "decoding-deepseek-v4",
-    "num": "5.7",
+    "num": "6.7",
     "title": "DeepSeek-V4: Anatomy of an Open-Source Frontier Model",
     "source": "",
     "covers": [
@@ -812,7 +812,7 @@ export const modules = [
  },
  {
   "id": "model-types",
-  "number": 6,
+  "number": 7,
   "title": "The Language Model Zoo",
   "short": "Model Types",
   "icon": "◇",
@@ -825,7 +825,7 @@ export const modules = [
   "lessons": [
    {
     "id": "small-language-models-slms",
-    "num": "6.1",
+    "num": "7.1",
     "title": "Small Language Models: Big Capability in Compact Form",
     "source": "",
     "covers": [
@@ -845,7 +845,7 @@ export const modules = [
    },
    {
     "id": "large-reasoning-models",
-    "num": "6.2",
+    "num": "7.2",
     "title": "Large Reasoning Models: Chain-of-Thought at Inference Time",
     "source": "",
     "covers": [
@@ -864,7 +864,7 @@ export const modules = [
    },
    {
     "id": "recursive-language-models",
-    "num": "6.3",
+    "num": "7.3",
     "title": "Recursive Language Models: Self-Referential Generation",
     "source": "",
     "covers": [
@@ -884,7 +884,7 @@ export const modules = [
    },
    {
     "id": "how-do-diffusion-language-models-dlms-work",
-    "num": "6.4",
+    "num": "7.4",
     "title": "Diffusion Language Models: Text Generation Beyond Autoregression",
     "source": "",
     "covers": [
@@ -905,7 +905,7 @@ export const modules = [
    },
    {
     "id": "jev-and-system-one-models-explained",
-    "num": "6.5",
+    "num": "7.5",
     "title": "Jev and System One: Fast vs Deliberate AI Thinking",
     "source": "",
     "covers": [
@@ -926,7 +926,7 @@ export const modules = [
  },
  {
   "id": "training-alignment",
-  "number": 7,
+  "number": 8,
   "title": "Teaching and Shaping Models",
   "short": "Training & Alignment",
   "icon": "⟲",
@@ -939,7 +939,7 @@ export const modules = [
   "lessons": [
    {
     "id": "how-does-fine-tuning-work",
-    "num": "7.1",
+    "num": "8.1",
     "title": "Fine-Tuning: Adapting a Pre-Trained Model to Your Task",
     "source": "",
     "covers": [
@@ -955,7 +955,7 @@ export const modules = [
    },
    {
     "id": "lora-low-rank-adaptation-of-llms",
-    "num": "7.2",
+    "num": "8.2",
     "title": "LoRA: Parameter-Efficient Fine-Tuning via Low-Rank Matrices",
     "source": "",
     "covers": [
@@ -972,7 +972,7 @@ export const modules = [
    },
    {
     "id": "how-does-prefix-tuning-work",
-    "num": "7.3",
+    "num": "8.3",
     "title": "Prefix Tuning: Learnable Context Prepended to the Input",
     "source": "",
     "covers": [
@@ -995,7 +995,7 @@ export const modules = [
    },
    {
     "id": "how-does-knowledge-distillation-work",
-    "num": "7.4",
+    "num": "8.4",
     "title": "Knowledge Distillation: Compressing Large Models into Small Ones",
     "source": "",
     "covers": [
@@ -1013,7 +1013,7 @@ export const modules = [
    },
    {
     "id": "continual-learning-in-llms",
-    "num": "7.5",
+    "num": "8.5",
     "title": "Continual Learning: Training Without Forgetting the Past",
     "source": "",
     "covers": [
@@ -1027,7 +1027,7 @@ export const modules = [
    },
    {
     "id": "decoding-deep-rl-from-human-preferences",
-    "num": "7.6",
+    "num": "8.6",
     "title": "Deep RL from Human Preferences: The Foundational Paper",
     "source": "",
     "covers": [
@@ -1048,7 +1048,7 @@ export const modules = [
    },
    {
     "id": "decoding-instructgpt",
-    "num": "7.7",
+    "num": "8.7",
     "title": "InstructGPT: Teaching GPT-3 to Follow Instructions",
     "source": "",
     "covers": [
@@ -1069,7 +1069,7 @@ export const modules = [
    },
    {
     "id": "reinforcement-learning-from-human-feedback-rlhf",
-    "num": "7.8",
+    "num": "8.8",
     "title": "RLHF: Aligning LLMs with Human Preferences",
     "source": "",
     "covers": [
@@ -1089,7 +1089,7 @@ export const modules = [
    },
    {
     "id": "proximal-policy-optimization-ppo",
-    "num": "7.9",
+    "num": "8.9",
     "title": "PPO: The Reinforcement Algorithm Behind Instruction Tuning",
     "source": "",
     "covers": [
@@ -1107,7 +1107,7 @@ export const modules = [
    },
    {
     "id": "direct-preference-optimization-dpo",
-    "num": "7.10",
+    "num": "8.10",
     "title": "DPO: Alignment Without the Separate Reward Model",
     "source": "",
     "covers": [
@@ -1125,7 +1125,7 @@ export const modules = [
    },
    {
     "id": "group-relative-policy-optimization-grpo",
-    "num": "7.11",
+    "num": "8.11",
     "title": "GRPO: Group-Based Preference Optimization Explained",
     "source": "",
     "covers": [
@@ -1145,7 +1145,7 @@ export const modules = [
  },
  {
   "id": "prompt-context",
-  "number": 8,
+  "number": 9,
   "title": "The Art of Prompting",
   "short": "Prompt Engineering",
   "icon": "❝",
@@ -1158,7 +1158,7 @@ export const modules = [
   "lessons": [
    {
     "id": "how-does-chain-of-thought-prompting-work",
-    "num": "8.1",
+    "num": "9.1",
     "title": "Chain-of-Thought Prompting: Making Models Reason Step by Step",
     "source": "",
     "covers": [
@@ -1176,7 +1176,7 @@ export const modules = [
    },
    {
     "id": "how-does-prompt-chaining-work",
-    "num": "8.2",
+    "num": "9.2",
     "title": "Prompt Chaining: Decomposing Complex Tasks into Steps",
     "source": "",
     "covers": [
@@ -1194,7 +1194,7 @@ export const modules = [
    },
    {
     "id": "how-does-prompt-caching-work",
-    "num": "8.3",
+    "num": "9.3",
     "title": "Prompt Caching: Reusing Computation Across API Calls",
     "source": "",
     "covers": [
@@ -1212,7 +1212,7 @@ export const modules = [
    },
    {
     "id": "context-engineering",
-    "num": "8.4",
+    "num": "9.4",
     "title": "Context Engineering: Curating the Model's Working Memory",
     "source": "",
     "covers": [
@@ -1229,7 +1229,7 @@ export const modules = [
    },
    {
     "id": "how-does-context-compaction-work",
-    "num": "8.5",
+    "num": "9.5",
     "title": "Context Compaction: Fitting More Into a Finite Window",
     "source": "",
     "covers": [
@@ -1250,7 +1250,7 @@ export const modules = [
  },
  {
   "id": "rag",
-  "number": 9,
+  "number": 10,
   "title": "Building RAG Systems",
   "short": "RAG Systems",
   "icon": "⌕",
@@ -1263,7 +1263,7 @@ export const modules = [
   "lessons": [
    {
     "id": "how-does-a-vector-database-work",
-    "num": "9.1",
+    "num": "10.1",
     "title": "Vector Databases: Storing and Searching Embeddings at Scale",
     "source": "",
     "covers": [
@@ -1287,7 +1287,7 @@ export const modules = [
    },
    {
     "id": "how-does-approximate-nearest-neighbor-ann-search-work",
-    "num": "9.2",
+    "num": "10.2",
     "title": "ANN Search: Finding Similar Vectors Without Brute Force",
     "source": "",
     "covers": [
@@ -1308,7 +1308,7 @@ export const modules = [
    },
    {
     "id": "how-does-semantic-search-work",
-    "num": "9.3",
+    "num": "10.3",
     "title": "Semantic Search: Finding Meaning, Not Just Keywords",
     "source": "",
     "covers": [
@@ -1326,7 +1326,7 @@ export const modules = [
    },
    {
     "id": "how-does-hybrid-search-work",
-    "num": "9.4",
+    "num": "10.4",
     "title": "Hybrid Search: Combining Sparse and Dense Retrieval",
     "source": "",
     "covers": [
@@ -1344,7 +1344,7 @@ export const modules = [
    },
    {
     "id": "how-does-a-reranker-work",
-    "num": "9.5",
+    "num": "10.5",
     "title": "Rerankers: Re-Scoring Retrieved Results by Relevance",
     "source": "",
     "covers": [
@@ -1362,7 +1362,7 @@ export const modules = [
    },
    {
     "id": "decoding-colbert",
-    "num": "9.6",
+    "num": "10.6",
     "title": "ColBERT: Token-Level Late Interaction for Retrieval",
     "source": "",
     "covers": [
@@ -1386,7 +1386,7 @@ export const modules = [
    },
    {
     "id": "chunking-strategies-for-rag",
-    "num": "9.7",
+    "num": "10.7",
     "title": "Document Chunking Strategies for RAG",
     "source": "",
     "covers": [
@@ -1412,7 +1412,7 @@ export const modules = [
    },
    {
     "id": "how-does-hyde-work",
-    "num": "9.8",
+    "num": "10.8",
     "title": "HyDE: Generating Hypothetical Documents to Improve RAG",
     "source": "",
     "covers": [
@@ -1432,7 +1432,7 @@ export const modules = [
    },
    {
     "id": "how-does-an-embedding-cache-work",
-    "num": "9.9",
+    "num": "10.9",
     "title": "Embedding Caches: Avoiding Redundant Embedding Calls",
     "source": "",
     "covers": [
@@ -1451,7 +1451,7 @@ export const modules = [
    },
    {
     "id": "how-does-semantic-caching-work",
-    "num": "9.10",
+    "num": "10.10",
     "title": "Semantic Caching: Skipping the LLM for Similar Queries",
     "source": "",
     "covers": [
@@ -1469,7 +1469,7 @@ export const modules = [
    },
    {
     "id": "agentic-rag",
-    "num": "9.11",
+    "num": "10.11",
     "title": "Agentic RAG: Dynamic Retrieval with Multi-Step Reasoning",
     "source": "",
     "covers": [
@@ -1490,7 +1490,7 @@ export const modules = [
    },
    {
     "id": "graphrag",
-    "num": "9.12",
+    "num": "10.12",
     "title": "GraphRAG: Combining Knowledge Graphs with Retrieval",
     "source": "",
     "covers": [
@@ -1507,7 +1507,7 @@ export const modules = [
    },
    {
     "id": "vectorless-rag",
-    "num": "9.13",
+    "num": "10.13",
     "title": "Vectorless RAG: Retrieval Without Embeddings or a Vector Store",
     "source": "",
     "covers": [
@@ -1531,7 +1531,7 @@ export const modules = [
  },
  {
   "id": "agents",
-  "number": 10,
+  "number": 11,
   "title": "Autonomous AI Agents",
   "short": "AI Agents",
   "icon": "⚙",
@@ -1544,7 +1544,7 @@ export const modules = [
   "lessons": [
    {
     "id": "ai-agent",
-    "num": "10.1",
+    "num": "11.1",
     "title": "AI Agents: Autonomous Decision-Making Systems",
     "source": "",
     "covers": [
@@ -1563,7 +1563,7 @@ export const modules = [
    },
    {
     "id": "how-does-function-calling-work-in-llms",
-    "num": "10.2",
+    "num": "11.2",
     "title": "Function Calling: Giving LLMs Tools to Act on the World",
     "source": "",
     "covers": [
@@ -1581,7 +1581,7 @@ export const modules = [
    },
    {
     "id": "ai-agent-loop",
-    "num": "10.3",
+    "num": "11.3",
     "title": "The Agent Loop: Observe, Think, Act, Repeat",
     "source": "",
     "covers": [
@@ -1599,7 +1599,7 @@ export const modules = [
    },
    {
     "id": "react-agent",
-    "num": "10.4",
+    "num": "11.4",
     "title": "ReAct Agents: Interleaving Reasoning and Acting",
     "source": "",
     "covers": [
@@ -1616,7 +1616,7 @@ export const modules = [
    },
    {
     "id": "plan-and-execute-agent",
-    "num": "10.5",
+    "num": "11.5",
     "title": "Plan-and-Execute: Tackling Complex Tasks in Two Phases",
     "source": "",
     "covers": [
@@ -1632,7 +1632,7 @@ export const modules = [
    },
    {
     "id": "reflection-agent",
-    "num": "10.6",
+    "num": "11.6",
     "title": "Reflection Agents: Self-Critique for Higher-Quality Outputs",
     "source": "",
     "covers": [
@@ -1648,7 +1648,7 @@ export const modules = [
    },
    {
     "id": "ai-agent-memory",
-    "num": "10.7",
+    "num": "11.7",
     "title": "Agent Memory: Short-Term, Long-Term, and Episodic",
     "source": "",
     "covers": [
@@ -1664,7 +1664,7 @@ export const modules = [
    },
    {
     "id": "what-is-mcp-model-context-protocol",
-    "num": "10.8",
+    "num": "11.8",
     "title": "Model Context Protocol: A Standard Interface for Agent Tools",
     "source": "",
     "covers": [
@@ -1684,7 +1684,7 @@ export const modules = [
    },
    {
     "id": "what-are-agent-skills",
-    "num": "10.9",
+    "num": "11.9",
     "title": "Agent Skills: Reusable Capabilities in Agentic Systems",
     "source": "",
     "covers": [
@@ -1705,7 +1705,7 @@ export const modules = [
    },
    {
     "id": "what-is-okf-open-knowledge-format",
-    "num": "10.10",
+    "num": "11.10",
     "title": "Open Knowledge Format: Structured Agent-to-Agent Communication",
     "source": "",
     "covers": [
@@ -1724,7 +1724,7 @@ export const modules = [
    },
    {
     "id": "multi-agent-systems",
-    "num": "10.11",
+    "num": "11.11",
     "title": "Multi-Agent Systems: Dividing Work Among Specialist Agents",
     "source": "",
     "covers": [
@@ -1742,7 +1742,7 @@ export const modules = [
    },
    {
     "id": "ai-subagents",
-    "num": "10.12",
+    "num": "11.12",
     "title": "Subagents: Delegating Tasks Within an Agent Network",
     "source": "",
     "covers": [
@@ -1758,7 +1758,7 @@ export const modules = [
    },
    {
     "id": "how-ai-agents-communicate",
-    "num": "10.13",
+    "num": "11.13",
     "title": "Agent Communication: Protocols and Message Formats",
     "source": "",
     "covers": [
@@ -1779,7 +1779,7 @@ export const modules = [
    },
    {
     "id": "ai-orchestration",
-    "num": "10.14",
+    "num": "11.14",
     "title": "AI Orchestration: Coordinating Agents, Tools, and Flows",
     "source": "",
     "covers": [
@@ -1801,7 +1801,7 @@ export const modules = [
    },
    {
     "id": "decoding-sakana-fugu",
-    "num": "10.15",
+    "num": "11.15",
     "title": "Sakana Fugu: Lessons from an Open-Source Agent Study",
     "source": "",
     "covers": [
@@ -1823,7 +1823,7 @@ export const modules = [
    },
    {
     "id": "how-do-computer-use-agents-work",
-    "num": "10.16",
+    "num": "11.16",
     "title": "Computer-Use Agents: Controlling Interfaces with AI",
     "source": "",
     "covers": [
@@ -1844,7 +1844,7 @@ export const modules = [
  },
  {
   "id": "agentic-engineering",
-  "number": 11,
+  "number": 12,
   "title": "Agent Patterns and Frameworks",
   "short": "Agent Frameworks",
   "icon": "⌘",
@@ -1857,7 +1857,7 @@ export const modules = [
   "lessons": [
    {
     "id": "harness-engineering-in-ai",
-    "num": "11.1",
+    "num": "12.1",
     "title": "Harness Engineering: The Scaffolding Around AI Agents",
     "source": "",
     "covers": [
@@ -1872,7 +1872,7 @@ export const modules = [
    },
    {
     "id": "what-is-loop-engineering",
-    "num": "11.2",
+    "num": "12.2",
     "title": "Loop Engineering: Designing Reliable Agentic Loops",
     "source": "",
     "covers": [
@@ -1891,7 +1891,7 @@ export const modules = [
    },
    {
     "id": "what-is-graph-engineering",
-    "num": "11.3",
+    "num": "12.3",
     "title": "Graph Engineering: Stateful Workflows for Agents",
     "source": "",
     "covers": [
@@ -1916,7 +1916,7 @@ export const modules = [
    },
    {
     "id": "ai-is-only-as-good-as-our-definition-of-done",
-    "num": "11.4",
+    "num": "12.4",
     "title": "Defining Done: Why Exit Criteria Shape Agent Quality",
     "source": "",
     "covers": [
@@ -1929,7 +1929,7 @@ export const modules = [
    },
    {
     "id": "how-does-langchain-work",
-    "num": "11.5",
+    "num": "12.5",
     "title": "LangChain: Composable Components for LLM Applications",
     "source": "",
     "covers": [
@@ -1947,7 +1947,7 @@ export const modules = [
    },
    {
     "id": "how-does-langgraph-work",
-    "num": "11.6",
+    "num": "12.6",
     "title": "LangGraph: Graph-Based Agent Orchestration Explained",
     "source": "",
     "covers": [
@@ -1966,7 +1966,7 @@ export const modules = [
    },
    {
     "id": "how-does-claude-code-work",
-    "num": "11.7",
+    "num": "12.7",
     "title": "Claude Code: AI-Powered Software Engineering at the CLI",
     "source": "",
     "covers": [
@@ -1985,7 +1985,7 @@ export const modules = [
    },
    {
     "id": "how-does-cursor-work",
-    "num": "11.8",
+    "num": "12.8",
     "title": "Cursor: Inside an AI-Native Code Editor",
     "source": "",
     "covers": [
@@ -2007,7 +2007,7 @@ export const modules = [
  },
  {
   "id": "inference",
-  "number": 12,
+  "number": 13,
   "title": "Serving LLMs at Scale",
   "short": "Inference Eng.",
   "icon": "⚡",
@@ -2020,7 +2020,7 @@ export const modules = [
   "lessons": [
    {
     "id": "llm-inference-optimization",
-    "num": "12.1",
+    "num": "13.1",
     "title": "LLM Inference Optimization: The Full Landscape",
     "source": "",
     "covers": [
@@ -2039,7 +2039,7 @@ export const modules = [
    },
    {
     "id": "prefill-vs-decode-llm-inference-optimization",
-    "num": "12.2",
+    "num": "13.2",
     "title": "Prefill vs Decode: Two Distinct Phases of LLM Inference",
     "source": "",
     "covers": [
@@ -2059,7 +2059,7 @@ export const modules = [
    },
    {
     "id": "prefill-decode-disaggregation",
-    "num": "12.3",
+    "num": "13.3",
     "title": "Prefill-Decode Disaggregation: Splitting the Two Phases",
     "source": "",
     "covers": [
@@ -2080,7 +2080,7 @@ export const modules = [
    },
    {
     "id": "kv-cache-in-llms",
-    "num": "12.4",
+    "num": "13.4",
     "title": "The KV Cache: Avoiding Redundant Attention Computation",
     "source": "",
     "covers": [
@@ -2095,7 +2095,7 @@ export const modules = [
    },
    {
     "id": "kv-cache-compression",
-    "num": "12.5",
+    "num": "13.5",
     "title": "KV Cache Compression: Trading Some Accuracy for Speed",
     "source": "",
     "covers": [
@@ -2114,7 +2114,7 @@ export const modules = [
    },
    {
     "id": "paged-attention-in-llms",
-    "num": "12.6",
+    "num": "13.6",
     "title": "Paged Attention: OS-Inspired Memory Management for KV Caches",
     "source": "",
     "covers": [
@@ -2128,7 +2128,7 @@ export const modules = [
    },
    {
     "id": "continuous-batching-in-llms",
-    "num": "12.7",
+    "num": "13.7",
     "title": "Continuous Batching: Keeping GPUs Busy Between Requests",
     "source": "",
     "covers": [
@@ -2149,7 +2149,7 @@ export const modules = [
    },
    {
     "id": "speculative-decoding",
-    "num": "12.8",
+    "num": "13.8",
     "title": "Speculative Decoding: Draft Fast, Verify in Parallel",
     "source": "",
     "covers": [
@@ -2167,7 +2167,7 @@ export const modules = [
    },
    {
     "id": "n-gram-speculation-in-llms",
-    "num": "12.9",
+    "num": "13.9",
     "title": "N-gram Speculation: Draft Tokens Without a Draft Model",
     "source": "",
     "covers": [
@@ -2185,7 +2185,7 @@ export const modules = [
    },
    {
     "id": "decoding-medusa",
-    "num": "12.10",
+    "num": "13.10",
     "title": "Medusa: Parallel Decoding via Multiple Prediction Heads",
     "source": "",
     "covers": [
@@ -2203,7 +2203,7 @@ export const modules = [
    },
    {
     "id": "decoding-eagle",
-    "num": "12.11",
+    "num": "13.11",
     "title": "EAGLE: Feature-Level Drafting for Faster Inference",
     "source": "",
     "covers": [
@@ -2220,7 +2220,7 @@ export const modules = [
    },
    {
     "id": "how-does-model-quantization-work",
-    "num": "12.12",
+    "num": "13.12",
     "title": "Model Quantization: Shrinking Weights Without Breaking Outputs",
     "source": "",
     "covers": [
@@ -2240,7 +2240,7 @@ export const modules = [
    },
    {
     "id": "how-does-gguf-work",
-    "num": "12.13",
+    "num": "13.13",
     "title": "GGUF: The File Format Powering Local LLM Inference",
     "source": "",
     "covers": [
@@ -2258,7 +2258,7 @@ export const modules = [
    },
    {
     "id": "how-does-llama-cpp-run-llms-on-everyday-hardware",
-    "num": "12.14",
+    "num": "13.14",
     "title": "llama.cpp: Running Large Models on Consumer Hardware",
     "source": "",
     "covers": [
@@ -2278,7 +2278,7 @@ export const modules = [
    },
    {
     "id": "how-does-vllm-work",
-    "num": "12.15",
+    "num": "13.15",
     "title": "vLLM: High-Throughput Serving with PagedAttention",
     "source": "",
     "covers": [
@@ -2297,7 +2297,7 @@ export const modules = [
    },
    {
     "id": "how-does-sglang-work",
-    "num": "12.16",
+    "num": "13.16",
     "title": "SGLang: Structured LLM Programs for Efficient Inference",
     "source": "",
     "covers": [
@@ -2317,7 +2317,7 @@ export const modules = [
    },
    {
     "id": "how-does-tensorrt-llm-work",
-    "num": "12.17",
+    "num": "13.17",
     "title": "TensorRT-LLM: NVIDIA's Optimized Inference Engine",
     "source": "",
     "covers": [
@@ -2349,7 +2349,7 @@ export const modules = [
  },
  {
   "id": "evaluation",
-  "number": 13,
+  "number": 14,
   "title": "Measuring What Matters",
   "short": "Eval & Observability",
   "icon": "◉",
@@ -2362,7 +2362,7 @@ export const modules = [
   "lessons": [
    {
     "id": "llm-evaluation",
-    "num": "13.1",
+    "num": "14.1",
     "title": "Evaluating LLMs: Metrics, Benchmarks, and Methods",
     "source": "",
     "covers": [
@@ -2382,7 +2382,7 @@ export const modules = [
    },
    {
     "id": "llm-as-a-judge",
-    "num": "13.2",
+    "num": "14.2",
     "title": "LLM-as-Judge: Automating Evaluation with Another Model",
     "source": "",
     "covers": [
@@ -2400,7 +2400,7 @@ export const modules = [
    },
    {
     "id": "ai-agent-evaluation",
-    "num": "13.3",
+    "num": "14.3",
     "title": "Evaluating AI Agents: Metrics and Methods That Work",
     "source": "",
     "covers": [
@@ -2423,7 +2423,7 @@ export const modules = [
    },
    {
     "id": "ai-agent-observability",
-    "num": "13.4",
+    "num": "14.4",
     "title": "Agent Observability: Traces, Spans, and Debug Signals",
     "source": "",
     "covers": [
@@ -2447,7 +2447,7 @@ export const modules = [
  },
  {
   "id": "safety",
-  "number": 14,
+  "number": 15,
   "title": "Securing AI Systems",
   "short": "Safety & Security",
   "icon": "⛨",
@@ -2460,7 +2460,7 @@ export const modules = [
   "lessons": [
    {
     "id": "how-do-llm-guardrails-work",
-    "num": "14.1",
+    "num": "15.1",
     "title": "LLM Guardrails: Filtering Inputs and Outputs for Safety",
     "source": "",
     "covers": [
@@ -2479,7 +2479,7 @@ export const modules = [
    },
    {
     "id": "prompt-injection-in-llms",
-    "num": "14.2",
+    "num": "15.2",
     "title": "Prompt Injection: Attacks Against LLM-Powered Systems",
     "source": "",
     "covers": [
@@ -2504,7 +2504,7 @@ export const modules = [
    },
    {
     "id": "how-does-llm-watermarking-work",
-    "num": "14.3",
+    "num": "15.3",
     "title": "LLM Watermarking: Embedding Invisible Signatures in AI Text",
     "source": "",
     "covers": [
@@ -2530,7 +2530,7 @@ export const modules = [
  },
  {
   "id": "multimodal",
-  "number": 15,
+  "number": 16,
   "title": "Beyond Text: Multimodal AI",
   "short": "Multimodal AI",
   "icon": "◐",
@@ -2543,7 +2543,7 @@ export const modules = [
   "lessons": [
    {
     "id": "multimodal-ai",
-    "num": "15.1",
+    "num": "16.1",
     "title": "Multimodal AI: Perceiving Text, Images, and Audio Together",
     "source": "",
     "covers": [
@@ -2561,7 +2561,7 @@ export const modules = [
    },
    {
     "id": "decoding-vision-transformer-vit",
-    "num": "15.2",
+    "num": "16.2",
     "title": "Vision Transformers: Applying Self-Attention to Image Patches",
     "source": "",
     "covers": [
@@ -2579,7 +2579,7 @@ export const modules = [
    },
    {
     "id": "how-do-image-embeddings-work",
-    "num": "15.3",
+    "num": "16.3",
     "title": "Image Embeddings: Encoding Visual Content as Vectors",
     "source": "",
     "covers": [
@@ -2597,7 +2597,7 @@ export const modules = [
    },
    {
     "id": "diffusion-models",
-    "num": "15.4",
+    "num": "16.4",
     "title": "Diffusion Models: Iterative Denoising to Generate Images",
     "source": "",
     "covers": [
@@ -2616,7 +2616,7 @@ export const modules = [
    },
    {
     "id": "generative-adversarial-networks",
-    "num": "15.5",
+    "num": "16.5",
     "title": "GANs: A Generator and Discriminator in Constant Competition",
     "source": "",
     "covers": [
@@ -2634,7 +2634,7 @@ export const modules = [
    },
    {
     "id": "variational-autoencoders",
-    "num": "15.6",
+    "num": "16.6",
     "title": "Variational Autoencoders: Learning a Compressed Latent Space",
     "source": "",
     "covers": [
@@ -2654,7 +2654,7 @@ export const modules = [
  },
  {
   "id": "infrastructure",
-  "number": 16,
+  "number": 17,
   "title": "Production AI Infrastructure",
   "short": "AI Infrastructure",
   "icon": "▣",
@@ -2667,7 +2667,7 @@ export const modules = [
   "lessons": [
    {
     "id": "how-does-a-gpu-work-for-deep-learning",
-    "num": "16.1",
+    "num": "17.1",
     "title": "GPUs for Deep Learning: Parallelism at the Core",
     "source": "",
     "covers": [
@@ -2688,7 +2688,7 @@ export const modules = [
    },
    {
     "id": "how-do-cuda-kernels-work",
-    "num": "16.2",
+    "num": "17.2",
     "title": "CUDA Kernels: Writing Parallel Code for NVIDIA GPUs",
     "source": "",
     "covers": [
@@ -2707,7 +2707,7 @@ export const modules = [
    },
    {
     "id": "how-does-a-google-tpu-work",
-    "num": "16.3",
+    "num": "17.3",
     "title": "Google TPUs: Purpose-Built Hardware for Neural Networks",
     "source": "",
     "covers": [
@@ -2725,7 +2725,7 @@ export const modules = [
    },
    {
     "id": "how-does-an-lpu-work",
-    "num": "16.4",
+    "num": "17.4",
     "title": "Language Processing Units: A New Approach to LLM Inference",
     "source": "",
     "covers": [
@@ -2748,7 +2748,7 @@ export const modules = [
    },
    {
     "id": "cloud-vs-on-device-model-deployment",
-    "num": "16.5",
+    "num": "17.5",
     "title": "Cloud vs Edge: Where Should Your Model Run?",
     "source": "",
     "covers": [
@@ -2772,14 +2772,14 @@ export const modules = [
    },
    {
     "id": "android-tensorflow-lite-machine-learning-example",
-    "num": "16.6",
+    "num": "17.6",
     "title": "On-Device ML: A TensorFlow Lite Android Walkthrough",
     "source": "",
     "covers": []
    },
    {
     "id": "llm-routing",
-    "num": "16.7",
+    "num": "17.7",
     "title": "LLM Routing: Directing Each Query to the Best Model",
     "source": "",
     "covers": [
@@ -2797,7 +2797,7 @@ export const modules = [
    },
    {
     "id": "design-a-real-time-voice-ai-agent",
-    "num": "16.8",
+    "num": "17.8",
     "title": "Building a Real-Time Voice AI Agent from Scratch",
     "source": "",
     "covers": [
@@ -2830,7 +2830,7 @@ export const modules = [
    },
    {
     "id": "system-design",
-    "num": "16.9",
+    "num": "17.9",
     "title": "System Design Fundamentals for AI Engineers",
     "source": "",
     "covers": [
@@ -2841,7 +2841,7 @@ export const modules = [
    },
    {
     "id": "http-request-long-polling-websocket-sse",
-    "num": "16.10",
+    "num": "17.10",
     "title": "Transport Protocols: HTTP, WebSockets, and SSE Compared",
     "source": "",
     "covers": [
@@ -2854,7 +2854,7 @@ export const modules = [
    },
    {
     "id": "voice-and-video-call",
-    "num": "16.11",
+    "num": "17.11",
     "title": "How do Voice And Video Call Work?",
     "source": "",
     "covers": [
@@ -2868,7 +2868,7 @@ export const modules = [
  },
  {
   "id": "frontier",
-  "number": 17,
+  "number": 18,
   "title": "The Edge of AI Research",
   "short": "Frontier Ideas",
   "icon": "✦",
@@ -2881,7 +2881,7 @@ export const modules = [
   "lessons": [
    {
     "id": "joint-embedding-predictive-architecture-jepa",
-    "num": "17.1",
+    "num": "18.1",
     "title": "JEPA: LeCun's Vision for World Model AI",
     "source": "",
     "covers": [
@@ -2902,7 +2902,7 @@ export const modules = [
    },
    {
     "id": "how-do-world-models-work",
-    "num": "17.2",
+    "num": "18.2",
     "title": "World Models: Teaching AI to Simulate Its Environment",
     "source": "",
     "covers": [
@@ -2920,7 +2920,7 @@ export const modules = [
    },
    {
     "id": "what-is-recursive-self-improvement-rsi",
-    "num": "17.3",
+    "num": "18.3",
     "title": "Recursive Self-Improvement: Can AI Improve Itself Indefinitely?",
     "source": "",
     "covers": [
@@ -2941,7 +2941,7 @@ export const modules = [
  },
  {
   "id": "interviews",
-  "number": 18,
+  "number": 19,
   "title": "AI Engineering Career Prep",
   "short": "Career Prep",
   "icon": "✓",
@@ -2953,7 +2953,7 @@ export const modules = [
   "lessons": [
    {
     "id": "ai-engineering-interview-prep",
-    "num": "18.1",
+    "num": "19.1",
     "title": "Cracking the AI Engineering Interview",
     "source": "",
     "covers": [

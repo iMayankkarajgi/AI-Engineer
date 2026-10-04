@@ -11,7 +11,7 @@ export default {
         { type: 'p', text: '**Contrastive learning** is a way of training a model to produce useful **embeddings** (lists of numbers that represent an input) by **comparing** examples. We show the model pairs of things and tell it only one fact about each pair: are these two related, or not? The model learns to place related things close together in embedding space and unrelated things far apart.' },
         { type: 'p', text: 'The model being trained is called an **encoder**: a network that turns an input (an image, a sentence, an audio clip) into a vector. After training, we usually throw away the training task and keep the encoder, because its embeddings capture meaning: similar inputs get similar vectors.' },
         { type: 'callout', tone: 'analogy', title: 'Spot the same person', text: 'Show a child two photos of their aunt, one in sunlight and one at night with a hat, and a photo of a stranger. The child learns that lighting and hats do not matter, while face shape does. Nobody explains "face shape" in words; the child learns it by contrasting same-person pairs with different-person pairs. Contrastive learning teaches an encoder the same way: what stays the same across positives is what matters.' },
-        { type: 'p', text: 'Contrastive learning is usually a form of **self-supervised learning** (Lesson 1.2): the training signal comes from the structure of the data itself, not from human labels. It can also be supervised, when we use labels to decide which pairs are positive.' },
+        { type: 'p', text: 'Contrastive learning is usually a form of **self-supervised learning** (Lesson 2.2): the training signal comes from the structure of the data itself, not from human labels. It can also be supervised, when we use labels to decide which pairs are positive.' },
       ],
     },
     {
@@ -19,14 +19,14 @@ export default {
       title: 'Why do we need contrastive learning?',
       blocks: [
         { type: 'p', text: 'Supervised learning needs labels, and labels are expensive. Meanwhile the world is full of unlabelled data: billions of images, web pages, and image-caption pairs. We want a way to learn good representations from all of it.' },
-        { type: 'p', text: 'We also need representations that capture **meaning**. Early approaches described data with hand-made features (Lesson 1.4) or with **one-hot encoding**, where each word or category gets its own 0/1 column. One-hot vectors treat every pair of items as equally different: "cat" is as far from "kitten" as it is from "carburettor". Learned embeddings fix this by placing similar things nearby, and contrastive learning is one of the most effective ways to learn them.' },
+        { type: 'p', text: 'We also need representations that capture **meaning**. Early approaches described data with hand-made features (Lesson 2.4) or with **one-hot encoding**, where each word or category gets its own 0/1 column. One-hot vectors treat every pair of items as equally different: "cat" is as far from "kitten" as it is from "carburettor". Learned embeddings fix this by placing similar things nearby, and contrastive learning is one of the most effective ways to learn them.' },
         { type: 'list', items: [
           '**Uses unlabelled data:** positives can be created automatically.',
           '**Produces general-purpose embeddings:** one encoder can serve search, clustering, classification and recommendation.',
           '**Needs few labels downstream:** a small classifier on top of good embeddings (a "linear probe") can work well with little labelled data.',
           '**Connects different modalities:** it can put images and text in the same space, so a sentence can find a photo.',
         ] },
-        { type: 'callout', tone: 'note', title: 'Related videos from the course', text: 'For the background ideas mentioned here, see [Feature Engineering in Machine Learning](https://www.youtube.com/watch?v=QLlywrWuXag) (video) and [One-hot Encoding in Machine Learning](https://www.youtube.com/watch?v=6AmedU5i9go) (video). Lesson 1.4 also covers both topics on this site.' },
+        { type: 'callout', tone: 'note', title: 'Related videos from the course', text: 'For the background ideas mentioned here, see [Feature Engineering in Machine Learning](https://www.youtube.com/watch?v=QLlywrWuXag) (video) and [One-hot Encoding in Machine Learning](https://www.youtube.com/watch?v=6AmedU5i9go) (video). Lesson 2.4 also covers both topics on this site.' },
       ],
     },
     {
@@ -201,8 +201,8 @@ random-guess loss with 8 candidates = ln(8) = 2.079`, walkthrough: [
       title: 'Real-world use cases, and limits',
       blocks: [
         { type: 'list', items: [
-          '**Semantic search and RAG:** text embedding models are commonly trained contrastively on (query, relevant passage) pairs with in-batch and hard negatives. These embeddings power vector databases and retrieval in RAG (Module 9).',
-          '**Multimodal search:** CLIP-style models let users search photos with words ("red sneakers on a beach") and are used as components in many text-to-image and vision-language systems (Module 15).',
+          '**Semantic search and RAG:** text embedding models are commonly trained contrastively on (query, relevant passage) pairs with in-batch and hard negatives. These embeddings power vector databases and retrieval in RAG (Module 10).',
+          '**Multimodal search:** CLIP-style models let users search photos with words ("red sneakers on a beach") and are used as components in many text-to-image and vision-language systems (Module 16).',
           '**Face verification:** unlocking a phone or matching ID photos compares face embeddings learned with contrastive or triplet-style losses.',
           '**Recommendation:** users and items are embedded so that a user is near items they engaged with.',
           '**Pre-training with few labels:** in medical imaging or industrial inspection, contrastive pre-training on unlabelled images followed by a small labelled fine-tune can beat training from scratch.',

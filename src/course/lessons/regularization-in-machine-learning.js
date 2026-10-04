@@ -8,12 +8,12 @@ export default {
       id: 'overfitting',
       title: 'What is overfitting?',
       blocks: [
-        { type: 'p', text: 'In Lesson 1.1 we saw that the goal of machine learning is **generalisation**: doing well on new data. **Overfitting** is the failure where a model fits its training data too closely, including random noise and quirks that will not repeat, and as a result performs worse on new data. The tell-tale sign: very low training error, much higher validation or test error.' },
+        { type: 'p', text: 'In Lesson 2.1 we saw that the goal of machine learning is **generalisation**: doing well on new data. **Overfitting** is the failure where a model fits its training data too closely, including random noise and quirks that will not repeat, and as a result performs worse on new data. The tell-tale sign: very low training error, much higher validation or test error.' },
         { type: 'callout', tone: 'analogy', title: 'Memorising the answer sheet', text: 'A student who memorises last year\'s exam answers word for word scores 100% on last year\'s paper and fails this year\'s, because the questions changed slightly. A student who learned the underlying ideas does well on both. An overfit model is the memoriser.' },
         { type: 'p', text: 'Overfitting is most likely when the model is very **flexible** (many parameters, high-degree polynomials, deep trees, big neural networks) compared with the **amount of data**. A classic example: fit a degree-9 polynomial through 15 noisy points. The curve can wiggle through almost every point, but between and beyond the points it swings wildly.' },
         { type: 'p', text: 'A key symptom is **large weights**. To wiggle through noisy points, the model needs big positive and negative coefficients that cancel each other out on the training data. In our example below, the unregularised model\'s weights add up (in absolute value) to 661, while a well-behaved model needs only about 2.' },
         { type: 'list', items: [
-          '**Ways to fight overfitting:** get more data, use a simpler model, choose better features, stop training early, use dropout in neural networks (Lesson 2.5), and **regularisation**, the subject of this lesson.',
+          '**Ways to fight overfitting:** get more data, use a simpler model, choose better features, stop training early, use dropout in neural networks (Lesson 3.5), and **regularisation**, the subject of this lesson.',
         ] },
       ],
     },
@@ -146,7 +146,7 @@ lasso weights: [1.14, -0.02, -0.54, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]`, walkthrough:
       blocks: [
         { type: 'list', items: [
           '**Choosing λ:** try a range of values on a log scale (0.001, 0.01, 0.1, 1, 10…) and pick the one with the best validation score, often with cross-validation (training and validating on several different splits).',
-          '**Scale features first.** The penalty treats all weights equally, so a feature measured in millimetres would be penalised differently from one in kilometres. Standardise before regularising (Lesson 1.4).',
+          '**Scale features first.** The penalty treats all weights equally, so a feature measured in millimetres would be penalised differently from one in kilometres. Standardise before regularising (Lesson 2.4).',
           '**Do not penalise the intercept.** Shifting all predictions up or down is not "complexity".',
           '**In deep learning,** L2-style weight decay is standard. Modern optimisers such as AdamW apply weight decay directly to the weights ("decoupled" from the gradient), which behaves better with adaptive optimisers. LLM pre-training and fine-tuning commonly use AdamW with weight decay, alongside other regularisers such as dropout.',
         ] },

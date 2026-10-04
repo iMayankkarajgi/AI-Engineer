@@ -103,7 +103,7 @@ one-hot rows for Pune, Mumbai, Nagpur: [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]`, wa
       id: 'feature-learning',
       title: 'Hand-made features vs learned features',
       blocks: [
-        { type: 'p', text: 'Deep learning changed the picture. A neural network\'s hidden layers effectively **learn their own features** from raw inputs: early layers of an image model learn edges, later ones learn shapes and objects. An LLM turns raw text into **embeddings**, dense vectors that capture meaning, without anyone designing them by hand (Lesson 3.4). Contrastive learning (Lesson 1.9) is one powerful way to learn such features.' },
+        { type: 'p', text: 'Deep learning changed the picture. A neural network\'s hidden layers effectively **learn their own features** from raw inputs: early layers of an image model learn edges, later ones learn shapes and objects. An LLM turns raw text into **embeddings**, dense vectors that capture meaning, without anyone designing them by hand (Lesson 4.4). Contrastive learning (Lesson 2.9) is one powerful way to learn such features.' },
         { type: 'compare', title: 'Manual feature engineering vs learned features', options: [
           { name: 'Manual feature engineering', summary: 'People design features using domain knowledge.', pros: ['Works with small datasets', 'Features are interpretable', 'Cheap to train and run'], cons: ['Takes expert time', 'May miss patterns humans do not think of', 'Hard for images, audio, free text'], bestFor: 'Tabular business data: sales, finance, risk, operations' },
           { name: 'Learned features (deep learning)', summary: 'The model learns representations directly from raw data.', pros: ['Finds complex patterns automatically', 'Excellent for images, audio, text', 'Reusable embeddings across tasks'], cons: ['Needs lots of data and compute', 'Features are hard to interpret', 'Can still pick up spurious shortcuts'], bestFor: 'Unstructured data: images, speech, language' },
@@ -112,7 +112,7 @@ one-hot rows for Pune, Mumbai, Nagpur: [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]`, wa
           ['Human effort', 'Designing features', 'Designing architecture and collecting data'],
           ['Interpretability', 'High', 'Low'],
         ], verdict: 'They are complementary. Even LLM applications use engineered features: document age, source trust, click counts or user tier for ranking, routing and safety decisions.' },
-        { type: 'callout', tone: 'example', title: 'Feature engineering in AI products', text: 'A RAG search system (Module 9) might combine a learned feature (embedding similarity) with engineered ones: how recent the document is, whether the query contains an exact product code, and the document\'s historical click-through rate. A fraud model might add "number of transactions in the last hour" and "distance from the user\'s usual location". These hand-made features are often what makes a production system reliable.' },
+        { type: 'callout', tone: 'example', title: 'Feature engineering in AI products', text: 'A RAG search system (Module 10) might combine a learned feature (embedding similarity) with engineered ones: how recent the document is, whether the query contains an exact product code, and the document\'s historical click-through rate. A fraud model might add "number of transactions in the last hour" and "distance from the user\'s usual location". These hand-made features are often what makes a production system reliable.' },
       ],
     },
     {
@@ -124,7 +124,7 @@ one-hot rows for Pune, Mumbai, Nagpur: [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]`, wa
           ['Standardisation (z-score)', '(x − mean) / std', '−1.22', '0', '1.22'],
           ['Min-max scaling', '(x − min) / (max − min)', '0', '0.5', '1'],
         ], caption: 'Mean = 100, population standard deviation ≈ 40.8, min = 50, max = 150.' },
-        { type: 'p', text: '**When does scaling matter?** For methods that use distances (k-means, k-nearest neighbours), for gradient descent (features on wildly different scales make the loss surface stretched, so training is slow), and for regularised models (Lesson 1.7), where the penalty treats all weights alike. **Tree-based models** (decision trees, random forests, gradient boosting) split on thresholds one feature at a time, so they generally do not need scaling.' },
+        { type: 'p', text: '**When does scaling matter?** For methods that use distances (k-means, k-nearest neighbours), for gradient descent (features on wildly different scales make the loss surface stretched, so training is slow), and for regularised models (Lesson 2.7), where the penalty treats all weights alike. **Tree-based models** (decision trees, random forests, gradient boosting) split on thresholds one feature at a time, so they generally do not need scaling.' },
         { type: 'p', text: 'Standardisation is the usual default. Min-max scaling is useful when we need a fixed 0 to 1 range, but a single extreme outlier squashes all other values close together.' },
       ],
     },

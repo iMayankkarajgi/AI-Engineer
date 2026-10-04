@@ -206,7 +206,7 @@ export default function Practice() {
     </div>
     <div className="ide container">
       <aside className="ide-files" aria-label="Files">
-        <button className="button primary small" onClick={() => open(blank())}>New file</button>
+        <button className="button primary small" onClick={() => open(blank())}>New File</button>
         <h2>Your files</h2>
         {snippets.error && <p className="ide-hint bad">{snippets.error}</p>}
         {snippets.loading ? <p className="ide-hint">Loading…</p> : snippets.list.length === 0 ? <p className="ide-hint">Nothing saved yet. Press Save to keep a file.</p>
@@ -220,7 +220,7 @@ export default function Practice() {
           <input className="ide-title" value={file.title} maxLength="80" spellCheck="false" aria-label="File name" onChange={e => setFile(f => ({ ...f, title: e.target.value }))}/>
           {dirty && <span className="ide-dirty" title="Unsaved changes">● Unsaved</span>}
           <span className="ide-spacer"/>
-          {file.id && <button className={'button ghost small' + (armed ? ' danger' : '')} onClick={remove}>{armed ? 'Click again to delete' : 'Delete'}</button>}
+          {file.id && <button className={'button ghost small' + (armed ? ' danger' : '')} onClick={remove}>{armed ? 'Click Again To Delete' : 'Delete'}</button>}
           <button className="button ghost small" onClick={() => save()} disabled={busy || (!dirty && !!file.id)}>{busy ? 'Saving…' : 'Save'}</button>
           {py.running
             ? <button className="button small stop" onClick={py.stop}>■ Stop</button>

@@ -121,16 +121,16 @@ function Quiz({ id, quiz, nextId }) {
       </li>;
     })}</ol>
     {!submitted
-      ? <div className="quiz-submit"><span>{answered} of {quiz.length} answered</span><button className="button primary" disabled={answered < quiz.length} onClick={submit}>Submit answers</button></div>
+      ? <div className="quiz-submit"><span>{answered} of {quiz.length} answered</span><button className="button primary" disabled={answered < quiz.length} onClick={submit}>Submit Answers</button></div>
       : <div id="quiz-result" className={'quiz-result ' + (passed ? 'pass' : 'fail')} role="status">
           <div className="quiz-score"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.9" className="track"/><circle cx="18" cy="18" r="15.9" className="fill" style={{ strokeDasharray: `${(score / quiz.length) * 100} 100` }}/></svg><b>{score}/{quiz.length}</b></div>
           <div>
             <strong>{passed ? (score === quiz.length ? 'Perfect score! Lesson passed.' : 'Lesson passed!') : `You scored ${score}. You need ${PASS_MARK} to pass.`}</strong>
             <p>{passed ? (nextId ? 'The next lesson is now unlocked.' : 'You have completed the whole course. Congratulations!') : 'Read the explanations above, revisit the sections they point to, then try again. The options will be shuffled.'}</p>
             <div className="quiz-actions">
-              {passed && nextId && <Link className="button primary" to={`/lesson/${nextId}`}>Next lesson →</Link>}
-              {passed && !nextId && <Link className="button primary" to="/dashboard">See your progress →</Link>}
-              <button className={'button ' + (passed ? 'ghost' : 'primary')} onClick={retry}>{passed ? 'Retake quiz' : '↺ Try again'}</button>
+              {passed && nextId && <Link className="button primary" to={`/lesson/${nextId}`}>Next Lesson →</Link>}
+              {passed && !nextId && <Link className="button primary" to="/dashboard">See Your Progress →</Link>}
+              <button className={'button ' + (passed ? 'ghost' : 'primary')} onClick={retry}>{passed ? 'Retake Quiz' : '↺ Try Again'}</button>
             </div>
           </div>
           {passed && <div className="confetti" aria-hidden="true">{Array.from({ length: 24 }, (_, i) => <i key={i} style={{ '--i': i }}/>)}</div>}
@@ -148,8 +148,8 @@ function Locked({ lesson, mod }) {
     <p className="dek">This lesson unlocks when you pass the quiz for <b>{prev.num} {prev.title}</b> with at least {PASS_MARK} of 5 correct answers. Each lesson builds on the one before it.</p>
     {lesson.covers?.length > 0 && <div className="card"><h3>What you’ll learn here</h3><ul className="check-list">{lesson.covers.map(c => <li key={c}>{c}</li>)}</ul></div>}
     <div className="locked-actions">
-      <Link className="button primary" to={`/lesson/${nextLesson}`}>Continue where you left off →</Link>
-      <Link className="button ghost" to={`/module/${mod.id}`}>Module overview</Link>
+      <Link className="button primary" to={`/lesson/${nextLesson}`}>Continue Where You Left Off →</Link>
+      <Link className="button ghost" to={`/module/${mod.id}`}>Module Overview</Link>
     </div>
   </main>;
 }

@@ -19,7 +19,7 @@ export default {
       title: 'Word 1: LLM, the engine that predicts text',
       blocks: [
         { type: 'p', text: 'A **Large Language Model (LLM)** is a neural network trained on a huge amount of text to do one simple-sounding job: given some text, predict the next small piece of text. Those pieces are called **tokens**. A token is often a word or part of a word; for example "refunds" might be split into "ref" and "unds".' },
-        { type: 'p', text: 'The model does not pick a single next token directly. It outputs a probability for every token in its vocabulary, picks one (we learn exactly how in Module 4), appends it, and repeats. Writing a whole answer is just this one step run many times. This is called **autoregressive** generation: each new token depends on all the tokens before it.' },
+        { type: 'p', text: 'The model does not pick a single next token directly. It outputs a probability for every token in its vocabulary, picks one (we learn exactly how in Module 5), appends it, and repeats. Writing a whole answer is just this one step run many times. This is called **autoregressive** generation: each new token depends on all the tokens before it.' },
         { type: 'viz', name: 'temperature', caption: 'An LLM outputs probabilities for the next token. Drag the temperature slider to see how the choice can be made more predictable (low) or more varied (high).' },
         { type: 'p', text: '"Large" refers to the number of **parameters**: the learned numbers (weights) inside the network. Modern LLMs have billions of them. During **pre-training**, the model reads trillions of tokens and adjusts those weights so its next-token guesses get better. Along the way it picks up grammar, facts, reasoning patterns, and coding skill, because all of these help predict text.' },
         { type: 'p', text: 'For ShopBot, the LLM is the part that understands "my parcel never showed up" and writes a polite, fluent reply. But a plain LLM has three big gaps:' },
@@ -38,7 +38,7 @@ export default {
         { type: 'p', text: '**Retrieval-Augmented Generation (RAG)** means: before the LLM answers, we *retrieve* the most relevant pieces of our own documents and paste them into the prompt, so the model *generates* its answer grounded in those facts. The model\'s weights do not change at all; we only change what it reads.' },
         { type: 'flow', title: 'How ShopBot answers with RAG', nodes: [
           { label: 'Question', detail: 'A customer asks: "How many days until my refund arrives?"' },
-          { label: 'Retrieve', detail: 'We search the help-centre articles and policy docs for the passages most related to the question. Real systems usually use embeddings and a vector database (Module 9).' },
+          { label: 'Retrieve', detail: 'We search the help-centre articles and policy docs for the passages most related to the question. Real systems usually use embeddings and a vector database (Module 10).' },
           { label: 'Augment', detail: 'We build a prompt: instructions + the retrieved passages + the question.' },
           { label: 'Generate', detail: 'The LLM writes an answer using the passages, e.g. "Refunds reach your original card within 5 business days."' },
           { label: 'Cite', detail: 'Good systems also show which article the answer came from, so users and reviewers can check it.' },
@@ -54,7 +54,7 @@ export default {
         { type: 'p', text: 'RAG gives the model documents. But ShopBot also needs *live* systems: the order database, the shipping tracker, the refund API. Every app that wants to connect an LLM to every tool used to write custom glue code for each pair. With 5 AI apps and 10 tools that is up to 50 separate integrations.' },
         { type: 'p', text: 'The **Model Context Protocol (MCP)** is an open standard, introduced by Anthropic in late 2024 and now supported by many AI apps and vendors, that defines one common way for AI applications to talk to tools and data sources. A tool provider writes one **MCP server** (for example, "order-system server"). Any AI application that includes an **MCP client** can then use it. Each side is built once, so 5 apps and 10 tools need about 15 pieces instead of 50.' },
         { type: 'callout', tone: 'analogy', title: 'Like USB-C for AI', text: 'Before USB, every device had its own special cable. A standard port means any charger fits any phone. MCP plays that role between AI apps and the tools they use.' },
-        { type: 'p', text: 'An MCP server can expose three kinds of things: **tools** (actions the model may call, such as `get_order_status(order_id)`), **resources** (data it may read, such as a file or record), and **prompts** (reusable prompt templates). Messages are exchanged as JSON. Important: MCP is only the *plug*. It does not decide when to call a tool. That decision belongs to the model and the agent around it, which is our next word. We go deep on MCP in Module 10.' },
+        { type: 'p', text: 'An MCP server can expose three kinds of things: **tools** (actions the model may call, such as `get_order_status(order_id)`), **resources** (data it may read, such as a file or record), and **prompts** (reusable prompt templates). Messages are exchanged as JSON. Important: MCP is only the *plug*. It does not decide when to call a tool. That decision belongs to the model and the agent around it, which is our next word. We go deep on MCP in Module 11.' },
       ],
     },
     {
@@ -79,7 +79,7 @@ export default {
       title: 'Word 5: Fine-tuning, changing the model\'s habits',
       blocks: [
         { type: 'p', text: '**Fine-tuning** means continuing to train an already pre-trained model on a smaller, focused dataset so its weights change. For example, we might fine-tune on a few thousand past support chats that our best human agents wrote, so ShopBot learns our tone, our reply format, and how to handle tricky edge cases.' },
-        { type: 'p', text: 'Fine-tuning a whole model updates billions of weights and needs a lot of GPU memory. A popular cheaper method is **LoRA (Low-Rank Adaptation)**: we freeze the original weights and train only small extra matrices, often well under 1% of the parameter count. Module 7 explains this in detail.' },
+        { type: 'p', text: 'Fine-tuning a whole model updates billions of weights and needs a lot of GPU memory. A popular cheaper method is **LoRA (Low-Rank Adaptation)**: we freeze the original weights and train only small extra matrices, often well under 1% of the parameter count. Module 8 explains this in detail.' },
         { type: 'compare', title: 'RAG vs Fine-tuning: which fixes what?', options: [
           { name: 'RAG', summary: 'Change what the model *reads* at question time.', pros: ['Knowledge updates instantly', 'Can cite sources', 'No training cost'], cons: ['Needs a good search system', 'Uses more prompt tokens per question'], bestFor: 'Facts that change: policies, docs, prices, product catalogues' },
           { name: 'Fine-tuning', summary: 'Change what the model *is* by training its weights.', pros: ['Teaches style, format and behaviour', 'Can shorten prompts', 'Can make a small model good at one narrow task'], cons: ['Needs curated training data', 'Knowledge goes stale until retrained', 'Harder to trace why it said something'], bestFor: 'Tone, output format, domain skills, narrow repeated tasks' },
@@ -149,7 +149,7 @@ mean absolute error after round trip: 0.000186`, walkthrough: [
           { lines: [23, 26], note: 'Quantization: pick a scale so the largest weight maps to 127, divide, and round to 8-bit integers.' },
           { lines: [27, 29], note: 'Dequantize and compare. Memory is 4× smaller; the average error is tiny compared with typical weight sizes (about 0.016).' },
         ] },
-        { type: 'check', question: 'In the output, why does the "shipping" article get a score of 1 even though it is about a different topic?', answer: 'Because it contains the word "days", which also appears in the question. Simple word overlap is easily fooled, which is exactly why real RAG systems use embeddings that compare meaning (Module 9).' },
+        { type: 'check', question: 'In the output, why does the "shipping" article get a score of 1 even though it is about a different topic?', answer: 'Because it contains the word "days", which also appears in the question. Simple word overlap is easily fooled, which is exactly why real RAG systems use embeddings that compare meaning (Module 10).' },
       ],
     },
     {
@@ -172,7 +172,7 @@ mean absolute error after round trip: 0.000186`, walkthrough: [
           { label: 'MCP tools', detail: 'Calls order lookup and refund tools through MCP servers.' },
           { label: 'Reply', detail: 'Writes a grounded, on-brand answer and logs every step.' },
         ] },
-        { type: 'callout', tone: 'tip', title: 'Start simple', text: 'A real team would not build all six on day one. A common order is: prompt a hosted LLM, add RAG for knowledge, add tools and an agent loop when actions are needed, then consider fine-tuning and quantization (or a smaller model) when quality, cost, or latency demand it. We also need **evaluation** (Module 13) to know whether each change actually helped.' },
+        { type: 'callout', tone: 'tip', title: 'Start simple', text: 'A real team would not build all six on day one. A common order is: prompt a hosted LLM, add RAG for knowledge, add tools and an agent loop when actions are needed, then consider fine-tuning and quantization (or a smaller model) when quality, cost, or latency demand it. We also need **evaluation** (Module 14) to know whether each change actually helped.' },
         { type: 'callout', tone: 'warn', title: 'When not to reach for the fancy words', text: 'If a question can be answered by a simple search or a fixed form, an agent is overkill. If our documents fit easily in the prompt, a full RAG pipeline may not be needed. Every extra component adds cost and new ways to fail.' },
       ],
     },

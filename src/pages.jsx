@@ -37,7 +37,7 @@ export function Header() {
       {user && <Link className="avatar-link" to="/profile" aria-label="Your profile" title={user.name}><Avatar user={user} size={34}/></Link>}
       {!ACCOUNTS || user
         ? <Link className="button primary small" to={`/lesson/${nextLesson}`}>Continue</Link>
-        : <Link className="button primary small" to="/account">Sign in</Link>}
+        : <Link className="button primary small" to="/account">Sign In</Link>}
       <button className="menu-toggle" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button>
     </div>
   </div></header>;
@@ -203,7 +203,7 @@ export function Guide() {
     <section id="glance" className="guide-section"><h2>Curriculum at a glance</h2><div className="b-table"><table><thead><tr><th>Module</th><th>Topic</th><th>Lessons</th></tr></thead>
       <tbody>{modules.map(m => <tr key={m.id}><td>{m.number}</td><td><Link to={`/module/${m.id}`}>{m.title}</Link></td><td>{m.lessons.length}</td></tr>)}</tbody></table></div></section>
     <section id="path" className="guide-section"><h2>Learning path</h2><LearningPath/></section>
-    <div className="guide-cta"><Link className="button primary" to={`/lesson/${allLessons[0].id}`}>Start lesson 0.1 →</Link></div>
+    <div className="guide-cta"><Link className="button primary" to={`/lesson/${allLessons[0].id}`}>Start Lesson {allLessons[0].num} →</Link></div>
   </main>;
 }
 
@@ -244,7 +244,7 @@ export function Dashboard() {
     <div className="dashboard-top">
       <div className="card stat"><small>Lessons passed</small><strong>{completed.length}<span> / {TOTAL}</span></strong><div className="meter large"><span style={{ width: `${(completed.length / TOTAL) * 100}%` }}/></div></div>
       <div className="card stat"><small>Average best quiz score</small><strong>{avg}<span> / 5</span></strong><p>{attempted} quiz{attempted === 1 ? '' : 'zes'} attempted</p></div>
-      <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><Link className="button primary" to={`/lesson/${nextLesson}`}>Open lesson →</Link></div>
+      <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link></div>
     </div>
     <h2 className="section-title">Your modules</h2>
     <ul className="dashboard-tracks">{modules.map(m => {
@@ -255,8 +255,8 @@ export function Dashboard() {
         <small>{done} / {m.lessons.length}</small>
       </Link></li>;
     })}</ul>
-    <div className="account-link">{user ? <><Link className="button ghost" to="/profile">Your profile</Link><button className="button ghost" onClick={logout}>Sign out</button></>
-      : <>{ACCOUNTS && <Link className="button ghost" to="/account">Create an account to sync progress</Link>}{completed.length > 0 && <ResetButton onReset={resetGuest}/>}</>}</div>
+    <div className="account-link">{user ? <><Link className="button ghost" to="/profile">Your Profile</Link><button className="button ghost" onClick={logout}>Sign Out</button></>
+      : <>{ACCOUNTS && <Link className="button ghost" to="/account">Create An Account To Sync Progress</Link>}{completed.length > 0 && <ResetButton onReset={resetGuest}/>}</>}</div>
   </main>;
 }
 
@@ -266,7 +266,7 @@ function ResetButton({ onReset }) {
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 5000); return () => clearTimeout(t); }, [armed]);
   return armed
     ? <span className="reset-confirm">Reset all progress and quiz scores in this browser? <button className="text-button danger" onClick={() => { onReset(); setArmed(false); }}>Yes, reset</button><button className="text-button" onClick={() => setArmed(false)}>Cancel</button></span>
-    : <button className="text-button" onClick={() => setArmed(true)}>Reset progress</button>;
+    : <button className="text-button" onClick={() => setArmed(true)}>Reset Progress</button>;
 }
 
 export function Account() {
@@ -293,23 +293,23 @@ export function Account() {
     <div className="account-form-wrap"><div className="account-form">
       <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
       <p className="dek">{mode === 'signup' ? 'Keep your progress across devices.' : 'Pick up where you left off.'}</p>
-      {CLOUD && <><button type="button" className="button ghost google-button" disabled={busy} onClick={google}><GoogleMark/>Continue with Google</button><div className="form-divider"><span>or use your email</span></div></>}
+      {CLOUD && <><button type="button" className="button ghost google-button" disabled={busy} onClick={google}><GoogleMark/>Continue With Google</button><div className="form-divider"><span>or use your email</span></div></>}
       <form onSubmit={submit}>
         {mode === 'signup' && <label>Your name<input name="name" required maxLength="80" autoComplete="name"/></label>}
         <label>Email address<input type="email" name="email" required autoComplete="email"/></label>
         <label>Password<input type="password" name="password" minLength="10" required autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}/></label>
         {error && <div className="form-error" role="alert">{error}</div>}
         {notice && <div className="form-ok" role="status">{notice}</div>}
-        <button className="button primary" disabled={busy}>{busy ? 'One moment…' : mode === 'signup' ? 'Create account' : 'Sign in'}</button>
+        <button className="button primary" disabled={busy}>{busy ? 'One moment…' : mode === 'signup' ? 'Create Account' : 'Sign In'}</button>
       </form>
       <button className="text-button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(''); }}>{mode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
-      <Link className="text-button" to="/curriculum">Explore as a guest →</Link>
+      <Link className="text-button" to="/curriculum">Explore As A Guest →</Link>
     </div></div>
   </main>;
 }
 
 export function NotFound() {
-  return <main className="page container narrow not-found"><PageIntro eyebrow="404" title="We couldn’t find that page."/><Link className="button primary" to="/curriculum">Browse the curriculum →</Link></main>;
+  return <main className="page container narrow not-found"><PageIntro eyebrow="404" title="We couldn’t find that page."/><Link className="button primary" to="/curriculum">Browse The Curriculum →</Link></main>;
 }
 
 // Every interactive widget in one place, each linked to a lesson that uses it.

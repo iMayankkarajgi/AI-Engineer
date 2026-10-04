@@ -8,7 +8,7 @@ export default {
       id: 'what-is-a-loss',
       title: 'First, what is a loss function?',
       blocks: [
-        { type: 'p', text: 'When a model makes a prediction, it is usually a bit wrong. The **error** (also called the **residual**) for one example is the difference between the true value and the prediction: `e = y − ŷ`. A **loss function** turns all those individual errors into a single number that says how bad the model is overall. Training (Lesson 1.1) is the search for parameters that make this number as small as possible.' },
+        { type: 'p', text: 'When a model makes a prediction, it is usually a bit wrong. The **error** (also called the **residual**) for one example is the difference between the true value and the prediction: `e = y − ŷ`. A **loss function** turns all those individual errors into a single number that says how bad the model is overall. Training (Lesson 2.1) is the search for parameters that make this number as small as possible.' },
         { type: 'p', text: 'The choice of loss is not a detail. It is how we tell the model **what kind of mistakes we care about**. Two models trained on the same data with different losses can end up making noticeably different predictions.' },
         { type: 'callout', tone: 'analogy', title: 'Two strict teachers', text: 'Imagine two teachers grading how late students are. The L1 teacher gives one penalty point per minute late: 2 minutes late = 2 points, 20 minutes late = 20 points. The L2 teacher squares the minutes: 2 minutes = 4 points, 20 minutes = 400 points. Under the L2 teacher, one very late student dominates the whole class\'s penalty.' },
         { type: 'p', text: 'Running example: we predict food delivery times in minutes. Five deliveries arrived roughly on time; one hit a road closure and took 90 minutes instead of the predicted 34.' },
@@ -40,7 +40,7 @@ export default {
       id: 'l2-loss',
       title: 'L2 loss: mean squared error',
       blocks: [
-        { type: 'p', text: '**L2 loss** squares each error. Averaged, it is the **Mean Squared Error (MSE)**, the default loss for regression and the one we used in Lessons 1.1 and 1.3. Its square root, **RMSE**, brings it back to the original units.' },
+        { type: 'p', text: '**L2 loss** squares each error. Averaged, it is the **Mean Squared Error (MSE)**, the default loss for regression and the one we used in Lessons 2.1 and 2.3. Its square root, **RMSE**, brings it back to the original units.' },
         { type: 'formula', expr: 'L2 = MSE = (1/n) ∑ (yᵢ − ŷᵢ)²', caption: 'For our deliveries: (1 + 4 + 1 + 4 + 1 + 3136) / 6 = 3147 / 6 = 524.5. Without the outlier: 11 / 5 = 2.2.' },
         { type: 'list', items: [
           '**Quadratic penalty.** An error of 10 costs 100 times an error of 1. The model is pushed hard to avoid big misses.',
@@ -139,9 +139,9 @@ error 56.0: L1 gradient = 1, L2 gradient = 112`, walkthrough: [
           ['Linear regression on clean data', 'L2 (MSE)', 'Closed-form solution, Gaussian noise assumption'],
           ['Demand or delivery-time forecasting with occasional spikes', 'L1 (MAE) or Huber', 'Spikes should not distort typical predictions'],
           ['Bounding-box regression in object detection', 'Smooth L1 / Huber, or L1 in some models', 'Robust to badly wrong early predictions'],
-          ['Diffusion models predicting noise (Module 15)', 'Usually L2 (MSE) on the noise', 'Smooth objective with a clear probabilistic meaning'],
+          ['Diffusion models predicting noise (Module 16)', 'Usually L2 (MSE) on the noise', 'Smooth objective with a clear probabilistic meaning'],
           ['Image-to-image models where blur is a problem', 'Often L1 on pixels', 'L2 tends to average possibilities into blurry images'],
-          ['Classification', 'Neither: cross-entropy (Lesson 2.4)', 'Targets are classes, not numbers'],
+          ['Classification', 'Neither: cross-entropy (Lesson 3.4)', 'Targets are classes, not numbers'],
         ] },
         { type: 'callout', tone: 'note', title: 'Do not confuse with L1/L2 regularisation', text: 'L1 and L2 **losses** measure prediction errors. L1 and L2 **regularisation** (next lesson) add a penalty on the model\'s weights to prevent overfitting. Both use the same two norms, |·| and (·)², which is why the names match, but they serve different purposes and are often used together, for example MSE loss + L2 weight penalty.' },
       ],
@@ -155,7 +155,7 @@ error 56.0: L1 gradient = 1, L2 gradient = 112`, walkthrough: [
           '**Using L2 on dirty data without looking.** A few mislabelled rows can drag the whole model. Plot the errors first.',
           '**Dropping outliers automatically.** Outliers may be the most important cases (fraud, failures). Decide on purpose whether to model them.',
           '**Assuming L1 has no downsides.** Its gradient does not shrink near the optimum, and the median ignores how far the extreme values are, which is wrong if extremes are what matter.',
-          '**Using a regression loss for classification.** For class probabilities, use log loss or cross-entropy (Lesson 1.3 and Module 2).',
+          '**Using a regression loss for classification.** For class probabilities, use log loss or cross-entropy (Lesson 2.3 and Module 3).',
         ] },
       ],
     },

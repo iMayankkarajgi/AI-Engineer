@@ -131,11 +131,11 @@ match with the hidden labels: 100%`, walkthrough: [
         { type: 'p', text: 'Real projects often blend the two. Two in-between approaches matter a lot for modern AI:' },
         { type: 'list', items: [
           '**Semi-supervised learning:** a small labelled set plus a large unlabelled set. For example, label 1,000 support tickets by hand, then use patterns in 100,000 unlabelled tickets to improve the classifier.',
-          '**Self-supervised learning:** create labels automatically from the data itself. Hide the next word in a sentence and ask the model to predict it: the "label" is just the real next word. This is how LLMs are pre-trained on huge amounts of raw text, and it is closely related to contrastive learning (Lesson 1.9).',
+          '**Self-supervised learning:** create labels automatically from the data itself. Hide the next word in a sentence and ask the model to predict it: the "label" is just the real next word. This is how LLMs are pre-trained on huge amounts of raw text, and it is closely related to contrastive learning (Lesson 2.9).',
         ] },
         { type: 'p', text: 'Self-supervised training produces **embeddings**: lists of numbers where similar items end up near each other. Explore a small embedding map below. Notice that related words cluster together even though nobody labelled them as related.' },
         { type: 'viz', name: 'embedding-space', caption: 'Click a word to see its nearest neighbours. These groupings emerged from raw text without human labels.' },
-        { type: 'p', text: 'There is also a third major family, **reinforcement learning**, where an agent learns from rewards rather than labels. We cover it in Lesson 1.8.' },
+        { type: 'p', text: 'There is also a third major family, **reinforcement learning**, where an agent learns from rewards rather than labels. We cover it in Lesson 2.8.' },
       ],
     },
     {
@@ -151,7 +151,7 @@ match with the hidden labels: 100%`, walkthrough: [
           ['Group similar support tickets to find emerging issues', 'Unsupervised clustering of embeddings', 'Emerging issues have no label yet'],
         ] },
         { type: 'callout', tone: 'example', title: 'They often work together', text: 'A common pattern: first cluster unlabelled data to understand it and decide which categories matter, then label a sample per category, then train a supervised model. Unsupervised dimensionality reduction (like PCA) is also often used as a preprocessing step before a supervised model.' },
-        { type: 'callout', tone: 'tip', title: 'Pitfalls to remember', text: 'For supervised learning, check label quality: noisy or inconsistent labels cap how good the model can get. For unsupervised learning, scale features first (Lesson 1.4): if "basket in dollars" ranges up to 100 and "visits" up to 15, distance is dominated by dollars, and clusters may reflect units rather than real behaviour.' },
+        { type: 'callout', tone: 'tip', title: 'Pitfalls to remember', text: 'For supervised learning, check label quality: noisy or inconsistent labels cap how good the model can get. For unsupervised learning, scale features first (Lesson 2.4): if "basket in dollars" ranges up to 100 and "visits" up to 15, distance is dominated by dollars, and clusters may reflect units rather than real behaviour.' },
       ],
     },
   ],

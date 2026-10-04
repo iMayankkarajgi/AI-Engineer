@@ -57,7 +57,7 @@ export default function Profile() {
           {CLOUD && <span className={'profile-tag ' + (syncError ? 'bad' : 'ok')} role="status">{syncError ? '⚠ Not synced' : '✓ Synced to your account'}</span>}
         </div>
       </div>
-      {CLOUD && !editing && <button className="button ghost small" onClick={() => { setEditing(true); setSaved(false); }}>Edit profile</button>}
+      {CLOUD && !editing && <button className="button ghost small" onClick={() => { setEditing(true); setSaved(false); }}>Edit Profile</button>}
     </section>
     {syncError && <div className="form-error" role="alert">{syncError}</div>}
     {saved && !editing && <div className="form-ok" role="status">Profile saved.</div>}
@@ -68,7 +68,7 @@ export default function Profile() {
       <label>About you<textarea name="bio" defaultValue={user.bio} maxLength="280" rows="3" placeholder="What are you learning AI engineering for?"/></label>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="profile-form-actions">
-        <button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+        <button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save Changes'}</button>
         <button type="button" className="button ghost" onClick={() => { setEditing(false); setError(''); }}>Cancel</button>
       </div>
     </form>}
@@ -81,12 +81,12 @@ export default function Profile() {
 
     <section className="card profile-next">
       <div><small>Continue learning</small><h3>{next.num} {next.title}</h3></div>
-      <Link className="button primary" to={`/lesson/${nextLesson}`}>Open lesson →</Link>
+      <Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link>
     </section>
 
     <div className="account-link">
-      <Link className="button ghost" to="/dashboard">My learning</Link>
-      <button className="button ghost" onClick={async () => { await logout(); nav('/'); }}>Sign out</button>
+      <Link className="button ghost" to="/dashboard">My Learning</Link>
+      <button className="button ghost" onClick={async () => { await logout(); nav('/'); }}>Sign Out</button>
     </div>
   </main>;
 }

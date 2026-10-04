@@ -239,14 +239,14 @@ MRR = 0.625`, walkthrough: [
       blocks: [
         { type: 'p', text: 'Assume about 1.5–2 hours per weekday and a little more at weekends. Every day: revise the lessons, then answer 5 questions aloud using the five-part structure, recording yourself once a week to check clarity.' },
         { type: 'timeline', title: 'Four weeks to interview-ready', items: [
-          { when: 'Days 1–4', title: 'Foundations', text: 'Module 0–1: the six words, supervised vs unsupervised, regression, features, precision/recall, losses, regularisation, RL, contrastive learning.' },
-          { when: 'Days 5–8', title: 'Deep learning', text: 'Module 2: neurons, gradient descent, backprop, cross-entropy, dropout, normalisation, RNNs. Derive backprop for a tiny network on paper.' },
-          { when: 'Days 9–13', title: 'Transformers and generation', text: 'Modules 3–4: tokenisation, embeddings, attention maths, causal masks, multi-head, RoPE, sampling, streaming. Implement attention in numpy.' },
-          { when: 'Days 14–16', title: 'Modern architectures and model types', text: 'Modules 5–6: MoE, GQA, sliding window, FlashAttention, SLMs, reasoning models.' },
-          { when: 'Days 17–19', title: 'Training and alignment', text: 'Module 7: fine-tuning, LoRA, distillation, RLHF, PPO, DPO, GRPO. Be able to compare them in a table.' },
-          { when: 'Days 20–23', title: 'Prompting, RAG and agents', text: 'Modules 8–11: context engineering, vector search, chunking, hybrid search, reranking, agents, function calling, MCP, frameworks. Build a tiny RAG app end to end.' },
-          { when: 'Days 24–26', title: 'Inference, evaluation, safety', text: 'Modules 12–14: KV cache, batching, paged attention, speculative decoding, quantization, evals, LLM-as-judge, guardrails, prompt injection.' },
-          { when: 'Days 27–30', title: 'System design and mock interviews', text: 'Modules 15–16 skim, then two timed system designs (RAG assistant, agent for internal tools), one full mock loop with a friend, polish your project stories, rest the day before.' },
+          { when: 'Days 1–4', title: 'Foundations', text: 'Module 1–2: the six words, supervised vs unsupervised, regression, features, precision/recall, losses, regularisation, RL, contrastive learning.' },
+          { when: 'Days 5–8', title: 'Deep learning', text: 'Module 3: neurons, gradient descent, backprop, cross-entropy, dropout, normalisation, RNNs. Derive backprop for a tiny network on paper.' },
+          { when: 'Days 9–13', title: 'Transformers and generation', text: 'Modules 4–5: tokenisation, embeddings, attention maths, causal masks, multi-head, RoPE, sampling, streaming. Implement attention in numpy.' },
+          { when: 'Days 14–16', title: 'Modern architectures and model types', text: 'Modules 6–7: MoE, GQA, sliding window, FlashAttention, SLMs, reasoning models.' },
+          { when: 'Days 17–19', title: 'Training and alignment', text: 'Module 8: fine-tuning, LoRA, distillation, RLHF, PPO, DPO, GRPO. Be able to compare them in a table.' },
+          { when: 'Days 20–23', title: 'Prompting, RAG and agents', text: 'Modules 9–12: context engineering, vector search, chunking, hybrid search, reranking, agents, function calling, MCP, frameworks. Build a tiny RAG app end to end.' },
+          { when: 'Days 24–26', title: 'Inference, evaluation, safety', text: 'Modules 13–15: KV cache, batching, paged attention, speculative decoding, quantization, evals, LLM-as-judge, guardrails, prompt injection.' },
+          { when: 'Days 27–30', title: 'System design and mock interviews', text: 'Modules 16–17 skim, then two timed system designs (RAG assistant, agent for internal tools), one full mock loop with a friend, polish your project stories, rest the day before.' },
         ] },
         { type: 'table', caption: 'Weekly checkpoints', head: ['End of week', 'You should be able to'], rows: [
           ['Week 1', 'Explain overfitting, precision/recall and backprop in 60 seconds each, without notes'],

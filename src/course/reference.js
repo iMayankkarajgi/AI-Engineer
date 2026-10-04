@@ -49,7 +49,7 @@ export const guide = {
       'Inside a lesson, play with every interactive: move the sliders, step through the animations, press Run on the code.',
       'Use the “Pause and think” checks. Predict the answer before you reveal it.',
       'Take the 5-question quiz at the end. You need 4 correct answers to unlock the next lesson. Wrong answers come with explanations, and you can retry as often as you like.',
-      'Do not skip Module 1 and Module 2. Everything later is built on them.',
+      'Do not skip Module 2 and Module 3. Everything later is built on them.',
       'After each module, explain its ideas to a friend in your own words. If you can explain it, you have learned it.',
     ],
   },
@@ -63,10 +63,10 @@ export const faqs = [
   ['How long does it take to finish?', 'Most lessons take 12–25 minutes including the interactives and quiz. At one or two lessons a day, the full course takes around three to four months. Understanding each concept deeply matters more than speed.'],
   ['What is the difference between an AI engineer and a machine-learning engineer?', 'A machine-learning engineer mostly trains, tunes and deploys models. An AI engineer mostly builds products and systems on top of existing models, especially LLMs, using prompting, context engineering, RAG, agents, fine-tuning, inference optimisation and evaluation. The two overlap, and this course covers the foundations both need.'],
   ['What skills does an AI engineer need?', 'How LLMs work inside (Transformers, attention, tokenization); how to adapt them (prompting, context engineering, fine-tuning, LoRA); how to give them knowledge (RAG, vector search); how to make them act (agents, function calling, MCP); how to run them efficiently (inference, quantization, serving); how to measure and secure them (evaluation, observability, guardrails); and how to design complete systems.'],
-  ['Does the course cover AI agents and agentic AI?', 'Yes. Module 10 covers agents in depth (function calling, the agent loop, ReAct, plan-and-execute, reflection, memory, MCP, skills, multi-agent systems, subagents, orchestration and computer-use agents), and Module 11 covers agentic engineering and frameworks such as LangChain, LangGraph, Claude Code and Cursor.'],
-  ['Does it cover RAG?', 'Yes. Module 9 goes from vector databases and approximate nearest-neighbour search to semantic and hybrid search, rerankers, ColBERT, chunking, HyDE, caching, agentic RAG, GraphRAG and vectorless RAG.'],
-  ['Does it cover LLM inference optimisation?', 'Yes. Module 12 covers prefill vs decode, disaggregation, the KV cache and its compression, paged attention, continuous batching, speculative decoding (n-gram, Medusa, EAGLE), quantization, GGUF, llama.cpp, vLLM, SGLang and TensorRT-LLM.'],
-  ['Will this help me with AI engineering interviews?', 'Yes. The course covers the concepts asked in AI engineer, GenAI engineer, LLM engineer and ML engineer interviews, and Module 18 is dedicated to interview preparation, including a worked system-design answer.'],
+  ['Does the course cover AI agents and agentic AI?', 'Yes. Module 11 covers agents in depth (function calling, the agent loop, ReAct, plan-and-execute, reflection, memory, MCP, skills, multi-agent systems, subagents, orchestration and computer-use agents), and Module 12 covers agentic engineering and frameworks such as LangChain, LangGraph, Claude Code and Cursor.'],
+  ['Does it cover RAG?', 'Yes. Module 10 goes from vector databases and approximate nearest-neighbour search to semantic and hybrid search, rerankers, ColBERT, chunking, HyDE, caching, agentic RAG, GraphRAG and vectorless RAG.'],
+  ['Does it cover LLM inference optimisation?', 'Yes. Module 13 covers prefill vs decode, disaggregation, the KV cache and its compression, paged attention, continuous batching, speculative decoding (n-gram, Medusa, EAGLE), quantization, GGUF, llama.cpp, vLLM, SGLang and TensorRT-LLM.'],
+  ['Will this help me with AI engineering interviews?', 'Yes. The course covers the concepts asked in AI engineer, GenAI engineer, LLM engineer and ML engineer interviews, and Module 19 is dedicated to interview preparation, including a worked system-design answer.'],
   ['Where does the curriculum come from?', 'AI Atlas covers 19 core modules drawn from the established body of AI engineering knowledge — from ML fundamentals through inference optimization and agent systems. All lesson text, interactive widgets, code walkthroughs and quizzes are written specifically for this platform.'],
 ];
 

@@ -50,8 +50,8 @@ export default {
           ['Reinforcement learning', 'An agent acts and receives rewards or penalties', 'Learn to play a game; control a robot'],
           ['Self-supervised learning', 'Labels are created automatically from the data itself', 'Predict the next word in a sentence (how LLMs are pre-trained)'],
         ] },
-        { type: 'p', text: 'Supervised tasks are further split by the type of label. **Regression** predicts a number (a price, a temperature). **Classification** predicts a category (spam or not spam, cat or dog). Lesson 1.3 contrasts the simplest model for each.' },
-        { type: 'callout', tone: 'note', title: 'AI, ML, deep learning and LLMs', text: 'These terms nest inside each other. **Artificial intelligence** is the broad goal of machines doing tasks that seem to need intelligence (it also includes non-learning methods like search and rule systems). **Machine learning** is the part of AI that learns from data. **Deep learning** is ML using neural networks with many layers (Module 2). **LLMs** are very large deep learning models trained on text (Module 3).' },
+        { type: 'p', text: 'Supervised tasks are further split by the type of label. **Regression** predicts a number (a price, a temperature). **Classification** predicts a category (spam or not spam, cat or dog). Lesson 2.3 contrasts the simplest model for each.' },
+        { type: 'callout', tone: 'note', title: 'AI, ML, deep learning and LLMs', text: 'These terms nest inside each other. **Artificial intelligence** is the broad goal of machines doing tasks that seem to need intelligence (it also includes non-learning methods like search and rule systems). **Machine learning** is the part of AI that learns from data. **Deep learning** is ML using neural networks with many layers (Module 3). **LLMs** are very large deep learning models trained on text (Module 4).' },
       ],
     },
     {
@@ -72,7 +72,7 @@ export default {
           { title: 'Find the direction', text: 'The prediction is too low, and `w` multiplies a positive size, so increasing `w` (and `b`) would raise the prediction and reduce the error.' },
           { title: 'Update', text: 'Increase `w` and `b` by a small amount proportional to the error. Repeat over all houses, thousands of times, and the line settles where the total error is smallest.' },
         ] },
-        { type: 'p', text: 'This downhill-walking procedure is called **gradient descent**. The **learning rate** controls the step size: too small and learning crawls, too large and it overshoots and can diverge. Try it below; Lesson 2.2 covers it in depth.' },
+        { type: 'p', text: 'This downhill-walking procedure is called **gradient descent**. The **learning rate** controls the step size: too small and learning crawls, too large and it overshoots and can diverge. Try it below; Lesson 3.2 covers it in depth.' },
         { type: 'viz', name: 'gradient-descent', caption: 'Change the learning rate and step the ball down the loss curve. Notice the slow, good, overshooting and diverging regimes.' },
       ],
     },
@@ -126,7 +126,7 @@ prediction for a 2,000 sq ft house: $447k`, walkthrough: [
       title: 'The real goal: generalising to new data',
       blocks: [
         { type: 'p', text: 'A model is only useful if it works on data it has never seen. This ability is called **generalisation**. To measure it honestly, we split our data: a **training set** to learn from, a **validation set** to tune choices like the learning rate, and a **test set** that we only look at at the very end.' },
-        { type: 'p', text: 'Two failure modes appear again and again. **Underfitting**: the model is too simple to capture the pattern (a straight line for a curved relationship), so it does badly on both training and test data. **Overfitting**: the model is so flexible that it memorises the training examples, including their noise, so it looks great on training data and does badly on new data. Lesson 1.7 shows how regularisation fights overfitting.' },
+        { type: 'p', text: 'Two failure modes appear again and again. **Underfitting**: the model is too simple to capture the pattern (a straight line for a curved relationship), so it does badly on both training and test data. **Overfitting**: the model is so flexible that it memorises the training examples, including their noise, so it looks great on training data and does badly on new data. Lesson 2.7 shows how regularisation fights overfitting.' },
         { type: 'chart', kind: 'line', title: 'Error vs model complexity', xLabel: 'Model complexity', yLabel: 'Error', series: [
           { name: 'Training error', points: [[1, 9], [2, 6], [3, 4], [4, 3], [5, 2.2], [6, 1.6], [7, 1.1], [8, 0.7]] },
           { name: 'Test error', points: [[1, 9.5], [2, 6.8], [3, 5], [4, 4.4], [5, 4.6], [6, 5.4], [7, 6.5], [8, 7.8]] },
@@ -140,10 +140,10 @@ prediction for a 2,000 sq ft house: $447k`, walkthrough: [
       blocks: [
         { type: 'timeline', title: 'Milestones on the road to modern AI', items: [
           { when: '1959', title: 'The term "machine learning"', text: 'Arthur Samuel popularises the term while building a checkers program that improved by playing against itself.' },
-          { when: '1986', title: 'Backpropagation popularised', text: 'Rumelhart, Hinton and Williams show how to train multi-layer neural networks efficiently (Lesson 2.3).' },
+          { when: '1986', title: 'Backpropagation popularised', text: 'Rumelhart, Hinton and Williams show how to train multi-layer neural networks efficiently (Lesson 3.3).' },
           { when: '1990s–2000s', title: 'Statistical ML', text: 'Methods like support vector machines, decision trees and random forests power spam filters, search and recommendations.' },
           { when: '2012', title: 'Deep learning breakthrough', text: 'AlexNet, a deep convolutional network trained on GPUs, wins the ImageNet image-recognition challenge by a wide margin.' },
-          { when: '2017', title: 'The Transformer', text: 'The architecture behind modern LLMs is introduced in "Attention Is All You Need" (Module 3).' },
+          { when: '2017', title: 'The Transformer', text: 'The architecture behind modern LLMs is introduced in "Attention Is All You Need" (Module 4).' },
           { when: '2022 onward', title: 'LLMs go mainstream', text: 'ChatGPT and similar assistants bring large language models to hundreds of millions of users.' },
         ] },
       ],
@@ -153,7 +153,7 @@ prediction for a 2,000 sq ft house: $447k`, walkthrough: [
       title: 'Where ML is used, and when not to use it',
       blocks: [
         { type: 'callout', tone: 'example', title: 'ML you used today', text: 'Email spam filters, product and video recommendations, card fraud alerts, voice assistants, photo search ("show me beach pictures"), map arrival-time estimates, machine translation, and of course AI chat assistants all rely on machine learning.' },
-        { type: 'p', text: 'A typical ML project follows a lifecycle: define the problem and the success metric, collect and clean data, engineer features (Lesson 1.4), train a model, evaluate on held-out data, deploy, and then monitor, because the world changes and models drift out of date.' },
+        { type: 'p', text: 'A typical ML project follows a lifecycle: define the problem and the success metric, collect and clean data, engineer features (Lesson 2.4), train a model, evaluate on held-out data, deploy, and then monitor, because the world changes and models drift out of date.' },
         { type: 'list', items: [
           '**Do not use ML when simple rules work.** A shipping-cost calculator should be code, not a model.',
           '**Do not use ML without enough representative data.** A model can only learn patterns present in its examples.',

@@ -4,6 +4,7 @@ import { modules, allLessons, lessonById } from './course/curriculum';
 import { guide, glossary, faqs } from './course/reference';
 import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
 import { Avatar, GoogleMark } from './Profile';
+import Modal from './Modal';
 import { ThemeToggle, useTheme } from './theme';
 import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
@@ -314,16 +315,35 @@ export function NotFound() {
 
 // Every interactive widget in one place, each linked to a lesson that uses it.
 export function Lab() {
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState(''), [open, setOpen] = useState(null);
   const usedIn = vizUsage;
-  const names = Object.keys(VIZ).filter(n => (n + ' ' + VIZ[n]).toLowerCase().includes(filter.toLowerCase()));
+  const all = Object.keys(VIZ);
+  const names = all.filter(n => (n + ' ' + VIZ[n]).toLowerCase().includes(filter.toLowerCase()));
+  const label = n => n.replace(/-/g, ' ');
+  const lessonsFor = n => (usedIn[n] || []).filter(id => lessonById[id]);
+  // A link such as /lab#temperature opens that interactive straight away.
+  useEffect(() => { const n = decodeURIComponent(location.hash.slice(1)); if (VIZ[n]) setOpen(n); }, []);
   return <main className="page container">
-    <PageIntro eyebrow="Interactive lab" title="Play with every idea">{Object.keys(VIZ).length} hands-on simulations from across the course. Drag, step and break things; each one links to the lesson that explains it.</PageIntro>
+    <PageIntro eyebrow="Interactive lab" title="Play with every idea">{all.length} hands-on simulations from across the course. Pick a card to open it, then drag, step and break things; each one links to the lesson that explains it.</PageIntro>
     <label className="search-box"><span aria-hidden="true">⌕</span><input placeholder="Find an interactive…" value={filter} onChange={e => setFilter(e.target.value)} aria-label="Filter interactives"/><small>{names.length} shown</small></label>
-    <div className="lab-grid">{names.map(n => <section key={n} className="lab-item" id={n}>
-      <h2>{n.replace(/-/g, ' ')}</h2><p>{VIZ[n]}</p>
-      <Viz name={n}/>
-      {usedIn[n]?.length > 0 && <div className="lab-used">Used in: {usedIn[n].slice(0, 4).map(id => lessonById[id] && <Link key={id} to={`/lesson/${id}`}>{lessonById[id].num} {lessonById[id].title}</Link>)}</div>}
-    </section>)}</div>
+    {names.length === 0 && <p className="lab-empty">No interactive matches “{filter}”.</p>}
+    <ul className="lab-grid">{names.map(n => {
+      const lessons = lessonsFor(n);
+      return <li key={n}><button className="lab-card" id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
+        <span className="lab-card-top"><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">Lesson {lessonById[lessons[0]].num}</span>}</span>
+        <strong>{label(n)}</strong>
+        <span className="lab-card-desc">{VIZ[n]}</span>
+        <span className="lab-card-open">Open Interactive <span aria-hidden="true">→</span></span>
+      </button></li>;
+    })}</ul>
+    <Modal open={!!open} onClose={() => setOpen(null)} label={open ? label(open) : 'Interactive'} className="modal-wide lab-modal">
+      {open && <>
+        <div className="eyebrow">Interactive {String(all.indexOf(open) + 1).padStart(2, '0')} of {all.length}</div>
+        <h2>{label(open)}</h2>
+        <p className="lab-modal-desc">{VIZ[open]}</p>
+        <Viz name={open}/>
+        {lessonsFor(open).length > 0 && <div className="lab-used">Used in: {lessonsFor(open).slice(0, 4).map(id => <Link key={id} to={`/lesson/${id}`}>{lessonById[id].num} {lessonById[id].title}</Link>)}</div>}
+      </>}
+    </Modal>
   </main>;
 }

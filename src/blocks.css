@@ -380,10 +380,19 @@
 .dashboard-top { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; }
 
 /* Interactive lab */
-.lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 28px; margin-top: 20px; }
-.lab-item { display: grid; gap: 10px; align-content: start; }
-.lab-item h2 { font-size: 1.15rem; text-transform: capitalize; }
-.lab-item > p { color: var(--ink-2); font-size: .9rem; }
+.lab-grid { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.lab-grid li { display: grid; }
+.lab-card { display: grid; grid-template-rows: auto auto 1fr auto; gap: 10px; text-align: left; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); color: var(--ink); transition: transform .15s, border-color .15s; }
+.lab-card:hover, .lab-card:focus-visible { transform: translateY(-2px); border-color: var(--accent-line); }
+.lab-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 500 .72rem var(--mono); letter-spacing: .08em; color: var(--ink-3); }
+.lab-card-index { display: inline-grid; place-items: center; min-width: 34px; height: 26px; padding-inline: 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.lab-card strong { font-size: 1.08rem; font-weight: 640; letter-spacing: -.01em; text-transform: capitalize; text-wrap: balance; }
+.lab-card-desc { color: var(--ink-2); font-size: .88rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lab-card-open { color: var(--accent); font-size: .86rem; font-weight: 600; }
+.lab-empty { margin-top: 24px; color: var(--ink-3); }
+.lab-modal h2 { font-size: clamp(1.3rem, 3vw, 1.7rem); text-transform: capitalize; margin: 4px 0 8px; padding-right: 36px; }
+.lab-modal-desc { color: var(--ink-2); font-size: .95rem; margin-bottom: 16px; max-width: 70ch; }
+.lab-modal .lab-used { margin-top: 14px; }
 .lab-used { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: .82rem; color: var(--ink-3); }
 .lab-used a { color: var(--accent); }
 

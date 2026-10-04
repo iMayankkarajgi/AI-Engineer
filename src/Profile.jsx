@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { useApp, ACCOUNTS, CLOUD } from './app';
+import Certificate from './Certificate';
 
 const initials = name => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
@@ -25,7 +26,7 @@ export function GoogleMark() {
 
 export default function Profile() {
   const { user, ready, completed, scores, nextLesson, updateProfile, logout, syncError } = useApp(), nav = useNavigate();
-  const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false), [cert, setCert] = useState(false);
   useEffect(() => { if (ready && !user) nav(ACCOUNTS ? '/account' : '/dashboard', { replace: true }); }, [ready, user, nav]);
   if (!user) return <main className="page container narrow"><div className="eyebrow">Loading…</div></main>;
 
@@ -33,6 +34,7 @@ export default function Profile() {
   const avg = attempted ? (Object.values(scores).reduce((a, b) => a + b, 0) / attempted).toFixed(1) : '–';
   const modulesDone = modules.filter(m => m.lessons.every(l => completed.includes(l.id))).length;
   const next = lessonById[nextLesson];
+  const finished = allLessons.every(l => completed.includes(l.id));
   const joined = user.joined ? new Date(user.joined).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null;
 
   async function save(e) {
@@ -83,6 +85,13 @@ export default function Profile() {
       <div><small>Continue learning</small><h3>{next.num} {next.title}</h3></div>
       <Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link>
     </section>
+
+    <section className="card profile-cert">
+      <div><small>Course certificate</small><h3>{finished ? 'You completed the course.' : 'Certificate Of Completion'}</h3>
+        <p>{finished ? 'Your certificate is ready, with your name on it.' : `Pass all ${allLessons.length} lessons to unlock it. ${allLessons.length - completed.length} to go.`}</p></div>
+      <button className={'button ' + (finished ? 'primary' : 'ghost')} disabled={!finished} onClick={() => setCert(true)}>{finished ? 'View Certificate' : '🔒 Certificate Locked'}</button>
+    </section>
+    {finished && <Certificate user={user} open={cert} onClose={() => setCert(false)}/>}
 
     <div className="account-link">
       <Link className="button ghost" to="/dashboard">My Learning</Link>

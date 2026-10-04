@@ -190,3 +190,42 @@
   .lesson-list a { grid-template-columns: 28px minmax(0, 1fr); }
   .lesson-list-time { display: none; }
 }
+
+/* Pop-ups */
+.modal { width: min(560px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--bg); color: var(--ink); box-shadow: 0 30px 80px -20px #000a; overflow: auto; overscroll-behavior: contain; }
+.modal.modal-wide { width: min(940px, calc(100vw - 24px)); }
+.modal::backdrop { background: #0c0a17b3; backdrop-filter: blur(3px); }
+.modal-body { position: relative; padding: clamp(18px, 3vw, 28px); }
+.modal-close { position: absolute; top: 12px; right: 12px; z-index: 2; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: 50%; background: var(--surface); color: var(--ink-2); font-size: 1.3rem; line-height: 1; }
+.modal-close:hover { color: var(--ink); border-color: var(--ink-3); }
+body:has(dialog.modal[open]) { overflow: hidden; }
+
+/* Certificate. Paper, ink and gold are fixed: it should look the same in either theme and in print. */
+.profile-cert { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.profile-cert h3 { margin: 0 0 4px; }
+.profile-cert p { margin: 0; }
+.cert-modal .modal-body { padding-top: 56px; }
+.cert { container-type: inline-size; aspect-ratio: 1.414 / 1; width: 100%; background: #fbf9f3; color: #1d1733; padding: 2.2cqw; box-shadow: 0 1px 2px #0003; }
+.cert-frame { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; padding: 4.2cqw 6cqw 3cqw; border: .35cqw solid #5b34b8; outline: .12cqw solid #b8975a; outline-offset: -1.1cqw; background: radial-gradient(ellipse at 50% 0%, #6b3fd414, transparent 60%); }
+.cert-brand { font: 650 2.1cqw var(--sans); letter-spacing: .02em; color: #1d1733; }
+.cert-brand span { color: #6b3fd4; }
+.cert-kicker { font: 600 1.55cqw var(--mono); letter-spacing: .42em; text-transform: uppercase; color: #8a6d35; margin-right: -.42em; }
+.cert-lead { font: italic 400 1.9cqw var(--serif); color: #51496b; margin: 0; }
+.cert-name { font: 600 6.2cqw/1.1 var(--serif); letter-spacing: -.01em; color: #1d1733; overflow-wrap: anywhere; text-wrap: balance; }
+.cert-rule { width: 34cqw; height: .14cqw; background: linear-gradient(90deg, transparent, #b8975a, transparent); }
+.cert-text { font: 400 1.85cqw/1.6 var(--serif); color: #3a3352; max-width: 68cqw; margin: 0; }
+.cert-foot { width: 100%; display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 3cqw; }
+.cert-foot > div { display: grid; gap: .5cqw; padding-top: 1cqw; border-top: .12cqw solid #1d173355; }
+.cert-foot strong { font: 600 1.7cqw var(--sans); color: #1d1733; }
+.cert-foot small { font: 500 1.05cqw var(--mono); letter-spacing: .16em; text-transform: uppercase; color: #6c6485; }
+.cert-seal { width: 11cqw; height: 11cqw; color: #5b34b8; }
+.cert-note { font: 400 1.1cqw var(--sans); color: #6c6485; }
+.cert-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+@media print {
+  @page { size: A4 landscape; margin: 0; }
+  body:has(.cert-modal[open]) * { visibility: hidden; }
+  body:has(.cert-modal[open]) .cert, body:has(.cert-modal[open]) .cert * { visibility: visible; }
+  .cert-modal[open] { position: fixed; inset: 0; width: 100vw; max-height: none; height: 100vh; border: 0; border-radius: 0; box-shadow: none; background: #fbf9f3; overflow: visible; }
+  .cert-modal .modal-body { padding: 0; height: 100%; display: grid; place-items: center; }
+  .cert { width: min(100vw, 141.4vh); box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

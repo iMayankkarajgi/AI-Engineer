@@ -1,0 +1,65 @@
+-- AI Atlas database schema for Supabase.
+-- Run once: Supabase dashboard → SQL Editor → paste this file → Run.
+-- Safe to run again; every statement is idempotent.
+
+-- One row per account: the editable profile shown on /profile.
+create table if not exists public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  email text,
+  full_name text not null default '' check (char_length(full_name) <= 80),
+  avatar_url text not null default '',
+  bio text not null default '' check (char_length(bio) <= 280),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- One row per learner per lesson: best quiz score and whether it is passed.
+create table if not exists public.lesson_progress (
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  lesson_id text not null check (lesson_id ~ '^[a-z0-9-]{1,80}$'),
+  best_score smallint not null default 0 check (best_score between 0 and 5),
+  passed boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, lesson_id)
+);
+
+-- Row-level security: every learner reads and writes only their own rows.
+alter table public.profiles enable row level security;
+alter table public.lesson_progress enable row level security;
+
+drop policy if exists "profiles: read own" on public.profiles;
+create policy "profiles: read own" on public.profiles for select using (auth.uid() = id);
+drop policy if exists "profiles: insert own" on public.profiles;
+create policy "profiles: insert own" on public.profiles for insert with check (auth.uid() = id);
+drop policy if exists "profiles: update own" on public.profiles;
+create policy "profiles: update own" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+
+drop policy if exists "progress: read own" on public.lesson_progress;
+create policy "progress: read own" on public.lesson_progress for select using (auth.uid() = user_id);
+drop policy if exists "progress: insert own" on public.lesson_progress;
+create policy "progress: insert own" on public.lesson_progress for insert with check (auth.uid() = user_id);
+drop policy if exists "progress: update own" on public.lesson_progress;
+create policy "progress: update own" on public.lesson_progress for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "progress: delete own" on public.lesson_progress;
+create policy "progress: delete own" on public.lesson_progress for delete using (auth.uid() = user_id);
+
+-- Create the profile automatically on sign-up, filled from the Google account
+-- (name and picture) when there is one.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.profiles (id, email, full_name, avatar_url)
+  values (
+    new.id,
+    new.email,
+    left(coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1), ''), 80),
+    coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture', '')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();

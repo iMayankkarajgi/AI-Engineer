@@ -1,0 +1,28 @@
+/* Shared styles for W1 widgets. Every class is prefixed with w-<widget-name>-. */
+
+/* regularization: signed vertical bars around a zero line */
+.w-regularization-plot { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; height: 200px; padding: 0 4px; }
+.w-regularization-plot::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--line-2); }
+.w-regularization-col { position: relative; display: flex; gap: 2px; }
+.w-regularization-slot { position: relative; flex: 1; }
+.w-regularization-bar { position: absolute; left: 0; right: 0; border-radius: 3px; background: var(--accent); transition: height .45s cubic-bezier(.2, .8, .2, 1), top .45s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+.w-regularization-bar.l2 { background: var(--s2); }
+.w-regularization-bar.ghost { background: none; border: 1px dashed var(--ink-3); opacity: .55; }
+.w-regularization-bar.zero { opacity: .25; }
+.w-regularization-names { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; padding: 0 4px; text-align: center; font: .7rem var(--mono); color: var(--ink-3); }
+.w-regularization-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+/* rl-gridworld */
+.w-rl-gridworld-grid { grid-template-columns: repeat(5, 1fr); max-width: 320px; width: 100%; }
+.w-rl-gridworld-grid .viz-cell { position: relative; font-size: 1rem; aspect-ratio: 1; }
+.w-rl-gridworld-grid .viz-cell.wall { background: var(--ink-3); opacity: .7; }
+.w-rl-gridworld-agent { position: absolute; inset: 18%; border-radius: 50%; background: var(--s2); border: 2px solid var(--surface); }
+.w-rl-gridworld-q { position: absolute; bottom: 2px; right: 4px; font-size: .55rem; font-weight: 400; opacity: .8; }
+
+/* normalization */
+.w-normalization-grid { grid-template-columns: repeat(5, 1fr); }
+.w-normalization-grid .viz-cell { aspect-ratio: 1.5; cursor: pointer; border: 0; }
+.w-normalization-grid .viz-cell.band { background: color-mix(in srgb, var(--accent) 18%, var(--surface-3)); }
+
+/* rnn-vs-transformer */
+.w-rnn-vs-transformer-tok { transition: fill .3s, stroke .3s; }

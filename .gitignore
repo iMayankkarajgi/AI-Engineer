@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+.env
+.env.local
+.env.*.local
+ai-video-studio/
+dist-static/
+.claude/scheduled_tasks.lock

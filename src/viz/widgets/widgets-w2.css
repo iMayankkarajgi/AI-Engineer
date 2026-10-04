@@ -1,0 +1,41 @@
+/* Shared styles for the W2 attention / inference widgets. Colours use theme tokens only. */
+.w-attention-heatmap-chips button, .w-multi-head-chips button { cursor: pointer; }
+.w-attention-heatmap-cell, .w-multi-head-cell, .w-causal-mask-heat { transition: fill-opacity .35s ease, opacity .35s ease; }
+
+.w-qkv-math-mat { display: grid; gap: 3px; justify-content: start; }
+.w-qkv-math-mat .viz-cell, .w-causal-mask-grid .viz-cell { aspect-ratio: auto; min-width: 0; padding: 6px 2px; font-size: .68rem; }
+.w-qkv-math-mat .viz-cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.w-qkv-math-box { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.w-qkv-math-box small, .w-kv-cache-row small, .w-paged-attention-side small, .w-streaming-pane small { font: 600 .68rem var(--mono); text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.w-qkv-math-mats { display: flex; flex-wrap: wrap; gap: 14px; }
+.w-qkv-math-eq { white-space: pre-wrap; overflow-wrap: anywhere; font: .8rem/1.6 var(--mono); color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; }
+.w-qkv-math-eq b { color: var(--accent); }
+
+.w-causal-mask-grid { display: grid; grid-template-columns: 54px repeat(6, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.w-causal-mask-grid .w-causal-mask-lab { font: .7rem var(--mono); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.w-causal-mask-grid .w-causal-mask-lab.cur { color: var(--accent); font-weight: 700; }
+
+.w-streaming-pane { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); display: grid; gap: 8px; align-content: start; min-height: 150px; }
+.w-streaming-text { font: .95rem/1.55 var(--serif); color: var(--ink); min-height: 4.6em; }
+.w-streaming-text span { animation: viz-fade .25s ease both; }
+.w-streaming-wait { color: var(--ink-3); font: .82rem var(--mono); }
+.w-streaming-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; position: relative; }
+.w-streaming-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; transition: width .1s linear; }
+.w-streaming-bar i.alt { background: var(--s2); }
+@media (prefers-reduced-motion: reduce) { .w-streaming-text span { animation: none; } }
+
+.w-kv-cache-row { display: grid; gap: 4px; }
+.w-kv-cache-row .viz-grid-cells { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.w-kv-cache-row .viz-cell { aspect-ratio: auto; padding: 6px 0; font-size: .62rem; overflow: hidden; }
+.w-kv-cache-v { background: var(--s3) !important; color: #fff !important; }
+.w-kv-cache-new { box-shadow: 0 0 0 2px var(--ink) inset; }
+.w-kv-cache-formula { font: .8rem var(--mono); color: var(--ink-2); }
+
+.w-paged-attention-side { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.w-paged-attention-mem { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
+.w-paged-attention-mem span { aspect-ratio: 1; border-radius: 3px; background: var(--surface-3); display: grid; place-items: center; font: 600 .55rem var(--mono); color: #fff; transition: background .3s, opacity .3s; }
+.w-paged-attention-mem span.blk { margin-right: 0; }
+
+.w-lora-delta { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; max-width: 220px; }
+.w-lora-delta span { aspect-ratio: 1; border-radius: 2px; transition: background .3s; }
+

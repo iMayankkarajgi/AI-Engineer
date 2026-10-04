@@ -1,0 +1,104 @@
+/* Design tokens. data-theme is set on <html> before first paint (index.html). */
+:root {
+  --sans: 'Instrument Sans', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  --serif: 'Source Serif 4', Charter, 'Iowan Old Style', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --max: 1240px;
+  --gutter: clamp(16px, 4vw, 40px);
+  --header-h: 60px;
+  --r-lg: 14px;
+  --r: 10px;
+  --r-sm: 6px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eff1f5;
+  --surface-3: #e3e7ee;
+  --ink: #111827;
+  --ink-2: #3b4456;
+  --ink-3: #5f6b80;
+  --line: #e2e6ec;
+  --line-2: #cfd5df;
+  --accent: #3352d6;
+  --accent-ink: #ffffff;
+  --ok: #13804f;
+  --warn: #9a5b00;
+  --bad: #c0392b;
+  --code-bg: #0f1623;
+  --code-ink: #e6eaf2;
+  --code-muted: #8d99ad;
+  --shadow: 0 1px 2px #1118270d, 0 10px 30px -14px #11182730;
+  --header-bg: #f6f7f9d9;
+  /* Home scene */
+  --scene-bg: #f3f5f9;
+  --scene-ink: #0f1830;
+  --scene-ink-2: #46516a;
+  --scene-scrim: #f3f5f9d9;
+  --glow: #3352d633;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0a0e17;
+  --surface: #101624;
+  --surface-2: #161d2c;
+  --surface-3: #212a3b;
+  --ink: #ecf0f7;
+  --ink-2: #b4bdcc;
+  --ink-3: #8f9ab0;
+  --line: #1d2433;
+  --line-2: #2b3446;
+  --accent: #8da6ff;
+  --accent-ink: #0a0e17;
+  --ok: #52c98a;
+  --warn: #f0ae4c;
+  --bad: #f27d7d;
+  --code-bg: #070b13;
+  --code-ink: #e6eaf2;
+  --code-muted: #8d99ad;
+  --shadow: 0 1px 2px #0006, 0 16px 40px -18px #000c;
+  --header-bg: #0a0e17d9;
+  --scene-bg: #05070c;
+  --scene-ink: #eef3fb;
+  --scene-ink-2: #b8c4d6;
+  --scene-scrim: #05070cc9;
+  --glow: #a8dfff40;
+}
+
+:root {
+  --accent-soft: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  --accent-line: color-mix(in srgb, var(--accent) 38%, var(--line));
+}
+
+/* Per-course accent: pastels read well on dark; darken them on light paper. */
+[style*='--track'] { --t: var(--track); }
+[data-theme='light'] [style*='--track'] { --t: color-mix(in srgb, var(--track) 42%, #141a29); }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 24px); }
+body {
+  margin: 0; min-width: 320px;
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+  transition: background-color .25s ease, color .25s ease;
+}
+h1, h2, h3, h4 { margin: 0; color: var(--ink); font-family: var(--sans); text-wrap: balance; }
+h1 { font-size: clamp(2.1rem, 4vw, 3rem); font-weight: 640; line-height: 1.06; letter-spacing: -.03em; }
+h2 { font-size: clamp(1.35rem, 2.2vw, 1.7rem); font-weight: 620; line-height: 1.2; letter-spacing: -.02em; }
+h3 { font-size: 1.1rem; font-weight: 620; letter-spacing: -.01em; }
+p { margin: 0; }
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+code, pre { font-family: var(--mono); }
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0s !important; }
+}

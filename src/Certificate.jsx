@@ -23,7 +23,7 @@ export default function Certificate({ user, open, onClose }) {
   const date = useCompletionDate(user, open);
   const id = `AA-${date.getFullYear()}-${String(user.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
   return <Modal open={open} onClose={onClose} label="Certificate of completion" className="modal-wide cert-modal">
-    <div className="cert" role="img" aria-label={`Certificate of completion awarded to ${user.name} for the AI Atlas AI engineering course, ${longDate(date)}`}>
+    <div className="cert-scroll" tabIndex="0"><div className="cert" role="img" aria-label={`Certificate of completion awarded to ${user.name} for the AI Atlas AI engineering course, ${longDate(date)}`}>
       <div className="cert-frame">
         <div className="cert-brand"><span>✳</span> AI Atlas</div>
         <div className="cert-kicker">Certificate of Completion</div>
@@ -43,7 +43,8 @@ export default function Certificate({ user, open, onClose }) {
         </div>
         <div className="cert-note">Each lesson passed with a quiz score of {PASS_MARK} out of 5 or higher.</div>
       </div>
-    </div>
+    </div></div>
+    <p className="cert-hint">Swipe sideways to see the whole certificate.</p>
     <div className="cert-actions">
       <button className="button primary" onClick={() => window.print()}>Print Or Save As PDF</button>
       <button className="button ghost" onClick={onClose}>Close</button>

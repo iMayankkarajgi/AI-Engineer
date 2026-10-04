@@ -205,6 +205,9 @@ body:has(dialog.modal[open]) { overflow: hidden; }
 .profile-cert h3 { margin: 0 0 4px; }
 .profile-cert p { margin: 0; }
 .cert-modal .modal-body { padding-top: 56px; }
+.cert-scroll { overflow-x: auto; }
+.cert-hint { display: none; margin-top: 10px; text-align: center; color: var(--ink-3); font-size: .82rem; }
+@media (max-width: 700px) { .cert { min-width: 640px; } .cert-hint { display: block; } }
 .cert { container-type: inline-size; aspect-ratio: 1.414 / 1; width: 100%; background: #fbf9f3; color: #1d1733; padding: 2.2cqw; box-shadow: 0 1px 2px #0003; }
 .cert-frame { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; padding: 4.2cqw 6cqw 3cqw; border: .35cqw solid #5b34b8; outline: .12cqw solid #b8975a; outline-offset: -1.1cqw; background: radial-gradient(ellipse at 50% 0%, #6b3fd414, transparent 60%); }
 .cert-brand { font: 650 2.1cqw var(--sans); letter-spacing: .02em; color: #1d1733; }
@@ -227,5 +230,6 @@ body:has(dialog.modal[open]) { overflow: hidden; }
   body:has(.cert-modal[open]) .cert, body:has(.cert-modal[open]) .cert * { visibility: visible; }
   .cert-modal[open] { position: fixed; inset: 0; width: 100vw; max-height: none; height: 100vh; border: 0; border-radius: 0; box-shadow: none; background: #fbf9f3; overflow: visible; }
   .cert-modal .modal-body { padding: 0; height: 100%; display: grid; place-items: center; }
-  .cert { width: min(100vw, 141.4vh); box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .cert-scroll { overflow: visible; }
+  .cert { width: min(100vw, 141.4vh); min-width: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }

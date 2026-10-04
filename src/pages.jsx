@@ -5,6 +5,7 @@ import { guide, glossary, faqs } from './course/reference';
 import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
 import { Avatar, GoogleMark } from './Profile';
 import Modal from './Modal';
+import LabIcon from './labIcons';
 import { ThemeToggle, useTheme } from './theme';
 import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
@@ -330,7 +331,7 @@ export function Lab() {
     <ul className="lab-grid">{names.map(n => {
       const lessons = lessonsFor(n);
       return <li key={n}><button className="lab-card" id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
-        <span className="lab-card-top"><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">Lesson {lessonById[lessons[0]].num}</span>}</span>
+        <span className="lab-card-top"><span className="lab-card-icon"><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">Lesson {lessonById[lessons[0]].num}</span>}</span>
         <strong>{label(n)}</strong>
         <span className="lab-card-desc">{VIZ[n]}</span>
         <span className="lab-card-open">Open Interactive <span aria-hidden="true">→</span></span>
@@ -339,7 +340,7 @@ export function Lab() {
     <Modal open={!!open} onClose={() => setOpen(null)} label={open ? label(open) : 'Interactive'} className="modal-wide lab-modal">
       {open && <>
         <div className="eyebrow">Interactive {String(all.indexOf(open) + 1).padStart(2, '0')} of {all.length}</div>
-        <h2>{label(open)}</h2>
+        <h2><span className="lab-card-icon"><LabIcon name={open}/></span>{label(open)}</h2>
         <p className="lab-modal-desc">{VIZ[open]}</p>
         <Viz name={open}/>
         {lessonsFor(open).length > 0 && <div className="lab-used">Used in: {lessonsFor(open).slice(0, 4).map(id => <Link key={id} to={`/lesson/${id}`}>{lessonById[id].num} {lessonById[id].title}</Link>)}</div>}

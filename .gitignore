@@ -7,3 +7,4 @@ data/
 ai-video-studio/
 dist-static/
 .claude/scheduled_tasks.lock
+certificate-preview.png

@@ -15,6 +15,10 @@ import { EXAM_ID, EXAM_PASS } from './course/exam';
 // build uses the bundled Express + SQLite API, and the static build is
 // guest-only.
 export const PASS_MARK = 4;
+// Whether lessons open in order (each one after the previous quiz is passed).
+// Off for now: every lesson is open. Passing quizzes still counts toward
+// progress, the final exam and the certificate.
+export const LOCKS = false;
 export const STATIC = import.meta.env.VITE_STATIC === '1';
 export const CLOUD = !!supabase;
 export const ACCOUNTS = CLOUD || !STATIC;
@@ -137,7 +141,7 @@ export function AppProvider({ children }) {
   // The first lesson is always open; every other lesson needs its predecessor.
   // A track's opening lesson only needs the Starter Kit, so learners can begin
   // the AI track without finishing the ML one.
-  const isUnlocked = id => { const i = lessonIds.indexOf(id); return i <= 0 || completed.includes(lessonIds[i - 1]) || completed.includes(id) || (entryLessonIds.includes(id) && completed.includes(lessonIds[0])); };
+  const isUnlocked = id => { if (!LOCKS) return true; const i = lessonIds.indexOf(id); return i <= 0 || completed.includes(lessonIds[i - 1]) || completed.includes(id) || (entryLessonIds.includes(id) && completed.includes(lessonIds[0])); };
   const nextLesson = lessonIds.find(id => !completed.includes(id)) || lessonIds[lessonIds.length - 1];
 
   // Where Supabase sends the browser back to: this app's own entry URL.

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { lessonById, lessonIds, moduleOf } from './course/curriculum';
 import { Block, Rich } from './LessonBlocks';
-import { useApp, PASS_MARK } from './app';
+import { useApp, PASS_MARK, LOCKS } from './app';
 import { NotFound } from './pages';
 
 const pad = n => String(n).padStart(2, '0');
@@ -102,7 +102,7 @@ function Quiz({ id, quiz, nextId }) {
   const already = completed.includes(id);
   return <div className="quiz">
     <div className="quiz-intro">
-      <p>Answer all {quiz.length} questions, then submit. Score <b>{PASS_MARK} or more</b> to pass and unlock the next lesson.</p>
+      <p>Answer all {quiz.length} questions, then submit. Score <b>{PASS_MARK} or more</b> to pass{LOCKS ? ' and unlock the next lesson' : ''}.</p>
       {(scores[id] !== undefined || already) && <span className={'quiz-badge' + (already ? ' ok' : '')}>{already ? '✓ Passed' : 'Not passed yet'}{scores[id] !== undefined ? ` · best ${scores[id]}/${quiz.length}` : ''}</span>}
     </div>
     <ol className="quiz-list">{quiz.map((q, qi) => {
@@ -126,7 +126,7 @@ function Quiz({ id, quiz, nextId }) {
           <div className="quiz-score"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.9" className="track"/><circle cx="18" cy="18" r="15.9" className="fill" style={{ strokeDasharray: `${(score / quiz.length) * 100} 100` }}/></svg><b>{score}/{quiz.length}</b></div>
           <div>
             <strong>{passed ? (score === quiz.length ? 'Perfect score! Lesson passed.' : 'Lesson passed!') : `You scored ${score}. You need ${PASS_MARK} to pass.`}</strong>
-            <p>{passed ? (nextId ? 'The next lesson is now unlocked.' : 'That was the last lesson. The final exam is the next step.') : 'Read the explanations above, revisit the sections they point to, then try again. The options will be shuffled.'}</p>
+            <p>{passed ? (nextId ? (LOCKS ? 'The next lesson is now unlocked.' : 'Carry on to the next lesson when you are ready.') : 'That was the last lesson. The final exam is the next step.') : 'Read the explanations above, revisit the sections they point to, then try again. The options will be shuffled.'}</p>
             <div className="quiz-actions">
               {passed && nextId && <Link className="button primary" to={`/lesson/${nextId}`}>Next Lesson →</Link>}
               {passed && !nextId && <Link className="button primary" to="/exam">Take The Final Exam →</Link>}
@@ -207,7 +207,7 @@ export default function LessonPage() {
         <nav className="pager" aria-label="Lesson navigation">
           {prevId ? <Link className="pager-card prev" to={`/lesson/${prevId}`}><small>← Previous · {lessonById[prevId].num}</small><strong>{lessonById[prevId].title}</strong></Link> : <span/>}
           {nextId
-            ? (passed ? <Link className="pager-card next" to={`/lesson/${nextId}`}><small>Next · {lessonById[nextId].num} →</small><strong>{lessonById[nextId].title}</strong></Link>
+            ? (passed || !LOCKS ? <Link className="pager-card next" to={`/lesson/${nextId}`}><small>Next · {lessonById[nextId].num} →</small><strong>{lessonById[nextId].title}</strong></Link>
               : <a className="pager-card next locked" href="#quiz" onClick={e => { e.preventDefault(); document.getElementById('quiz')?.scrollIntoView({ behavior: 'smooth' }); }}><small>🔒 Pass the quiz to unlock</small><strong>{lessonById[nextId].title}</strong></a>)
             : <Link className="pager-card next" to="/exam"><small>Lessons complete →</small><strong>Take the final exam</strong></Link>}
         </nav>

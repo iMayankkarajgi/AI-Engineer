@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { guide, glossary, faqs } from './course/reference';
-import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
+import { useApp, ACCOUNTS, CLOUD, PASS_MARK, LOCKS } from './app';
 import { Avatar, GoogleMark, SignOutButton } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
@@ -119,7 +119,7 @@ export function Curriculum() {
   const next = track.lessons.find(l => !completed.includes(l.id) && isUnlocked(l.id)) || track.lessons.find(l => !completed.includes(l.id)) || track.lessons[0];
   return <main className="page container">
     <PageIntro eyebrow="Curriculum" title="Choose your learning track">
-      Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; pass it with {PASS_MARK}/5 to unlock the next one.
+      Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; score {PASS_MARK}/5 to pass it{LOCKS ? ' and unlock the next one' : ''}.
     </PageIntro>
     <TrackPicker value={track.id} onChange={setTrack}/>
 
@@ -190,7 +190,7 @@ export function Module() {
       </section>
       <aside className="course-aside">
         <div className="card"><h3>How each lesson works</h3><ul className="check-list">
-          <li>Intuition and an analogy first</li><li>Animated diagrams and step-by-step flows</li><li>Interactive widgets you can drag and play</li><li>Real code with walkthrough and real output</li><li>Side-by-side comparisons</li><li>A 5-question quiz: score {PASS_MARK}+ to unlock the next lesson</li>
+          <li>Intuition and an analogy first</li><li>Animated diagrams and step-by-step flows</li><li>Interactive widgets you can drag and play</li><li>Real code with walkthrough and real output</li><li>Side-by-side comparisons</li><li>A 5-question quiz: score {PASS_MARK}+ to {LOCKS ? 'unlock the next lesson' : 'pass the lesson'}</li>
         </ul></div>
         <div className="card"><h3>Module outcome</h3><p>{m.intro[1] || m.intro[0]}</p></div>
       </aside>

@@ -1,7 +1,7 @@
 # AI Atlas lesson authoring spec
 
 Every lesson is one file: `src/course/lessons/<lesson-id>.js`, with a single `export default { ... }`.
-The lesson id, number, title, outline ("covers") and source link come from `src/course/curriculum.js`;
+The lesson id, number, title and outline ("covers") come from `src/course/curriculum.js`;
 do not repeat them in the lesson file except for `id`.
 
 Validate with: `node scripts/validate-lessons.mjs <lesson-id> [...more ids]`
@@ -11,15 +11,14 @@ Validate with: `node scripts/validate-lessons.mjs <lesson-id> [...more ids]`
 A learner must be able to understand the topic completely **without leaving the page**. Each lesson is a
 self-contained, beginner-friendly, technically accurate chapter: intuition first, then mechanism, math where it
 helps, runnable code with real output, a comparison, an animated visual, real-world use, pitfalls, and a
-5-question quiz. The learner must score 4/5 on the quiz to unlock the next lesson, so the quiz must test only
+5-question quiz. The learner must score 4/5 on the quiz to pass the lesson, so the quiz must test only
 what the lesson actually teaches.
 
 ## Content rules
 
-- **Write original text.** The curriculum comes from Amit Shekhar's AI Engineering Course (Apache-2.0 README).
-  The linked outcomeschool.com blog posts are NOT licensed for copying: you may read them to check facts on an
-  unfamiliar topic, but never copy or closely paraphrase their sentences, examples, or structure beyond the
-  public outline in `covers`. Write in your own words.
+- **Write original text.** Every sentence, example and structure must be your own. Do not copy or closely
+  paraphrase any outside article, course or video, and do not mention or link to other courses, authors or sites.
+  Lessons contain no external links at all; outside references live on the Useful links page (`src/course/resources.js`).
 - **Cover every item in the lesson's `covers` list**, roughly in that order. Usually each item becomes a section
   or a clearly titled part of one. If `covers` is empty, design a sensible outline yourself from the title.
 - Voice: simple words, short sentences, "we" voice, friendly and precise. Define every term the first time it
@@ -34,7 +33,7 @@ what the lesson actually teaches.
   vllm, langchain...), you may show that code with `lang` set and no `output`, but then ALSO include a runnable
   numpy/stdlib version that demonstrates the same idea with real output.
 - Math: write with Unicode, not LaTeX: `softmax(QKᵀ / √dₖ) · V`, `ŷ = σ(w·x + b)`, `∑`, `∂L/∂w`, `λ`, `‖w‖₂²`.
-- Inline markup inside any text string: `` `code` ``, `**bold**`, `*italic*`, and links `[text](https://...)`.
+- Inline markup inside any text string: `` `code` ``, `**bold**`, `*italic*`. Do not add links.
   Nothing else (no HTML, no headings, no LaTeX).
 
 ## Lesson object

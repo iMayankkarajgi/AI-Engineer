@@ -33,7 +33,7 @@ With Supabase configured, learners sign in with Google (or email), get a profile
 3. In Google Cloud Console create an OAuth client (type: Web application) with the authorised redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`. Paste its client ID and secret into Supabase under **Authentication → Providers → Google**.
 4. In Supabase under **Authentication → URL Configuration**, add every address the site is served from to **Redirect URLs**, for example `http://127.0.0.1:5173/**` and your production URL.
 
-Tables: `profiles` (one row per account), `lesson_progress` (one row per learner per lesson) and `code_snippets` (Python files saved from the Practice page). Row-level security limits every learner to their own rows.
+Tables: `profiles` (one row per account), `lesson_progress` (one row per learner per lesson) `code_snippets` (Python files saved from the Practice page) and `entitlements` (plans a learner has bought; learners can read their own rows but only the dashboard or a trusted server can write them). To grant a plan by hand, insert a row in `entitlements` with the learner's user id and a track of `ml`, `ai` or `complete`. Row-level security limits every learner to their own rows.
 
 To exercise the whole flow offline, `npm run dev:mock` starts the site on http://127.0.0.1:5174 against `scripts/mock-supabase.mjs`, a small in-memory stand-in for Supabase Auth and the two tables (with a simulated Google account). `npm run build:static` leaves Supabase out unless you pass `--with-supabase`.
 

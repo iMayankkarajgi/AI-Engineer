@@ -46,6 +46,8 @@ export function AppProvider({ children }) {
   const [scores, setScores] = useState(() => read('atlas-scores-v2', {}));
   const [ready, setReady] = useState(!ACCOUNTS);
   const [syncError, setSyncError] = useState('');
+  // Track ids the learner has an active plan for (granted in the entitlements table).
+  const [plans, setPlans] = useState([]);
 
   // Bundled API: restore the cookie session.
   useEffect(() => {
@@ -67,13 +69,14 @@ export function AppProvider({ children }) {
   const authId = authUser?.id;
   useEffect(() => {
     if (!CLOUD) return;
-    if (!authUser) { setUser(null); return; }
+    if (!authUser) { setUser(null); setPlans([]); return; }
     let live = true;
     (async () => {
       const guestDone = read('atlas-progress-v2', []).filter(known), guestScores = read('atlas-scores-v2', {});
-      const [profileRes, rowsRes] = await Promise.all([
+      const [profileRes, rowsRes, plansRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('lesson_progress').select('lesson_id,best_score,passed').eq('user_id', authUser.id),
+        supabase.from('entitlements').select('track,expires_at').eq('user_id', authUser.id),
       ]);
       if (!live) return;
       let profile = profileRes.data;
@@ -97,6 +100,7 @@ export function AppProvider({ children }) {
       const failed = profileRes.error || rowsRes.error || pushRes.error;
       setSyncError(failed ? SYNC_FAILED : '');
       if (!failed) { try { localStorage.removeItem('atlas-progress-v2'); } catch {} }
+      setPlans((plansRes.data || []).filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).map(p => p.track));
       setUser(toUser(authUser, profile));
       setReady(true);
     })();
@@ -152,8 +156,8 @@ export function AppProvider({ children }) {
   };
   const logout = async () => {
     if (CLOUD) await supabase.auth.signOut(); else await fetch('/api/logout', { method: 'POST' });
-    setUser(null); setCompleted([]); setScores({}); setSyncError('');
+    setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]);
   };
   const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); } };
-  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, updateProfile, logout, resetGuest, ready, syncError }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, updateProfile, logout, resetGuest, ready, syncError, plans }}>{children}</AppContext.Provider>;
 }

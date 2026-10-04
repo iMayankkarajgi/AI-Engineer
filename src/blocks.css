@@ -393,6 +393,17 @@
 .lab-card-open { color: var(--accent); font-size: .86rem; font-weight: 600; }
 .lab-chips { margin-top: 16px; }
 .lab-chips button span { opacity: .6; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.lab-plan { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 20px; }
+.lab-plan h3 { margin: 0 0 4px; }
+.lab-plan p { margin: 0; max-width: 62ch; }
+.lab-card.locked .lab-card-icon { background: var(--surface-2); border-color: var(--line-2); color: var(--ink-3); }
+.lab-card.locked strong, .lab-card.locked .lab-card-desc { color: var(--ink-3); }
+.lab-card.locked .lab-card-open { color: var(--ink-2); }
+.lab-free { margin-right: 8px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 14%, var(--surface)); color: var(--ok); font-size: .72rem; font-weight: 650; }
+.lab-locked { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 36px 16px; border: 1px dashed var(--line-2); border-radius: var(--r-lg); background: var(--surface); }
+.lab-locked .lock-icon { font-size: 2rem; }
+.lab-locked h3 { margin: 0; }
+.lab-locked p { color: var(--ink-2); max-width: 46ch; }
 .lab-empty { margin-top: 24px; color: var(--ink-3); }
 .lab-modal h2 { display: flex; align-items: center; gap: 12px; font-size: clamp(1.3rem, 3vw, 1.7rem); text-transform: capitalize; margin: 8px 0 10px; padding-right: 36px; }
 .lab-modal-desc { color: var(--ink-2); font-size: .95rem; margin-bottom: 16px; max-width: 70ch; }

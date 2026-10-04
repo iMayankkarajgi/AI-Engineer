@@ -7,7 +7,7 @@ import { Avatar, GoogleMark } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
 import { TrackPicker, useTrack } from './Tracks';
-import { tracks, labTrack } from './course/tracks';
+import { tracks, trackById, labTrack, labUnlocked, FREE_LABS } from './course/tracks';
 import { ThemeToggle, useTheme } from './theme';
 import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
@@ -322,8 +322,11 @@ export function NotFound() {
 
 // Every interactive widget in one place, each linked to a lesson that uses it.
 export function Lab() {
+  const { user, plans } = useApp();
   const [filter, setFilter] = useState(''), [open, setOpen] = useState(null);
   const [params] = useSearchParams();
+  const can = n => labUnlocked(n, plans);
+  const unlockedCount = Object.keys(VIZ).filter(can).length;
   const [group, setGroup] = useState(() => ['ml', 'ai'].includes(params.get('track')) ? params.get('track') : 'all');
   const usedIn = vizUsage;
   const all = Object.keys(VIZ);
@@ -335,16 +338,18 @@ export function Lab() {
   useEffect(() => { const n = decodeURIComponent(location.hash.slice(1)); if (VIZ[n]) setOpen(n); }, []);
   return <main className="page container">
     <PageIntro eyebrow="Interactive lab" title="Play with every idea">{all.length} hands-on simulations from across the course. Pick a card to open it, then drag, step and break things; each one links to the lesson that explains it.</PageIntro>
+    {unlockedCount < all.length && <div className="card lab-plan"><div><small>Lab access</small><h3>{unlockedCount} of {all.length} labs open</h3><p>{plans.length ? 'Your plan covers the labs in its track. Upgrade to the Complete track to open every lab.' : 'The Temperature lab is free to try. The others open when you buy a plan that includes them.'}</p></div><Link className="button primary" to="/pricing">See Plans →</Link></div>}
     <label className="search-box"><span aria-hidden="true">⌕</span><input placeholder="Find an interactive…" value={filter} onChange={e => setFilter(e.target.value)} aria-label="Filter interactives"/><small>{names.length} shown</small></label>
     <div className="chips lab-chips" role="group" aria-label="Filter labs by track">{groups.map(([id, name, n]) => <button key={id} className={group === id ? 'active' : ''} aria-pressed={group === id} onClick={() => setGroup(id)}>{name} <span>{n}</span></button>)}</div>
     {names.length === 0 && <p className="lab-empty">No lab matches your search in this group.</p>}
     <ul className="lab-grid">{names.map(n => {
       const lessons = lessonsFor(n);
-      return <li key={n}><button className="lab-card" id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
+      const ok = can(n);
+      return <li key={n}><button className={'lab-card' + (ok ? '' : ' locked')} id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
         <span className="lab-card-top"><span className="lab-card-icon"><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">{labTrack(n) === 'ml' ? 'ML / DL' : 'AI'} · Lesson {lessonById[lessons[0]].num}</span>}</span>
         <strong>{label(n)}</strong>
         <span className="lab-card-desc">{VIZ[n]}</span>
-        <span className="lab-card-open">Open Interactive <span aria-hidden="true">→</span></span>
+        <span className="lab-card-open">{ok ? <>{FREE_LABS.includes(n) && !plans.length && <span className="lab-free">Free</span>}Open Interactive <span aria-hidden="true">→</span></> : <>🔒 Unlock With A Plan</>}</span>
       </button></li>;
     })}</ul>
     <Modal open={!!open} onClose={() => setOpen(null)} label={open ? label(open) : 'Interactive'} className="modal-wide lab-modal">
@@ -352,7 +357,12 @@ export function Lab() {
         <div className="eyebrow">Interactive {String(all.indexOf(open) + 1).padStart(2, '0')} of {all.length}</div>
         <h2><span className="lab-card-icon"><LabIcon name={open}/></span>{label(open)}</h2>
         <p className="lab-modal-desc">{VIZ[open]}</p>
-        <Viz name={open}/>
+        {can(open) ? <Viz name={open}/> : <div className="lab-locked">
+          <div className="lock-icon" aria-hidden="true">🔒</div>
+          <h3>This lab is part of a paid plan</h3>
+          <p>It opens with the <b>{trackById[labTrack(open)].name}</b> track or the <b>{trackById.complete.name}</b> track.{!user && ' If you already have a plan, sign in to use it.'}</p>
+          <div className="cert-actions"><Link className="button primary" to="/pricing">See Plans</Link>{!user && ACCOUNTS && <Link className="button ghost" to="/account">Sign In</Link>}<button className="button ghost" onClick={() => setOpen('temperature')}>Try The Free Lab</button></div>
+        </div>}
         {lessonsFor(open).length > 0 && <div className="lab-used">Used in: {lessonsFor(open).slice(0, 4).map(id => <Link key={id} to={`/lesson/${id}`}>{lessonById[id].num} {lessonById[id].title}</Link>)}</div>}
       </>}
     </Modal>

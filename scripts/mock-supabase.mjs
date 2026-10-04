@@ -16,9 +16,9 @@ const users = new Map();      // id -> { user, password }
 const tokens = new Map();     // access token -> user id
 const refresh = new Map();    // refresh token -> user id
 const codes = new Map();      // oauth code -> user id
-const tables = { profiles: [], lesson_progress: [], code_snippets: [] };
-const OWNER = { profiles: 'id', lesson_progress: 'user_id', code_snippets: 'user_id' };
-const KEYS = { profiles: ['id'], lesson_progress: ['user_id', 'lesson_id'], code_snippets: ['id'] };
+const tables = { profiles: [], lesson_progress: [], code_snippets: [], entitlements: [] };
+const OWNER = { profiles: 'id', lesson_progress: 'user_id', code_snippets: 'user_id', entitlements: 'user_id' };
+const KEYS = { profiles: ['id'], lesson_progress: ['user_id', 'lesson_id'], code_snippets: ['id'], entitlements: ['user_id', 'track'] };
 
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 function createUser({ email, password, meta, provider }) {
@@ -82,7 +82,7 @@ async function rest(req, res, url) {
   const filters = [...url.searchParams].filter(([k, v]) => !['select', 'on_conflict', 'columns'].includes(k) && v.startsWith('eq.'));
   const visible = () => rows.filter(r => uid && r[owner] === uid && filters.every(([k, v]) => String(r[k]) === v.slice(3)));
   if (req.method === 'GET') return reply(200, visible());
-  if (!uid) return send(res, 401, { code: '42501', message: 'new row violates row-level security policy' });
+  if (!uid || name === 'entitlements') return send(res, uid ? 403 : 401, { code: '42501', message: 'new row violates row-level security policy' });
   const body = await readBody(req), wants = (req.headers.prefer || '').includes('return=representation');
   if (req.method === 'POST') {
     const out = [];
@@ -112,6 +112,8 @@ http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith('/auth/v1/')) return await auth(req, res, url);
     if (url.pathname.startsWith('/rest/v1/')) return await rest(req, res, url);
+    // Test-only stand-in for granting a plan from the dashboard: /__grant?email=...&track=ml|ai|complete|none
+    if (url.pathname === '/__grant') { const u = byEmail(url.searchParams.get('email')), track = url.searchParams.get('track'); if (!u) return send(res, 404, { message: 'No such user' }); tables.entitlements.splice(0, tables.entitlements.length, ...tables.entitlements.filter(e => e.user_id !== u.user.id)); if (track !== 'none') tables.entitlements.push({ user_id: u.user.id, track, period: 'lifetime', expires_at: null }); return send(res, 200, { ok: true }); }
     // Inspection endpoint for tests: what is stored right now.
     if (url.pathname === '/__state') return send(res, 200, { users: [...users.values()].map(u => ({ id: u.user.id, email: u.user.email, provider: u.user.app_metadata.provider })), ...tables });
     send(res, 404, { message: 'Not found' });

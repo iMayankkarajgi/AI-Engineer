@@ -84,3 +84,18 @@ drop policy if exists "snippets: update own" on public.code_snippets;
 create policy "snippets: update own" on public.code_snippets for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "snippets: delete own" on public.code_snippets;
 create policy "snippets: delete own" on public.code_snippets for delete using (auth.uid() = user_id);
+
+-- Plans a learner has bought. Learners can only read their own rows: there are
+-- no insert/update/delete policies, so plans are granted from the dashboard or
+-- by a trusted server (for example a payment webhook using the service role).
+create table if not exists public.entitlements (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  track text not null check (track in ('ml', 'ai', 'complete')),
+  period text not null default 'lifetime' check (period in ('monthly', 'half', 'lifetime')),
+  expires_at timestamptz,            -- null means it never expires
+  created_at timestamptz not null default now(),
+  primary key (user_id, track)
+);
+alter table public.entitlements enable row level security;
+drop policy if exists "entitlements: read own" on public.entitlements;
+create policy "entitlements: read own" on public.entitlements for select using (auth.uid() = user_id);

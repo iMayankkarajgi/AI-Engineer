@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { useApp, ACCOUNTS, CLOUD } from './app';
 import Certificate from './Certificate';
+import { trackById } from './course/tracks';
 
 const initials = name => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
@@ -25,7 +26,7 @@ export function GoogleMark() {
 }
 
 export default function Profile() {
-  const { user, ready, completed, scores, nextLesson, updateProfile, logout, syncError } = useApp(), nav = useNavigate();
+  const { user, ready, completed, scores, nextLesson, updateProfile, logout, syncError, plans } = useApp(), nav = useNavigate();
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false), [cert, setCert] = useState(false);
   useEffect(() => { if (ready && !user) nav(ACCOUNTS ? '/account' : '/dashboard', { replace: true }); }, [ready, user, nav]);
   if (!user) return <main className="page container narrow"><div className="eyebrow">Loading…</div></main>;
@@ -56,6 +57,7 @@ export default function Profile() {
         <div className="profile-tags">
           {user.provider === 'google' && <span className="profile-tag"><GoogleMark/>Signed in with Google</span>}
           {joined && <span className="profile-tag">Joined {joined}</span>}
+          {CLOUD && <span className="profile-tag">{plans.length ? `Plan: ${plans.map(p => trackById[p]?.name || p).join(', ')}` : 'No plan yet'}</span>}
           {CLOUD && <span className={'profile-tag ' + (syncError ? 'bad' : 'ok')} role="status">{syncError ? '⚠ Not synced' : '✓ Synced to your account'}</span>}
         </div>
       </div>

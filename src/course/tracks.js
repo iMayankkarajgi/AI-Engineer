@@ -63,3 +63,8 @@ export const entryLessonIds = tracks.map(t => t.modules.find(m => m.id !== 'must
 export const formatPrice = amount => new Intl.NumberFormat(CURRENCY.locale, { style: 'currency', currency: CURRENCY.code, maximumFractionDigits: 0 }).format(amount);
 // How much cheaper six months is than paying monthly for six months, as a whole percentage.
 export const halfYearSaving = t => Math.round((1 - t.prices.half / (t.prices.monthly * 6)) * 100);
+
+// Lab access. One lab is free for everyone; the rest need a plan whose track
+// includes that lab. `plans` is the list of track ids the learner has bought.
+export const FREE_LABS = ['temperature'];
+export const labUnlocked = (name, plans = []) => FREE_LABS.includes(name) || plans.includes('complete') || plans.includes(labTrack(name));

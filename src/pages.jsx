@@ -113,7 +113,7 @@ export function Curriculum() {
   const passed = track.lessons.filter(l => completed.includes(l.id)).length;
   const next = track.lessons.find(l => !completed.includes(l.id) && isUnlocked(l.id)) || track.lessons.find(l => !completed.includes(l.id)) || track.lessons[0];
   return <main className="page container">
-    <PageIntro eyebrow="Three tracks, one path" title="Choose how deep you want to go">
+    <PageIntro eyebrow="Curriculum" title="Choose your learning track">
       Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; pass it with {PASS_MARK}/5 to unlock the next one.
     </PageIntro>
     <TrackPicker value={track.id} onChange={setTrack}/>

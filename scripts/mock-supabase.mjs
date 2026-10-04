@@ -90,7 +90,7 @@ async function rest(req, res, url) {
       const row = { ...input }; if (owner === 'user_id' && !row.user_id) row.user_id = uid;
       if (name === 'code_snippets' && !row.id) row.id = randomUUID();
       if (row[owner] !== uid) return send(res, 403, { code: '42501', message: `new row violates row-level security policy for table "${name}"` });
-      if (name === 'lesson_progress' && (!/^[a-z0-9-]{1,80}$/.test(row.lesson_id || '') || !(row.best_score >= 0 && row.best_score <= 5))) return send(res, 400, { code: '23514', message: 'new row violates check constraint' });
+      if (name === 'lesson_progress' && (!/^[a-z0-9-]{1,80}$/.test(row.lesson_id || '') || !(row.best_score >= 0 && row.best_score <= 50))) return send(res, 400, { code: '23514', message: 'new row violates check constraint' });
       if (name === 'profiles' && ((row.full_name || '').length > 80 || (row.bio || '').length > 280)) return send(res, 400, { code: '23514', message: 'new row violates check constraint' });
       const at = rows.findIndex(r => KEYS[name].every(k => r[k] === row[k]));
       if (at >= 0) { if (!(req.headers.prefer || '').includes('merge-duplicates')) return send(res, 409, { code: '23505', message: 'duplicate key value violates unique constraint' }); rows[at] = { ...rows[at], ...row }; out.push(rows[at]); }

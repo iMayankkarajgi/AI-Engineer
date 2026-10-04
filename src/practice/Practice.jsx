@@ -9,6 +9,7 @@ import { python } from '@codemirror/lang-python';
 import { classHighlighter } from '@lezer/highlight';
 import { useApp, ACCOUNTS, CLOUD } from '../app';
 import { supabase } from '../supabase';
+import { PRACTICE_HANDOFF } from '../LessonBlocks';
 import './practice.css';
 
 const STARTERS = [
@@ -172,6 +173,14 @@ export default function Practice() {
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 4000); return () => clearTimeout(t); }, [notice]);
   // Signing in or out swaps the file list, so start from a clean file.
   useEffect(() => { setFile(f => ({ ...f, id: null })); setSavedAs(blank()); }, [snippets.cloud]);
+  // Arriving from a lesson's "Practice In Editor" button: open that code as a new file.
+  useEffect(() => {
+    try {
+      const sent = JSON.parse(sessionStorage.getItem(PRACTICE_HANDOFF));
+      sessionStorage.removeItem(PRACTICE_HANDOFF);
+      if (sent?.code) { const next = { id: null, title: sent.title || 'lesson_example.py', code: sent.code }; setFile(next); setSavedAs(next); setNotice({ ok: true, text: 'Lesson code loaded. Edit it, then press Run.' }); }
+    } catch {}
+  }, []);
 
   const run = () => { if (!py.running && !py.failed) { setTab('output'); py.run(file.code, stdin); } };
   const save = async (quiet = false) => {

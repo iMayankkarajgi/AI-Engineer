@@ -8,7 +8,7 @@ export default {
       id: 'big-picture',
       title: 'The big picture',
       blocks: [
-        { type: 'p', text: 'In the previous lesson we fine-tuned a model by nudging all of its weights. **LoRA**, short for **Low-Rank Adaptation**, introduced by Hu and colleagues at Microsoft in 2021 ([paper](https://arxiv.org/abs/2106.09685)), takes a different route: keep every original weight **frozen** (not trainable) and learn a small **correction** that is added on top.' },
+        { type: 'p', text: 'In the previous lesson we fine-tuned a model by nudging all of its weights. **LoRA**, short for **Low-Rank Adaptation**, introduced by Hu and colleagues at Microsoft in 2021, takes a different route: keep every original weight **frozen** (not trainable) and learn a small **correction** that is added on top.' },
         { type: 'p', text: 'The trick is the *shape* of that correction. Instead of a full matrix the size of the original, LoRA writes it as two skinny matrices multiplied together. That shape is called **low-rank**, and it is why LoRA is so cheap.' },
         { type: 'callout', tone: 'analogy', title: 'Think of it like transparent sticky notes', text: 'Imagine a printed textbook (the frozen model). Instead of reprinting the book for every class, each teacher adds a thin set of transparent overlays with corrections. The book never changes, overlays are cheap to make and swap, and if we like one overlay a lot we can print it into a new edition (merging).' },
         { type: 'p', text: 'Running example: we run the bike-rental support bot from the last lesson, and also want a second version for our corporate-fleet customers. With LoRA we keep one copy of the base model and two small adapters, one per audience.' },

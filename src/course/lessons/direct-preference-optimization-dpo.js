@@ -29,7 +29,7 @@ export default {
       id: 'what-is-dpo',
       title: 'What is Direct Preference Optimization?',
       blocks: [
-        { type: 'p', text: '**DPO** was introduced by Rafael Rafailov, Archit Sharma, Eric Mitchell and colleagues at Stanford in 2023, in a paper titled “Direct Preference Optimization: Your Language Model is Secretly a Reward Model” ([paper](https://arxiv.org/abs/2305.18290)). It optimises the *same goal* as KL-regularised RLHF but does it **directly** on preference pairs, using one supervised-style loss. No reward model is trained, and no text is sampled during training.' },
+        { type: 'p', text: '**DPO** was introduced by Rafael Rafailov, Archit Sharma, Eric Mitchell and colleagues at Stanford in 2023, in a paper titled “Direct Preference Optimization: Your Language Model is Secretly a Reward Model”. It optimises the *same goal* as KL-regularised RLHF but does it **directly** on preference pairs, using one supervised-style loss. No reward model is trained, and no text is sampled during training.' },
         { type: 'callout', tone: 'analogy', title: 'Think of it like learning from marked exam pairs', text: 'RLHF is like training a separate examiner, then having the student write new essays for the examiner to grade, over and over. DPO skips the examiner: the student looks at pairs of essays where a teacher already marked which was better and adjusts directly, making the better one feel more “like me” and the worse one less, compared with how they wrote before the course.' },
       ],
     },

@@ -24,7 +24,7 @@ export default {
           '**Imitation learning** (copying human demonstrations) needs someone who can *perform* the task. Nobody can demonstrate a backflip by controlling a simulated robot’s joints.',
           '**A human giving a reward at every step** is far too slow: RL agents need millions of steps.',
         ] },
-        { type: 'p', text: 'The insight of Paul Christiano, Jan Leike, Tom Brown, Miljan Martic, Shane Legg and Dario Amodei (OpenAI and DeepMind, [2017](https://arxiv.org/abs/1706.03741)) was that humans are good at **judging** behaviour even when they cannot specify or demonstrate it, and that comparing two options is easier and more consistent than giving an absolute score.' },
+        { type: 'p', text: 'The insight of Paul Christiano, Jan Leike, Tom Brown, Miljan Martic, Shane Legg and Dario Amodei (OpenAI and DeepMind, 2017) was that humans are good at **judging** behaviour even when they cannot specify or demonstrate it, and that comparing two options is easier and more consistent than giving an absolute score.' },
       ],
     },
     {

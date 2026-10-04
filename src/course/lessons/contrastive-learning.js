@@ -26,7 +26,7 @@ export default {
           '**Needs few labels downstream:** a small classifier on top of good embeddings (a "linear probe") can work well with little labelled data.',
           '**Connects different modalities:** it can put images and text in the same space, so a sentence can find a photo.',
         ] },
-        { type: 'callout', tone: 'note', title: 'Related videos from the course', text: 'For the background ideas mentioned here, see [Feature Engineering in Machine Learning](https://www.youtube.com/watch?v=QLlywrWuXag) (video) and [One-hot Encoding in Machine Learning](https://www.youtube.com/watch?v=6AmedU5i9go) (video). Lesson 2.4 also covers both topics on this site.' },
+        { type: 'callout', tone: 'note', title: 'Background', text: 'For the background ideas mentioned here, feature engineering and one-hot encoding, see Lesson 2.4.' },
       ],
     },
     {

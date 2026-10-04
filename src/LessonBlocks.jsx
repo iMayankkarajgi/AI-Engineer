@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Viz } from './viz';
 
 // Renders the typed blocks described in src/course/LESSON_SPEC.md.
@@ -89,7 +90,20 @@ function highlight(line, lang) {
   return out;
 }
 
+// Python the in-browser runtime can execute: the standard library plus the
+// scientific packages it ships. Code importing anything else (PyTorch, API
+// clients, agent frameworks) cannot run there, so it gets no Practice button.
+const RUNNABLE = new Set(['numpy', 'pandas', 'scipy', 'sklearn', 'matplotlib', 'math', 'random', 'collections', 're', 'json', 'itertools', 'functools', 'bisect', 'heapq', 'statistics', 'time', 'typing', 'dataclasses', 'string', 'textwrap', 'hashlib', 'ipaddress', 'datetime', 'enum', 'operator', 'copy', 'sys', 'os', 'abc', 'decimal', 'fractions']);
+export const canPractice = (lang, code) => lang === 'python' && [...code.matchAll(/^\s*(?:import|from)\s+([A-Za-z_][\w]*)/gm)].every(m => RUNNABLE.has(m[1]));
+export const PRACTICE_HANDOFF = 'atlas-practice-handoff';
+
 function CodeBlock({ lang = 'python', title, code, output, caption, walkthrough }) {
+  const nav = useNavigate();
+  const practise = () => {
+    const name = (title || 'lesson example').toLowerCase().replace(/\.py$/, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'lesson_example';
+    try { sessionStorage.setItem(PRACTICE_HANDOFF, JSON.stringify({ title: name + '.py', code })); } catch {}
+    nav('/practice');
+  };
   const lines = useMemo(() => code.replace(/\n$/, '').split('\n'), [code]);
   const [copied, setCopied] = useState(false), [run, setRun] = useState(0), [typed, setTyped] = useState(''), [w, setW] = useState(-1);
   const copy = () => navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
@@ -108,6 +122,7 @@ function CodeBlock({ lang = 'python', title, code, output, caption, walkthrough 
       <span className="b-code-actions">
         {walkthrough?.length > 0 && <button onClick={() => setW(w >= walkthrough.length - 1 ? -1 : w + 1)}>{w < 0 ? '◎ Walk through' : w >= walkthrough.length - 1 ? '✕ End walkthrough' : `Next (${w + 2}/${walkthrough.length})`}</button>}
         {output && <button className="run" onClick={() => setRun(r => r + 1)}>▶ Run</button>}
+        {canPractice(lang, code) && <button className="practise" onClick={practise} title="Open this code in the Practice editor">✎ Practice In Editor</button>}
         <button onClick={copy}>{copied ? 'Copied ✓' : 'Copy'}</button>
       </span>
     </div>

@@ -166,13 +166,8 @@ What is the meal allowance when I travel?
     },
     {
       id: 'watch-next',
-      title: 'Watch next',
+      title: 'How this lesson connects',
       blocks: [
-        { type: 'p', text: 'Two videos from the course author that tie this module together:' },
-        { type: 'list', items: [
-          '[AI Engineering Explained: LLM, RAG, MCP, Agent, Fine-Tuning, Quantization](https://www.youtube.com/watch?v=lnfWvX66FUk) (video)',
-          '[Agentic RAG Explained](https://www.youtube.com/watch?v=6nSegpuWJVw) (video)',
-        ] },
         { type: 'callout', tone: 'tip', title: 'How this lesson connects', text: 'Vectorless tree navigation is a form of agentic retrieval: an LLM decides step by step where to look. Compare it with the agentic RAG lesson (agents choosing tools) and the GraphRAG lesson (retrieval over explicit structure).' },
       ],
     },

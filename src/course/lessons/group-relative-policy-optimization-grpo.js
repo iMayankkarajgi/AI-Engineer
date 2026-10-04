@@ -8,7 +8,7 @@ export default {
       id: 'what-is-grpo',
       title: 'What is GRPO?',
       blocks: [
-        { type: 'p', text: '**GRPO**, short for **Group Relative Policy Optimization**, was introduced by Zhihong Shao and colleagues at DeepSeek in the 2024 DeepSeekMath paper ([paper](https://arxiv.org/abs/2402.03300)). It became widely known in 2025 when DeepSeek-R1, a model with strong step-by-step reasoning, was trained with large-scale reinforcement learning using GRPO.' },
+        { type: 'p', text: '**GRPO**, short for **Group Relative Policy Optimization**, was introduced by Zhihong Shao and colleagues at DeepSeek in the 2024 DeepSeekMath paper. It became widely known in 2025 when DeepSeek-R1, a model with strong step-by-step reasoning, was trained with large-scale reinforcement learning using GRPO.' },
         { type: 'p', text: 'GRPO is a variant of **PPO** (Proximal Policy Optimization). It keeps PPO’s core, the clipped probability-ratio update, but changes how the **advantage** (how much better an answer was than expected) is computed: instead of a learned value model, it compares answers within a **group** sampled for the same prompt.' },
         { type: 'callout', tone: 'analogy', title: 'Think of it like grading on a curve', text: 'A teacher without an answer key for “how hard was this exam?” can still grade fairly by comparing students who took the same exam: above the class average is good, below is bad. GRPO grades each answer against its classmates, the other answers to the same prompt, instead of against a separately trained predictor of expected score.' },
       ],

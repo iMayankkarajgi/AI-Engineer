@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './theme';
 import { AppProvider, STATIC, useApp, takeAfterLogin } from './app';
-import { Header, Footer, Curriculum, Module, Guide, Glossary, Faq, Dashboard, Account, NotFound, Lab } from './pages';
+import { Header, Footer, Curriculum, Module, Guide, Glossary, Faq, Dashboard, Account, NotFound, Lab, Resources } from './pages';
+import Exam from './Exam';
 import LessonPage from './LessonPage';
 import Profile from './Profile';
 import { Pricing } from './Tracks';
@@ -63,6 +64,8 @@ function App() {
         <Route path="/practice" element={<Practice/>}/>
         <Route path="/glossary" element={<Glossary/>}/>
         <Route path="/faq" element={<Faq/>}/>
+        <Route path="/resources" element={<Resources/>}/>
+        <Route path="/exam" element={<Exam/>}/>
         <Route path="/dashboard" element={<Dashboard/>}/>
         <Route path="/account" element={<Account/>}/>
         <Route path="/profile" element={<Profile/>}/>

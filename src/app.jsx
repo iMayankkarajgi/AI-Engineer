@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { lessonIds } from './course/curriculum';
 import { supabase } from './supabase';
 import { entryLessonIds } from './course/tracks';
+import { EXAM_ID, EXAM_PASS } from './course/exam';
 
 // Account session and lesson progress. A lesson counts as completed once its
 // quiz is passed (4 of 5). Lessons unlock in order: each one opens when the
@@ -48,6 +49,8 @@ export function AppProvider({ children }) {
   const [syncError, setSyncError] = useState('');
   // Track ids the learner has an active plan for (granted in the entitlements table).
   const [plans, setPlans] = useState([]);
+  // Best final-exam score so far, or null when it has not been taken.
+  const [exam, setExam] = useState(() => read('atlas-exam-v1', null));
 
   // Bundled API: restore the cookie session.
   useEffect(() => {
@@ -96,8 +99,14 @@ export function AppProvider({ children }) {
       if (!live) return;
       const merged = { ...remote, ...Object.fromEntries(push.map(r => [r.lesson_id, r])) };
       setCompleted(Object.values(merged).filter(r => r.passed).map(r => r.lesson_id).filter(known));
-      setScores(Object.fromEntries(Object.values(merged).map(r => [r.lesson_id, r.best_score])));
-      const failed = profileRes.error || rowsRes.error || pushRes.error;
+      setScores(Object.fromEntries(Object.values(merged).filter(r => known(r.lesson_id)).map(r => [r.lesson_id, r.best_score])));
+      // The exam result is stored beside lesson progress, under its own id.
+      const localExam = read('atlas-exam-v1', null), remoteExam = remote[EXAM_ID]?.best_score ?? null;
+      const bestExam = localExam === null ? remoteExam : Math.max(localExam, remoteExam ?? 0);
+      const examRes = bestExam !== null && bestExam !== remoteExam ? await supabase.from('lesson_progress').upsert({ user_id: authUser.id, lesson_id: EXAM_ID, best_score: bestExam, passed: bestExam >= EXAM_PASS, updated_at: new Date().toISOString() }) : {};
+      if (!live) return;
+      setExam(bestExam);
+      const failed = profileRes.error || rowsRes.error || pushRes.error || examRes.error;
       setSyncError(failed ? SYNC_FAILED : '');
       if (!failed) { try { localStorage.removeItem('atlas-progress-v2'); } catch {} }
       setPlans((plansRes.data || []).filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).map(p => p.track));
@@ -109,6 +118,7 @@ export function AppProvider({ children }) {
 
   useEffect(() => { if (!user) write('atlas-progress-v2', completed); }, [completed, user]);
   useEffect(() => { write('atlas-scores-v2', scores); }, [scores]);
+  useEffect(() => { write('atlas-exam-v1', exam); }, [exam]);
 
   const complete = async id => { setCompleted(v => [...new Set([...v, id])]); if (user && !CLOUD) { try { await fetch(`/api/progress/${id}`, { method: 'PUT' }); } catch {} } };
   const recordScore = (id, score) => {
@@ -116,6 +126,12 @@ export function AppProvider({ children }) {
     setScores(s => ({ ...s, [id]: Math.max(score, s[id] ?? 0) }));
     if (score >= PASS_MARK) complete(id);
     if (CLOUD && user) supabase.from('lesson_progress').upsert({ user_id: user.id, lesson_id: id, best_score: best, passed, updated_at: new Date().toISOString() })
+      .then(({ error }) => setSyncError(error ? SYNC_FAILED : ''));
+  };
+  const recordExam = score => {
+    const best = Math.max(score, exam ?? 0);
+    setExam(best);
+    if (CLOUD && user) supabase.from('lesson_progress').upsert({ user_id: user.id, lesson_id: EXAM_ID, best_score: best, passed: best >= EXAM_PASS, updated_at: new Date().toISOString() })
       .then(({ error }) => setSyncError(error ? SYNC_FAILED : ''));
   };
   // The first lesson is always open; every other lesson needs its predecessor.
@@ -156,8 +172,8 @@ export function AppProvider({ children }) {
   };
   const logout = async () => {
     if (CLOUD) await supabase.auth.signOut(); else await fetch('/api/logout', { method: 'POST' });
-    setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]);
+    setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]); setExam(null);
   };
-  const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); } };
-  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, updateProfile, logout, resetGuest, ready, syncError, plans }}>{children}</AppContext.Provider>;
+  const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); setExam(null); } };
+  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
 }

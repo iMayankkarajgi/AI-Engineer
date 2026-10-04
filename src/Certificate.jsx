@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { modules, allLessons } from './course/curriculum';
-import { CLOUD, PASS_MARK } from './app';
+import { CLOUD } from './app';
+import { examQuestions } from './course/exam';
 import { supabase } from './supabase';
 import Modal from './Modal';
 
@@ -19,7 +20,7 @@ function useCompletionDate(user, open) {
   return date;
 }
 
-export default function Certificate({ user, open, onClose }) {
+export default function Certificate({ user, exam, open, onClose }) {
   const date = useCompletionDate(user, open);
   const id = `AA-${date.getFullYear()}-${String(user.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
   return <Modal open={open} onClose={onClose} label="Certificate of completion" className="modal-wide cert-modal">
@@ -30,7 +31,7 @@ export default function Certificate({ user, open, onClose }) {
         <p className="cert-lead">This certifies that</p>
         <div className="cert-name">{user.name}</div>
         <div className="cert-rule"/>
-        <p className="cert-text">has successfully completed the <b>AI Engineering Course</b>, passing the quiz for every one of its {allLessons.length} lessons across {modules.length} modules, from machine-learning foundations to production AI systems.</p>
+        <p className="cert-text">has successfully completed the <b>AI Engineering Course</b>, passing all {allLessons.length} lessons across {modules.length} modules and the final examination, from machine-learning foundations to production AI systems.</p>
         <div className="cert-foot">
           <div><strong>{longDate(date)}</strong><small>Date of completion</small></div>
           <svg className="cert-seal" viewBox="0 0 120 120" aria-hidden="true">
@@ -41,7 +42,7 @@ export default function Certificate({ user, open, onClose }) {
           </svg>
           <div><strong>{id}</strong><small>Certificate ID</small></div>
         </div>
-        <div className="cert-note">Each lesson passed with a quiz score of {PASS_MARK} out of 5 or higher.</div>
+        <div className="cert-note">Final examination score: {exam} out of {examQuestions.length}.</div>
       </div>
     </div></div>
     <p className="cert-hint">Swipe sideways to see the whole certificate.</p>

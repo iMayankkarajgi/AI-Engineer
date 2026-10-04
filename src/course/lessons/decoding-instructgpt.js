@@ -8,7 +8,7 @@ export default {
       id: 'what-is-instructgpt',
       title: 'What is the InstructGPT paper?',
       blocks: [
-        { type: 'p', text: '“Training language models to follow instructions with human feedback” by Long Ouyang and colleagues at OpenAI ([2022](https://arxiv.org/abs/2203.02155)) describes **InstructGPT**: GPT-3 models fine-tuned so that they do what the user asks, rather than just continuing the text. It was the first large-scale demonstration of **RLHF** (reinforcement learning from human feedback) on a general-purpose language model, and the same approach was used for ChatGPT later that year.' },
+        { type: 'p', text: '“Training language models to follow instructions with human feedback” by Long Ouyang and colleagues at OpenAI (2022) describes **InstructGPT**: GPT-3 models fine-tuned so that they do what the user asks, rather than just continuing the text. It was the first large-scale demonstration of **RLHF** (reinforcement learning from human feedback) on a general-purpose language model, and the same approach was used for ChatGPT later that year.' },
         { type: 'callout', tone: 'analogy', title: 'Think of it like coaching a brilliant but literal new hire', text: 'The new hire has read every book in the library (pretraining) but answers a request like “write a short apology email” by writing three more requests, because that is what the documents they read looked like. Coaching has three stages: show them good examples, teach them to judge which drafts are better, then let them practise and reward the drafts that a judge likes.' },
       ],
     },

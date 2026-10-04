@@ -1,0 +1,21 @@
+/* Final exam. Question styling is shared with the lesson quiz (lesson.css). */
+.exam-page { display: grid; gap: 18px; align-content: start; }
+.exam-page .page-intro { margin-bottom: 0; }
+.exam-rules { display: grid; gap: 12px; }
+.exam-best { margin: 0; color: var(--ink-2); }
+.exam-best.ok { color: var(--ok); }
+.exam-bar { position: sticky; top: calc(var(--header-h) + env(safe-area-inset-top, 0px)); z-index: 5; display: grid; gap: 8px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.exam-bar > div:first-child { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
+.exam-bar span { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.exam-list { margin-top: 4px; }
+.exam-topic { margin: -4px 0 10px; color: var(--ink-3); font: 500 .72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.exam-submit { position: sticky; bottom: 12px; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 12px 16px; box-shadow: var(--shadow); }
+.exam-result { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; }
+.exam-result h1 { font-size: clamp(1.4rem, 3.4vw, 1.9rem); margin: 0 0 6px; }
+.exam-result p { margin: 0 0 14px; }
+.exam-score { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.exam-score strong { font-size: clamp(3rem, 9vw, 4.4rem); font-weight: 660; letter-spacing: -.03em; line-height: 1; }
+.exam-score span { color: var(--ink-3); font-size: 1.3rem; }
+.exam-result.pass { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.exam-result.pass .exam-score strong { color: var(--ok); }
+.exam-result.fail .exam-score strong { color: var(--bad); }

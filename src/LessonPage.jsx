@@ -126,10 +126,10 @@ function Quiz({ id, quiz, nextId }) {
           <div className="quiz-score"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.9" className="track"/><circle cx="18" cy="18" r="15.9" className="fill" style={{ strokeDasharray: `${(score / quiz.length) * 100} 100` }}/></svg><b>{score}/{quiz.length}</b></div>
           <div>
             <strong>{passed ? (score === quiz.length ? 'Perfect score! Lesson passed.' : 'Lesson passed!') : `You scored ${score}. You need ${PASS_MARK} to pass.`}</strong>
-            <p>{passed ? (nextId ? 'The next lesson is now unlocked.' : 'You have completed the whole course. Congratulations!') : 'Read the explanations above, revisit the sections they point to, then try again. The options will be shuffled.'}</p>
+            <p>{passed ? (nextId ? 'The next lesson is now unlocked.' : 'That was the last lesson. The final exam is the next step.') : 'Read the explanations above, revisit the sections they point to, then try again. The options will be shuffled.'}</p>
             <div className="quiz-actions">
               {passed && nextId && <Link className="button primary" to={`/lesson/${nextId}`}>Next Lesson →</Link>}
-              {passed && !nextId && <Link className="button primary" to="/dashboard">See Your Progress →</Link>}
+              {passed && !nextId && <Link className="button primary" to="/exam">Take The Final Exam →</Link>}
               <button className={'button ' + (passed ? 'ghost' : 'primary')} onClick={retry}>{passed ? 'Retake Quiz' : '↺ Try Again'}</button>
             </div>
           </div>
@@ -209,7 +209,7 @@ export default function LessonPage() {
           {nextId
             ? (passed ? <Link className="pager-card next" to={`/lesson/${nextId}`}><small>Next · {lessonById[nextId].num} →</small><strong>{lessonById[nextId].title}</strong></Link>
               : <a className="pager-card next locked" href="#quiz" onClick={e => { e.preventDefault(); document.getElementById('quiz')?.scrollIntoView({ behavior: 'smooth' }); }}><small>🔒 Pass the quiz to unlock</small><strong>{lessonById[nextId].title}</strong></a>)
-            : <Link className="pager-card next" to="/dashboard"><small>Course complete →</small><strong>See your progress</strong></Link>}
+            : <Link className="pager-card next" to="/exam"><small>Lessons complete →</small><strong>Take the final exam</strong></Link>}
         </nav>
       </article>
       {body && <Toc sections={sections}/>}

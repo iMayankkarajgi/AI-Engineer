@@ -39,7 +39,7 @@ export default {
       id: 'what-is-ppo',
       title: 'What is PPO, and the key idea: clipping',
       blocks: [
-        { type: 'p', text: '**PPO** was introduced by John Schulman and colleagues at OpenAI in 2017 ([paper](https://arxiv.org/abs/1707.06347)). It keeps TRPO’s spirit, “do not move too far from the old policy”, but replaces the hard constraint with a simple trick in the loss function: **clipping**. *Proximal* means “nearby”: each new policy stays near the previous one.' },
+        { type: 'p', text: '**PPO** was introduced by John Schulman and colleagues at OpenAI in 2017. It keeps TRPO’s spirit, “do not move too far from the old policy”, but replaces the hard constraint with a simple trick in the loss function: **clipping**. *Proximal* means “nearby”: each new policy stays near the previous one.' },
         { type: 'callout', tone: 'analogy', title: 'Think of it like adjusting a recipe', text: 'A cook gets feedback that a dish was great. A wise cook does not triple every ingredient tomorrow; they change things by a bounded amount, maybe 20%, then taste again. PPO is that rule: learn from the feedback, but never change any action’s probability by more than a set fraction per round.' },
         { type: 'p', text: 'The central quantity is the **probability ratio**:' },
         { type: 'formula', expr: 'rₜ(θ) = π_θ(aₜ | sₜ) / π_θ_old(aₜ | sₜ)', where: [

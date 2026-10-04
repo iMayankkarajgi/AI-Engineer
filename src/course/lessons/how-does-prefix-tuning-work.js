@@ -26,7 +26,7 @@ export default {
       id: 'what-is-prefix-tuning',
       title: 'What is prefix tuning?',
       blocks: [
-        { type: 'p', text: '**Prefix tuning** was introduced by Xiang Lisa Li and Percy Liang in 2021 ([paper](https://arxiv.org/abs/2101.00190)). It freezes all model weights and learns a short, task-specific sequence of vectors that is placed *before* the real input at every layer. The name splits nicely:' },
+        { type: 'p', text: '**Prefix tuning** was introduced by Xiang Lisa Li and Percy Liang in 2021. It freezes all model weights and learns a short, task-specific sequence of vectors that is placed *before* the real input at every layer. The name splits nicely:' },
         { type: 'list', items: [
           '**Prefix**: a few extra positions in front of the input sequence, like a preface before a book.',
           '**Tuning**: those positions hold trainable numbers, adjusted with gradient descent while the model stays fixed.',

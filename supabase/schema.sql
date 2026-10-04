@@ -17,7 +17,7 @@ create table if not exists public.profiles (
 create table if not exists public.lesson_progress (
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   lesson_id text not null check (lesson_id ~ '^[a-z0-9-]{1,80}$'),
-  best_score smallint not null default 0 check (best_score between 0 and 5),
+  best_score smallint not null default 0 check (best_score between 0 and 50),  -- lesson quizzes score 0-5; the final exam row scores 0-50
   passed boolean not null default false,
   updated_at timestamptz not null default now(),
   primary key (user_id, lesson_id)
@@ -99,3 +99,8 @@ create table if not exists public.entitlements (
 alter table public.entitlements enable row level security;
 drop policy if exists "entitlements: read own" on public.entitlements;
 create policy "entitlements: read own" on public.entitlements for select using (auth.uid() = user_id);
+
+-- Final exam: its result is one lesson_progress row with lesson_id 'final-exam'
+-- and a score out of 50, so databases created before the exam need a wider check.
+alter table public.lesson_progress drop constraint if exists lesson_progress_best_score_check;
+alter table public.lesson_progress add constraint lesson_progress_best_score_check check (best_score between 0 and 50);

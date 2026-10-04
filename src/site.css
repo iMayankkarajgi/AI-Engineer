@@ -116,9 +116,9 @@
 
 /* Account */
 .account-page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; padding-top: var(--header-h); }
-.account-aside { position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 56px; background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--accent) 14%, var(--surface)) 0, var(--surface) 62%); border-right: 1px solid var(--line); }
+.account-aside { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; text-align: center; padding: 56px; background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--accent) 14%, var(--surface)) 0, var(--surface) 62%); border-right: 1px solid var(--line); }
 .particle-field { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.account-aside-copy { position: relative; display: grid; gap: 12px; max-width: 420px; }
+.account-aside-copy { position: relative; display: grid; gap: 12px; justify-items: center; max-width: 420px; }
 .account-aside-copy h2 { font-size: clamp(2rem, 3.5vw, 2.8rem); }
 .account-aside-copy p { color: var(--ink-2); }
 .account-form-wrap { display: grid; place-items: center; padding: 48px var(--gutter); }
@@ -236,3 +236,16 @@ body:has(dialog.modal[open]) { overflow: hidden; }
   .cert-scroll { overflow: visible; }
   .cert { width: min(100vw, 141.4vh); min-width: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* Useful links */
+.resource-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.resource-list a { display: grid; gap: 4px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); transition: border-color .15s, transform .15s; }
+.resource-list a:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+.resource-list strong { font-size: 1rem; font-weight: 620; }
+.resource-list strong span { color: var(--accent); }
+.resource-list small { color: var(--ink-3); font-size: .82rem; }
+.resource-list a > span { color: var(--ink-2); font-size: .92rem; }
+.resource-list em { font: 500 .76rem var(--mono); color: var(--accent); font-style: normal; overflow-wrap: anywhere; }
+.exam-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; }
+.exam-card h3 { margin: 0 0 4px; }
+.exam-card p { margin: 0; }

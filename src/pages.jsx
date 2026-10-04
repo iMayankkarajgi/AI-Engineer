@@ -3,9 +3,11 @@ import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } f
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { guide, glossary, faqs } from './course/reference';
 import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
-import { Avatar, GoogleMark } from './Profile';
+import { Avatar, GoogleMark, SignOutButton } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
+import { resources } from './course/resources';
+import { EXAM_PASS, examQuestions } from './course/exam';
 import { TrackPicker, useTrack } from './Tracks';
 import { tracks, trackById, labTrack, labUnlocked, FREE_LABS } from './course/tracks';
 import { ThemeToggle, useTheme } from './theme';
@@ -35,6 +37,7 @@ export function Header() {
       <NavLink onClick={close} to="/practice">Practice</NavLink>
       <NavLink onClick={close} to="/glossary">Glossary</NavLink>
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
+      <NavLink onClick={close} to="/resources">Useful links</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
     </nav>
     <div className="header-actions">
@@ -51,7 +54,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>Understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/dashboard">Your progress</Link></div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/resources">Useful links</Link><Link to="/dashboard">Your progress</Link></div>
     <small>Lessons and interactives © {new Date().getFullYear()} AI Atlas. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
@@ -240,7 +243,7 @@ export function Faq() {
 }
 
 export function Dashboard() {
-  const { user, completed, scores, logout, resetGuest, nextLesson } = useApp();
+  const { user, completed, scores, resetGuest, nextLesson, exam } = useApp();
   const next = lessonById[nextLesson];
   const nextMod = modules.find(m => m.lessons.some(l => l.id === nextLesson));
   const attempted = Object.keys(scores).length;
@@ -254,6 +257,10 @@ export function Dashboard() {
       <div className="card stat"><small>Average best quiz score</small><strong>{avg}<span> / 5</span></strong><p>{attempted} quiz{attempted === 1 ? '' : 'zes'} attempted</p></div>
       <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link></div>
     </div>
+    <div className="card exam-card">
+      <div><small>Final exam</small><h3>{exam !== null && exam >= EXAM_PASS ? `Passed with ${exam} / ${examQuestions.length}` : completed.length < TOTAL ? 'Opens when every lesson is passed' : exam !== null ? `Best score ${exam} / ${examQuestions.length}` : 'Ready when you are'}</h3><p>{examQuestions.length} mixed questions. Score {EXAM_PASS} or more to earn the certificate.</p></div>
+      <Link className={'button ' + (completed.length < TOTAL ? 'ghost' : 'primary')} to="/exam">{completed.length < TOTAL ? 'About The Exam' : exam !== null && exam >= EXAM_PASS ? 'Retake The Exam' : 'Take The Final Exam'} →</Link>
+    </div>
     <h2 className="section-title">Your modules</h2>
     <ul className="dashboard-tracks">{modules.map(m => {
       const done = modDone(m, completed);
@@ -263,7 +270,7 @@ export function Dashboard() {
         <small>{done} / {m.lessons.length}</small>
       </Link></li>;
     })}</ul>
-    <div className="account-link">{user ? <><Link className="button ghost" to="/profile">Your Profile</Link><button className="button ghost" onClick={logout}>Sign Out</button></>
+    <div className="account-link">{user ? <><Link className="button ghost" to="/profile">Your Profile</Link><SignOutButton/></>
       : <>{ACCOUNTS && <Link className="button ghost" to="/account">Create An Account To Sync Progress</Link>}{completed.length > 0 && <ResetButton onReset={resetGuest}/>}</>}</div>
   </main>;
 }
@@ -316,6 +323,23 @@ export function Account() {
   </main>;
 }
 
+// Every external reference in one place; lessons themselves do not link out.
+export function Resources() {
+  return <main className="page container narrow">
+    <PageIntro eyebrow="Useful links" title="Papers, documentation and standards">The original sources and reference manuals behind the course, gathered in one place. Links open in a new tab.</PageIntro>
+    {resources.map(g => <section key={g.group} className="resource-group">
+      <h2 className="section-title">{g.group}</h2>
+      <p className="section-dek">{g.note}</p>
+      <ul className="resource-list">{g.items.map(r => <li key={r.url}><a href={r.url} target="_blank" rel="noreferrer">
+        <strong>{r.title} <span aria-hidden="true">↗</span></strong>
+        {r.by && <small>{r.by}</small>}
+        <span>{r.about}</span>
+        <em>{r.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</em>
+      </a></li>)}</ul>
+    </section>)}
+  </main>;
+}
+
 export function NotFound() {
   return <main className="page container narrow not-found"><PageIntro eyebrow="404" title="We couldn’t find that page."/><Link className="button primary" to="/curriculum">Browse The Curriculum →</Link></main>;
 }
@@ -346,7 +370,7 @@ export function Lab() {
       const lessons = lessonsFor(n);
       const ok = can(n);
       return <li key={n}><button className={'lab-card' + (ok ? '' : ' locked')} id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
-        <span className="lab-card-top"><span className="lab-card-icon"><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">{labTrack(n) === 'ml' ? 'ML / DL' : 'AI'} · Lesson {lessonById[lessons[0]].num}</span>}</span>
+        <span className="lab-card-top"><span className="lab-card-icon" style={{ '--h': (all.indexOf(n) * 47) % 360, '--delay': `${(all.indexOf(n) % 7) * -0.5}s` }}><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">{labTrack(n) === 'ml' ? 'ML / DL' : 'AI'} · Lesson {lessonById[lessons[0]].num}</span>}</span>
         <strong>{label(n)}</strong>
         <span className="lab-card-desc">{VIZ[n]}</span>
         <span className="lab-card-open">{ok ? <>{FREE_LABS.includes(n) && !plans.length && <span className="lab-free">Free</span>}Open Interactive <span aria-hidden="true">→</span></> : <>🔒 Unlock With A Plan</>}</span>
@@ -355,7 +379,7 @@ export function Lab() {
     <Modal open={!!open} onClose={() => setOpen(null)} label={open ? label(open) : 'Interactive'} className="modal-wide lab-modal">
       {open && <>
         <div className="eyebrow">Interactive {String(all.indexOf(open) + 1).padStart(2, '0')} of {all.length}</div>
-        <h2><span className="lab-card-icon"><LabIcon name={open}/></span>{label(open)}</h2>
+        <h2><span className="lab-card-icon" style={{ '--h': (all.indexOf(open) * 47) % 360 }}><LabIcon name={open}/></span>{label(open)}</h2>
         <p className="lab-modal-desc">{VIZ[open]}</p>
         {can(open) ? <Viz name={open}/> : <div className="lab-locked">
           <div className="lock-icon" aria-hidden="true">🔒</div>

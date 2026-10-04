@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { useApp, ACCOUNTS, CLOUD } from './app';
 import Certificate from './Certificate';
+import Modal from './Modal';
+import { EXAM_PASS, examQuestions } from './course/exam';
 import { trackById } from './course/tracks';
 
 const initials = name => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
@@ -25,8 +27,25 @@ export function GoogleMark() {
   </svg>;
 }
 
+// Sign out, after asking first.
+export function SignOutButton() {
+  const { logout } = useApp(), nav = useNavigate();
+  const [asking, setAsking] = useState(false), [busy, setBusy] = useState(false);
+  const confirm = async () => { setBusy(true); try { await logout(); } finally { setBusy(false); setAsking(false); nav('/'); } };
+  return <>
+    <button className="button ghost" onClick={() => setAsking(true)}>Sign Out</button>
+    <Modal open={asking} onClose={() => setAsking(false)} label="Sign out">
+      <div className="plan-confirm">
+        <h2>Do you want to sign out?</h2>
+        <p>Your progress and saved files stay in your account. You can sign back in at any time.</p>
+        <div className="cert-actions"><button className="button primary" disabled={busy} onClick={confirm}>{busy ? 'Signing Out…' : 'Yes, Sign Out'}</button><button className="button ghost" onClick={() => setAsking(false)}>Stay Signed In</button></div>
+      </div>
+    </Modal>
+  </>;
+}
+
 export default function Profile() {
-  const { user, ready, completed, scores, nextLesson, updateProfile, logout, syncError, plans } = useApp(), nav = useNavigate();
+  const { user, ready, completed, scores, nextLesson, updateProfile, syncError, plans, exam } = useApp(), nav = useNavigate();
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false), [cert, setCert] = useState(false);
   useEffect(() => { if (ready && !user) nav(ACCOUNTS ? '/account' : '/dashboard', { replace: true }); }, [ready, user, nav]);
   if (!user) return <main className="page container narrow"><div className="eyebrow">Loading…</div></main>;
@@ -35,7 +54,9 @@ export default function Profile() {
   const avg = attempted ? (Object.values(scores).reduce((a, b) => a + b, 0) / attempted).toFixed(1) : '–';
   const modulesDone = modules.filter(m => m.lessons.every(l => completed.includes(l.id))).length;
   const next = lessonById[nextLesson];
-  const finished = allLessons.every(l => completed.includes(l.id));
+  const lessonsDone = allLessons.every(l => completed.includes(l.id));
+  const examPassed = exam !== null && exam >= EXAM_PASS;
+  const finished = lessonsDone && examPassed;
   const joined = user.joined ? new Date(user.joined).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null;
 
   async function save(e) {
@@ -90,14 +111,18 @@ export default function Profile() {
 
     <section className="card profile-cert">
       <div><small>Course certificate</small><h3>{finished ? 'You completed the course.' : 'Certificate Of Completion'}</h3>
-        <p>{finished ? 'Your certificate is ready, with your name on it.' : `Pass all ${allLessons.length} lessons to unlock it. ${allLessons.length - completed.length} to go.`}</p></div>
-      <button className={'button ' + (finished ? 'primary' : 'ghost')} disabled={!finished} onClick={() => setCert(true)}>{finished ? 'View Certificate' : '🔒 Certificate Locked'}</button>
+        <p>{finished ? `Your certificate is ready, with your name on it. Final exam: ${exam} / ${examQuestions.length}.`
+          : !lessonsDone ? `Pass all ${allLessons.length} lessons (${allLessons.length - completed.length} to go), then score ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam.`
+          : `All lessons passed. Score ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam to unlock it${exam !== null ? ` (best so far: ${exam})` : ''}.`}</p></div>
+      {finished ? <button className="button primary" onClick={() => setCert(true)}>View Certificate</button>
+        : lessonsDone ? <Link className="button primary" to="/exam">Take The Final Exam →</Link>
+        : <button className="button ghost" disabled>🔒 Certificate Locked</button>}
     </section>
-    {finished && <Certificate user={user} open={cert} onClose={() => setCert(false)}/>}
+    {finished && <Certificate user={user} exam={exam} open={cert} onClose={() => setCert(false)}/>}
 
     <div className="account-link">
       <Link className="button ghost" to="/dashboard">My Learning</Link>
-      <button className="button ghost" onClick={async () => { await logout(); nav('/'); }}>Sign Out</button>
+      <SignOutButton/>
     </div>
   </main>;
 }

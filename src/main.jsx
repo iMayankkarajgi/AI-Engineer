@@ -6,6 +6,7 @@ import { AppProvider, STATIC, useApp, takeAfterLogin } from './app';
 import { Header, Footer, Curriculum, Module, Guide, Glossary, Faq, Dashboard, Account, NotFound, Lab } from './pages';
 import LessonPage from './LessonPage';
 import Profile from './Profile';
+import { Pricing } from './Tracks';
 import './tokens.css';
 import './site.css';
 import './lesson.css';
@@ -58,6 +59,7 @@ function App() {
         <Route path="/lesson/:id" element={<LessonPage/>}/>
         <Route path="/guide" element={<Guide/>}/>
         <Route path="/lab" element={<Lab/>}/>
+        <Route path="/pricing" element={<Pricing/>}/>
         <Route path="/practice" element={<Practice/>}/>
         <Route path="/glossary" element={<Glossary/>}/>
         <Route path="/faq" element={<Faq/>}/>

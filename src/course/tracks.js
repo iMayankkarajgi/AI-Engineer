@@ -1,0 +1,65 @@
+import { modules, lessonById } from './curriculum';
+import { vizUsage } from './vizUsage';
+import { VIZ } from './vizNames';
+
+// The course is sold as three tracks. A track is a set of modules plus the Lab
+// interactives those modules use. The Starter Kit opens every track.
+//
+// PRICES ARE PLACEHOLDERS: edit the numbers below. Amounts are whole units of
+// CURRENCY; `half` is the price for six months, `lifetime` is paid once.
+export const CURRENCY = { code: 'INR', locale: 'en-IN' };
+export const PERIODS = [
+  { id: 'monthly', label: 'Monthly', unit: 'per month', months: 1 },
+  { id: 'half', label: '6 Months', unit: 'for 6 months', months: 6 },
+  { id: 'lifetime', label: 'Lifetime', unit: 'one-time payment', months: null },
+];
+
+const ML_MODULES = ['must-know', 'ml-foundations', 'deep-learning'];
+const CAREER_MODULES = ['interviews'];
+const AI_MODULES = modules.map(m => m.id).filter(id => id === 'must-know' || (!ML_MODULES.includes(id) && !CAREER_MODULES.includes(id)));
+
+const DEFS = [
+  {
+    id: 'ml', name: 'ML & Deep Learning', short: 'ML / DL', icon: '∑', accent: '#7ee0a8',
+    blurb: 'How machines learn from data: regression, losses, regularisation, neural networks, backpropagation and the road to Transformers.',
+    moduleIds: ML_MODULES, labs: 'ml',
+    prices: { monthly: 499, half: 2499, lifetime: 5999 },
+    extras: [],
+  },
+  {
+    id: 'ai', name: 'Generative AI Engineering', short: 'AI', icon: '✦', accent: '#b79cff',
+    blurb: 'Inside LLMs and the systems around them: Transformers, prompting, RAG, agents, inference, evaluation, safety and infrastructure.',
+    moduleIds: AI_MODULES, labs: 'ai',
+    prices: { monthly: 799, half: 3999, lifetime: 9999 },
+    extras: [],
+  },
+  {
+    id: 'complete', name: 'Complete AI Engineer', short: 'Complete', icon: '◎', accent: '#ffd9a8', featured: true,
+    blurb: 'Everything in both tracks, in order, plus AI engineer career preparation: interview questions, system design and a study plan.',
+    moduleIds: modules.map(m => m.id), labs: 'all',
+    prices: { monthly: 1199, half: 5999, lifetime: 14999 },
+    extras: ['AI engineer career prep module', 'Certificate of completion'],
+  },
+];
+
+// An interactive counts as ML/DL when an ML or deep-learning lesson uses it; the rest belong to the AI track.
+const moduleOfLesson = id => modules.find(m => m.lessons.some(l => l.id === id));
+const mlLessonModules = new Set(['ml-foundations', 'deep-learning']);
+export const labTrack = name => (vizUsage[name] || []).some(id => lessonById[id] && mlLessonModules.has(moduleOfLesson(id).id)) ? 'ml' : 'ai';
+const allLabs = Object.keys(VIZ);
+
+export const tracks = DEFS.map(t => {
+  const mods = modules.filter(m => t.moduleIds.includes(m.id));
+  const lessons = mods.flatMap(m => m.lessons);
+  const labs = t.labs === 'all' ? allLabs : allLabs.filter(n => labTrack(n) === t.labs);
+  return { ...t, modules: mods, lessons, labs };
+});
+export const trackById = Object.fromEntries(tracks.map(t => [t.id, t]));
+
+// Lessons a learner may open without finishing everything before them: the
+// first lesson of each track's first module after the Starter Kit.
+export const entryLessonIds = tracks.map(t => t.modules.find(m => m.id !== 'must-know')?.lessons[0].id).filter(Boolean);
+
+export const formatPrice = amount => new Intl.NumberFormat(CURRENCY.locale, { style: 'currency', currency: CURRENCY.code, maximumFractionDigits: 0 }).format(amount);
+// How much cheaper six months is than paying monthly for six months, as a whole percentage.
+export const halfYearSaving = t => Math.round((1 - t.prices.half / (t.prices.monthly * 6)) * 100);

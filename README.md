@@ -39,6 +39,7 @@ To exercise the whole flow offline, `npm run dev:mock` starts the site on http:/
 
 ## How the course works
 
+- **Tracks and pricing** (`/pricing`): the course is offered as three tracks (ML & Deep Learning, Generative AI Engineering, Complete AI Engineer), each with its modules and labs. Track contents and prices live in `src/course/tracks.js`; the prices there are placeholders and no payment provider is connected.
 - **Curriculum** (`/curriculum`): 19 modules with progress, an at-a-glance table and an animated learning path.
 - **Course guide** (`/guide`): about the course, what AI engineering is, who it is for, what we learn, prerequisites, how to use it.
 - **Lessons** (`/lesson/:id`): intuition, step-by-step mechanism, math with small numbers, runnable code with a line-by-line walkthrough and real output, side-by-side comparisons, animated charts and flows, interactive widgets, inline "pause and think" checks, key terms, takeaways.

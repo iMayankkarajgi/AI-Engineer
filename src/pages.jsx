@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { guide, glossary, faqs } from './course/reference';
 import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
 import { Avatar, GoogleMark } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
+import { TrackPicker, useTrack } from './Tracks';
+import { tracks, labTrack } from './course/tracks';
 import { ThemeToggle, useTheme } from './theme';
 import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
@@ -29,6 +31,7 @@ export function Header() {
       <NavLink onClick={close} to="/curriculum">Curriculum</NavLink>
       <NavLink onClick={close} to="/guide">Course guide</NavLink>
       <NavLink onClick={close} to="/lab">Lab</NavLink>
+      <NavLink onClick={close} to="/pricing">Pricing</NavLink>
       <NavLink onClick={close} to="/practice">Practice</NavLink>
       <NavLink onClick={close} to="/glossary">Glossary</NavLink>
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
@@ -48,7 +51,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>Understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/dashboard">Your progress</Link></div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/dashboard">Your progress</Link></div>
     <small>Lessons and interactives © {new Date().getFullYear()} AI Atlas. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
@@ -88,13 +91,12 @@ function PageIntro({ eyebrow, title, children }) {
 }
 
 const modDone = (m, completed) => m.lessons.filter(l => completed.includes(l.id)).length;
-const STAGES = ['All', 'Start here', 'Foundations', 'Core', 'Adapt', 'Build', 'Production', 'Frontier', 'Career'];
 
 // Animated vertical learning path: one node per module, filled by progress.
-export function LearningPath() {
+export function LearningPath({ mods = modules }) {
   const { completed, isUnlocked } = useApp();
   const [ref, seen] = useInView({ threshold: 0.05 });
-  return <ol ref={ref} className={'learning-path' + (seen ? ' in-view' : '')}>{modules.map((m, i) => {
+  return <ol ref={ref} className={'learning-path' + (seen ? ' in-view' : '')}>{mods.map((m, i) => {
     const done = modDone(m, completed), open = isUnlocked(m.lessons[0].id), full = done === m.lessons.length;
     return <li key={m.id} style={{ '--track': m.accent, '--d': `${i * 70}ms`, '--p': done / m.lessons.length }} className={(full ? 'full ' : '') + (open ? 'open' : 'locked')}>
       <Link to={`/module/${m.id}`}>
@@ -107,17 +109,24 @@ export function LearningPath() {
 
 export function Curriculum() {
   const { completed, isUnlocked } = useApp();
-  const [stage, setStage] = useState('All');
-  const shown = modules.filter(m => stage === 'All' || m.stage === stage);
+  const [track, setTrack] = useTrack();
+  const passed = track.lessons.filter(l => completed.includes(l.id)).length;
+  const next = track.lessons.find(l => !completed.includes(l.id) && isUnlocked(l.id)) || track.lessons.find(l => !completed.includes(l.id)) || track.lessons[0];
   return <main className="page container">
-    <PageIntro eyebrow="The complete path" title="AI engineering, from first principles to production">
-      {modules.length} modules and {TOTAL} interactive lessons. Every lesson ends with a 5-question quiz; pass it with {PASS_MARK}/5 to unlock the next one.
+    <PageIntro eyebrow="Three tracks, one path" title="Choose how deep you want to go">
+      Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; pass it with {PASS_MARK}/5 to unlock the next one.
     </PageIntro>
-    <div className="overall card"><div><small>Your progress</small><strong>{completed.length}<span> / {TOTAL} lessons</span></strong></div><div className="meter large"><span style={{ width: `${(completed.length / TOTAL) * 100}%` }}/></div></div>
-    <div className="chips" role="group" aria-label="Filter modules by stage">{STAGES.filter(s => s === 'All' || modules.some(m => m.stage === s)).map(x =>
-      <button key={x} className={stage === x ? 'active' : ''} onClick={() => setStage(x)} aria-pressed={stage === x}>{x}</button>)}
+    <TrackPicker value={track.id} onChange={setTrack}/>
+
+    <div className="track-detail-head" style={{ '--track': track.accent }}>
+      <div><div className="eyebrow">{track.modules.length} modules · {track.lessons.length} lessons · {track.labs.length} labs</div><h2>{track.name}</h2><p>{track.blurb}</p></div>
+      <div className="track-detail-actions">
+        <Link className="button primary" to={`/lesson/${next.id}`}>{passed ? 'Continue This Track' : 'Start This Track'} →</Link>
+        <Link className="button ghost" to="/pricing">See Pricing</Link>
+      </div>
     </div>
-    <div className="module-grid">{shown.map(m => {
+    <div className="overall card"><div><small>Your progress in this track</small><strong>{passed}<span> / {track.lessons.length} lessons</span></strong></div><div className="meter large"><span style={{ width: `${(passed / track.lessons.length) * 100}%` }}/></div></div>
+    <div className="module-grid">{track.modules.map(m => {
       const done = modDone(m, completed), open = isUnlocked(m.lessons[0].id);
       return <Link key={m.id} to={`/module/${m.id}`} className={'module-card' + (open ? '' : ' locked')} style={{ '--track': m.accent }}>
         <div className="module-card-top"><span className="course-icon">{m.icon}</span><span>Module {m.number}</span><span className="module-stage">{open ? m.stage : '🔒 Locked'}</span></div>
@@ -128,14 +137,11 @@ export function Curriculum() {
         <div className="meter"><span style={{ width: `${(done / m.lessons.length) * 100}%` }}/></div>
       </Link>;
     })}</div>
-    <section className="glance">
-      <h2 className="section-title">Curriculum at a glance</h2>
-      <div className="b-table"><table>
-        <thead><tr><th>Module</th><th>Topic</th><th>Lessons</th><th>Progress</th></tr></thead>
-        <tbody>{modules.map(m => <tr key={m.id}><td>{m.number}</td><td><Link to={`/module/${m.id}`}>{m.title}</Link></td><td>{m.lessons.length}</td><td>{modDone(m, completed)}/{m.lessons.length}</td></tr>)}</tbody>
-      </table></div>
-    </section>
-    <section><h2 className="section-title">The learning path</h2><p className="section-dek">Each module builds on the one before it. Follow the line from top to bottom.</p><LearningPath/></section>
+    <div className="card track-labs">
+      <div><small>Hands-on</small><h3>{track.labs.length} interactive labs in this track</h3><p>Simulations you can drag, step through and break, each tied to the lesson that explains it.</p></div>
+      <Link className="button ghost" to={`/lab?track=${track.id}`}>Open The Labs →</Link>
+    </div>
+    <section><h2 className="section-title">The learning path</h2><p className="section-dek">Each module builds on the one before it. Follow the line from top to bottom.</p><LearningPath mods={track.modules}/></section>
   </main>;
 }
 
@@ -317,9 +323,12 @@ export function NotFound() {
 // Every interactive widget in one place, each linked to a lesson that uses it.
 export function Lab() {
   const [filter, setFilter] = useState(''), [open, setOpen] = useState(null);
+  const [params] = useSearchParams();
+  const [group, setGroup] = useState(() => ['ml', 'ai'].includes(params.get('track')) ? params.get('track') : 'all');
   const usedIn = vizUsage;
   const all = Object.keys(VIZ);
-  const names = all.filter(n => (n + ' ' + VIZ[n]).toLowerCase().includes(filter.toLowerCase()));
+  const names = all.filter(n => (group === 'all' || labTrack(n) === group) && (n + ' ' + VIZ[n]).toLowerCase().includes(filter.toLowerCase()));
+  const groups = [['all', 'All Labs', all.length], ...tracks.filter(t => t.id !== 'complete').map(t => [t.id, t.name, t.labs.length])];
   const label = n => n.replace(/-/g, ' ');
   const lessonsFor = n => (usedIn[n] || []).filter(id => lessonById[id]);
   // A link such as /lab#temperature opens that interactive straight away.
@@ -327,11 +336,12 @@ export function Lab() {
   return <main className="page container">
     <PageIntro eyebrow="Interactive lab" title="Play with every idea">{all.length} hands-on simulations from across the course. Pick a card to open it, then drag, step and break things; each one links to the lesson that explains it.</PageIntro>
     <label className="search-box"><span aria-hidden="true">⌕</span><input placeholder="Find an interactive…" value={filter} onChange={e => setFilter(e.target.value)} aria-label="Filter interactives"/><small>{names.length} shown</small></label>
-    {names.length === 0 && <p className="lab-empty">No interactive matches “{filter}”.</p>}
+    <div className="chips lab-chips" role="group" aria-label="Filter labs by track">{groups.map(([id, name, n]) => <button key={id} className={group === id ? 'active' : ''} aria-pressed={group === id} onClick={() => setGroup(id)}>{name} <span>{n}</span></button>)}</div>
+    {names.length === 0 && <p className="lab-empty">No lab matches your search in this group.</p>}
     <ul className="lab-grid">{names.map(n => {
       const lessons = lessonsFor(n);
       return <li key={n}><button className="lab-card" id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
-        <span className="lab-card-top"><span className="lab-card-icon"><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">Lesson {lessonById[lessons[0]].num}</span>}</span>
+        <span className="lab-card-top"><span className="lab-card-icon"><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">{labTrack(n) === 'ml' ? 'ML / DL' : 'AI'} · Lesson {lessonById[lessons[0]].num}</span>}</span>
         <strong>{label(n)}</strong>
         <span className="lab-card-desc">{VIZ[n]}</span>
         <span className="lab-card-open">Open Interactive <span aria-hidden="true">→</span></span>

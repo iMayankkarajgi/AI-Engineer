@@ -1,0 +1,66 @@
+/* Tracks: the picker on the curriculum page, the home showcase, and pricing. */
+.track-picker, .track-showcase { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.track-option { position: relative; display: grid; grid-template-rows: auto auto 1fr auto auto auto; gap: 12px; text-align: left; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); color: var(--ink); transition: transform .15s, border-color .15s, box-shadow .15s; }
+.track-option::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; border-radius: var(--r-lg) var(--r-lg) 0 0; background: var(--t, var(--track)); opacity: .55; }
+.track-option:hover { transform: translateY(-2px); border-color: var(--accent-line); }
+.track-option.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.track-option.selected::before { opacity: 1; }
+.track-option-top { display: flex; align-items: center; gap: 10px; }
+.track-option-tag { color: var(--ink-3); font: 500 .72rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.track-badge { margin-left: auto; padding: 4px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: .7rem; font-weight: 650; letter-spacing: .03em; white-space: nowrap; }
+.track-option strong { font-size: 1.3rem; font-weight: 650; letter-spacing: -.015em; text-wrap: balance; }
+.track-option-blurb { color: var(--ink-2); font-size: .92rem; line-height: 1.55; }
+.track-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-3); font-size: .84rem; }
+.track-stats b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.track-option-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: var(--ink-3); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.track-option-foot span:last-child { color: var(--accent); font-weight: 600; }
+
+.track-detail-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; margin: 44px 0 18px; }
+.track-detail-head h2 { margin: 6px 0 0; }
+.track-detail-head p { color: var(--ink-2); margin-top: 6px; max-width: 62ch; }
+.track-detail-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.track-labs { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 28px; }
+.track-labs h3 { margin: 0 0 4px; }
+.track-labs p { margin: 0; }
+
+/* Home */
+.cinematic-tracks-pick { max-width: 1600px; margin: auto; padding: 0 8vw 150px; }
+.cinematic-tracks-pick .path-heading { margin-bottom: 40px; }
+.cinematic-tracks-pick .track-showcase { margin-top: 10px; }
+@media (max-width: 1100px) { .cinematic-tracks-pick { padding: 0 6vw 110px; } }
+
+/* Pricing */
+.pricing-page { display: grid; gap: 8px; align-content: start; }
+.pricing-intro { text-align: center; border-bottom: 0; margin-bottom: 0; padding-bottom: 20px; }
+.pricing-intro h1, .pricing-intro .dek { margin-inline: auto; }
+.pricing-intro h1 { max-width: none; text-wrap: balance; }
+.pricing-intro .dek { max-width: 58ch; }
+.period-toggle { justify-self: center; display: inline-flex; padding: 4px; gap: 2px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); }
+.period-toggle button { border: 0; background: none; color: var(--ink-2); font-size: .9rem; font-weight: 600; padding: 9px 18px; border-radius: 999px; white-space: nowrap; }
+.period-toggle button.active { background: var(--accent); color: var(--accent-ink); }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 0 18px; margin-top: 28px; align-items: stretch; }
+.plan-grid > .plan { margin-bottom: 18px; }
+/* Cards share row tracks, so prices and buttons line up across the three plans. */
+.plan { position: relative; display: grid; grid-row: span 6; grid-template-rows: subgrid; gap: 14px; padding: 26px; }
+.plan.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.plan > .track-badge { position: absolute; top: -12px; right: 22px; }
+.plan-head { display: flex; align-items: center; gap: 12px; }
+.plan-head h2 { font-size: 1.25rem; margin: 0; text-wrap: balance; }
+.plan-head small { margin-bottom: 2px; }
+.plan .plan-blurb { color: var(--ink-2); font-size: .92rem; }
+.plan-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0; }
+.plan-price strong { font-size: clamp(2.2rem, 5vw, 2.8rem); font-weight: 660; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); }
+.plan-price span { color: var(--ink-3); font-size: .9rem; }
+.plan .plan-note { color: var(--ink-3); font-size: .86rem; min-height: 2.6em; }
+.plan-note b { color: var(--ok); font-weight: 650; }
+.plan .button { width: 100%; }
+.plan-features { margin-top: 4px; font-size: .92rem; align-content: start; align-self: start; }
+.compare-table td small { display: block; color: var(--ink-3); font-size: .78rem; margin-top: 2px; }
+.compare-table th:not(:first-child), .compare-table td:not(:first-child) { text-align: center; width: 110px; font-variant-numeric: tabular-nums; }
+.compare-table td.yes { color: var(--ok); font-weight: 700; }
+.compare-table td.no { color: var(--ink-3); }
+.compare-table tr.total td { font-weight: 650; background: var(--surface-2); }
+.plan-confirm { display: grid; gap: 12px; padding-right: 36px; }
+.plan-confirm h2 { margin: 0; }
+.plan-confirm p { color: var(--ink-2); }
+.plan-confirm .cert-actions { justify-content: flex-start; margin-top: 6px; }

@@ -391,6 +391,8 @@
 .lab-card strong { font-size: 1.08rem; font-weight: 640; letter-spacing: -.01em; text-transform: capitalize; text-wrap: balance; }
 .lab-card-desc { color: var(--ink-2); font-size: .88rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .lab-card-open { color: var(--accent); font-size: .86rem; font-weight: 600; }
+.lab-chips { margin-top: 16px; }
+.lab-chips button span { opacity: .6; margin-left: 4px; font-variant-numeric: tabular-nums; }
 .lab-empty { margin-top: 24px; color: var(--ink-3); }
 .lab-modal h2 { display: flex; align-items: center; gap: 12px; font-size: clamp(1.3rem, 3vw, 1.7rem); text-transform: capitalize; margin: 8px 0 10px; padding-right: 36px; }
 .lab-modal-desc { color: var(--ink-2); font-size: .95rem; margin-bottom: 16px; max-width: 70ch; }

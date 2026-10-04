@@ -39,14 +39,15 @@ export function Header() {
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
       <NavLink onClick={close} to="/resources">Useful links</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
-      {ACCOUNTS && <NavLink className="nav-account" onClick={close} to={user ? '/profile' : '/account'}>{user ? 'Your profile' : 'Sign in'}</NavLink>}
+      {ACCOUNTS && (user ? <NavLink className="nav-account" onClick={close} to="/profile">Your profile</NavLink>
+        : <><Link className="nav-account" onClick={close} to="/account?mode=signup">Sign up (new here)</Link><Link className="nav-account plain" onClick={close} to="/account?mode=login">Sign in</Link></>)}
     </nav>
     <div className="header-actions">
       <ThemeToggle/>
       {user && <Link className="avatar-link" to="/profile" aria-label="Your profile" title={user.name}><Avatar user={user} size={34}/></Link>}
       {!ACCOUNTS || user
         ? <Link className="button primary small continue" to={`/lesson/${nextLesson}`}>Continue</Link>
-        : <Link className="button primary small" to="/account">Sign In</Link>}
+        : <><Link className="button ghost small signin" to="/account?mode=login">Sign In</Link><Link className="button primary small" to="/account?mode=signup">Sign Up</Link></>}
       <button className="menu-toggle" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button>
     </div>
   </div></header>;
@@ -287,8 +288,11 @@ function ResetButton({ onReset }) {
 
 export function Account() {
   const { user, auth, signInWithGoogle } = useApp(), nav = useNavigate(), { state } = useLocation();
-  const [mode, setMode] = useState('signup'), [error, setError] = useState(state?.error || ''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
+  const [params] = useSearchParams(), asked = params.get('mode') === 'login' ? 'login' : 'signup';
+  const [mode, setMode] = useState(asked), [error, setError] = useState(state?.error || ''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
   useEffect(() => { if (user) nav(CLOUD ? '/profile' : '/dashboard'); else if (!ACCOUNTS) nav('/dashboard'); }, [user, nav]);
+  // The header links choose a tab: ?mode=signup or ?mode=login.
+  useEffect(() => { setMode(asked); setError(''); setNotice(''); }, [asked]);
   async function submit(e) {
     e.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
@@ -307,6 +311,10 @@ export function Account() {
   return <main className="account-page">
     <div className="account-aside"><ParticleField/><div className="account-aside-copy"><div className="eyebrow">Build your understanding</div><h2>Every concept connects.</h2><p>Track your path from your first lesson to real AI systems.</p></div></div>
     <div className="account-form-wrap"><div className="account-form">
+      <div className="period-toggle account-tabs" role="tablist" aria-label="Sign up or sign in">
+        <button role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError(''); }}>Sign Up</button>
+        <button role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(''); }}>Sign In</button>
+      </div>
       <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
       <p className="dek">{mode === 'signup' ? 'Keep your progress across devices.' : 'Pick up where you left off.'}</p>
       {CLOUD && <><button type="button" className="button ghost google-button" disabled={busy} onClick={google}><GoogleMark/>Continue With Google</button><div className="form-divider"><span>or use your email</span></div></>}
@@ -386,7 +394,7 @@ export function Lab() {
           <div className="lock-icon" aria-hidden="true">🔒</div>
           <h3>This lab is part of a paid plan</h3>
           <p>It opens with the <b>{trackById[labTrack(open)].name}</b> track or the <b>{trackById.complete.name}</b> track.{!user && ' If you already have a plan, sign in to use it.'}</p>
-          <div className="cert-actions"><Link className="button primary" to="/pricing">See Plans</Link>{!user && ACCOUNTS && <Link className="button ghost" to="/account">Sign In</Link>}<button className="button ghost" onClick={() => setOpen('temperature')}>Try The Free Lab</button></div>
+          <div className="cert-actions"><Link className="button primary" to="/pricing">See Plans</Link>{!user && ACCOUNTS && <Link className="button ghost" to="/account?mode=login">Sign In</Link>}<button className="button ghost" onClick={() => setOpen('temperature')}>Try The Free Lab</button></div>
         </div>}
         {lessonsFor(open).length > 0 && <div className="lab-used">Used in: {lessonsFor(open).slice(0, 4).map(id => <Link key={id} to={`/lesson/${id}`}>{lessonById[id].num} {lessonById[id].title}</Link>)}</div>}
       </>}

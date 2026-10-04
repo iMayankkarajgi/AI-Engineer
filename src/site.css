@@ -186,9 +186,11 @@
   .site-header nav { display: none; position: absolute; top: var(--header-h); left: 0; right: 0; flex-direction: column; padding: 10px var(--gutter) 16px; background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); }
   .site-header nav.menu-open { display: flex; }
   .site-header nav .nav-account { display: block; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); border-radius: 0; color: var(--accent); font-weight: 600; }
+  .site-header nav .nav-account.plain { margin-top: 0; padding-top: 7px; border-top: 0; color: var(--ink-2); font-weight: 520; }
 }
 @media (max-width: 720px) {
   .header-actions .button.continue { display: none; }
+  .header-actions .button.small { padding: 8px 12px; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 4px; }
   .dashboard-tracks a { grid-template-columns: 36px minmax(0, 1fr) 56px; }
   .dashboard-tracks .meter { display: none; }
@@ -251,3 +253,8 @@ body:has(dialog.modal[open]) { overflow: hidden; }
 .exam-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; }
 .exam-card h3 { margin: 0 0 4px; }
 .exam-card p { margin: 0; }
+
+.account-tabs { justify-self: start; margin-bottom: 6px; }
+.account-tabs button { padding: 8px 20px; }
+/* Very narrow phones: one header button; Sign In stays in the menu and on the account page. */
+@media (max-width: 374px) { .header-actions .button.signin { display: none; } }

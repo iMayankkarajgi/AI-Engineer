@@ -36,6 +36,7 @@
 .story-scene.scene-0 h1 { font-size: clamp(50px, 5.5vw, 84px); }
 .story-scene.scene-1 h1, .story-scene.scene-2 h1 { font-size: clamp(44px, 4.8vw, 70px); }
 .story-scene h1 .title-line { display: block; white-space: nowrap; }
+.story-scene h1 .title-word { display: inline-block; white-space: nowrap; }
 .story-scene h1 .title-line.muted { color: var(--scene-ink-2); }
 .story-scene h1 .title-character { display: inline-block; opacity: 0; filter: blur(13px); transform: translateY(18px); transition: opacity .65s ease, filter .65s ease, transform .65s ease; transition-delay: 0ms; }
 .story-scene.is-active h1 .title-character { opacity: 1; filter: blur(0); transform: translateY(0); transition-delay: var(--character-delay); }
@@ -128,9 +129,12 @@
   .track-open { display: none; }
   .cinematic-spotlight > .cinematic-reveal { grid-template-columns: 1fr; }
   .spotlight-visual { margin-top: 50px; }
-  .story-scene.scene-0, .story-scene.scene-1, .story-scene.scene-2 { left: 50%; width: 83vw; text-align: center; transform: translate(-50%, -45%) scale(.96); }
-  .story-scene.scene-0 { top: 48%; } .story-scene.scene-1 { top: 43%; } .story-scene.scene-2 { top: 42%; }
-  .story-scene.scene-0.is-active, .story-scene.scene-1.is-active, .story-scene.scene-2.is-active { transform: translate(-50%, -50%) scale(1); }
+  /* Phones and tablets: the text comes first, under the header; the 3D core keeps the band below it, so they never overlap. */
+  .story-scene, .story-scene.scene-0, .story-scene.scene-1, .story-scene.scene-2, .story-scene.scene-3 { left: 50%; top: calc(var(--header-h) + 62px); bottom: auto; width: 86vw; text-align: center; transform: translate(-50%, 14px) scale(.96); }
+  .story-scene.is-active, .story-scene.scene-0.is-active, .story-scene.scene-1.is-active, .story-scene.scene-2.is-active { transform: translate(-50%, 0) scale(1); }
+  .story-scene::before { inset: -20px -7vw; background: linear-gradient(to top, transparent, var(--scene-bg) 16%); }
+  .story-chapters, .story-bottom { display: none; }
+  .story-scene h1 { margin: 14px 0 14px; }
   .story-scene.scene-0 .story-eyebrow, .story-scene.scene-1 .story-eyebrow, .story-scene.scene-2 .story-eyebrow,
   .story-scene.scene-0 .story-actions, .story-scene.scene-1 .story-actions, .story-scene.scene-2 .story-actions { justify-content: center; }
   .story-scene.scene-0 p, .story-scene.scene-1 p, .story-scene.scene-2 p { margin: auto; }
@@ -142,8 +146,7 @@
   .story-chapters button { font-size: 0; gap: 5px; }
   .story-chapters button span { font-size: .55rem; }
   .story-scene { width: 84vw; }
-  .story-scene.scene-3 { top: 46%; }
-  .story-scene h1, .story-scene.scene-0 h1, .story-scene.scene-1 h1, .story-scene.scene-2 h1 { font-size: clamp(40px, 11vw, 64px); }
+  .story-scene h1, .story-scene.scene-0 h1, .story-scene.scene-1 h1, .story-scene.scene-2 h1 { font-size: clamp(32px, 9.6vw, 64px); }
   .story-scene h1 .title-line { white-space: normal; }
   .story-actions { flex-direction: column; gap: 18px; }
   .intro-grid, .path-heading { display: block; }
@@ -172,4 +175,4 @@
   .cinematic-reveal { opacity: 1; transform: none; filter: none; }
   .spotlight-visual path, .ending-halo { animation: none; }
 }
-@media (prefers-reduced-motion: reduce) and (max-width: 900px) { .story-scene.scene-0 { transform: translate(-50%, -50%); } }
+@media (prefers-reduced-motion: reduce) and (max-width: 900px) { .story-scene.scene-0 { transform: translate(-50%, 0); } }

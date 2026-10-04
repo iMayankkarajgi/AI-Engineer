@@ -1,6 +1,6 @@
 export default {
   id: "ai-agent-memory",
-  minutes: 20,
+  minutes: 25,
   hook: "An LLM forgets everything the moment a call ends; so how does an assistant remember that you are vegetarian three weeks later?",
   summary: "LLMs are stateless, so agent memory is something we build around the model. It forms a stack: the context window as working memory, the session history as short-term memory, and external stores as long-term memory (facts, past episodes and procedures). Memory systems run four core operations, write, read, update and forget, and the hard part is choosing what is worth remembering and retrieving only what helps the current task.",
   sections: [
@@ -166,6 +166,99 @@ stored keys: ['allergy', 'diet', 'home'] | home = User city: Munich (moved)`,
           ] },
         { type: "p", text: "**When not to add long-term memory.** For one-off tasks, anonymous users, or highly regulated data where retention is risky, a stateless agent with only session memory may be the right design. Memory adds complexity and responsibility; add it when personalisation or continuity clearly pays off." },
         { type: "p", text: "**Quick summary.** LLMs are stateless; agent memory is built around them as a stack: weights, the context window, session history, and long-term stores of semantic, episodic and procedural memory. Four operations keep it healthy: write, read, update and forget. Retrieve a few relevant memories by similarity and recency, store only durable and safe information, and give users control." }
+      ]
+    },
+    {
+      id: "worked-example-reconcile",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The flow section ended with a step called *reconcile*: compare each new candidate memory with what is already stored. It is the step most often skipped, so let us do it by hand. Our store holds three memories about one user." },
+        { type: "list", items: [
+          "`diet`: vegetarian (written on day 1)",
+          "`city`: Berlin (written on day 2)",
+          "`allergy`: nuts (written on day 3)"
+        ] },
+        { type: "p", text: "On day 40 the user chats with the agent. After the turn, an extractor pulls out five candidate facts. For each one we ask two questions: does a memory about the same thing already exist, and if so, does the new fact agree with it?" },
+        { type: "table", caption: "Reconciling five candidates against the store",
+          head: ["Candidate from the chat", "Existing memory", "Decision", "Why"],
+          rows: [
+            ["“I moved to Munich”", "`city`: Berlin", "Update", "Same topic, different value. The new fact replaces the old one."],
+            ["“I still don't eat meat”", "`diet`: vegetarian", "Skip", "Same topic, same meaning. Storing it again would create a duplicate."],
+            ["“My dog is called Rex”", "None", "Add", "New topic, stable, and plausibly useful later."],
+            ["“Forget my allergy”", "`allergy`: nuts", "Delete", "An explicit request. The memory is removed, not just hidden."],
+            ["“Maybe I'll try sushi”", "`diet`: vegetarian", "Skip", "A passing thought, not a confirmed change. Unconfirmed guesses are not stored."]
+          ] },
+        { type: "steps", title: "What makes each decision possible",
+          items: [
+            { title: "A way to find the matching memory", text: "With keys like `city`, matching is exact. With free-text memories, we search for the most similar stored memory and treat a close match as “same topic”." },
+            { title: "A way to compare meaning", text: "“Vegetarian” and “doesn't eat meat” are different strings with the same meaning. Simple code cannot see that, so this comparison is usually given to an LLM." },
+            { title: "A rule for uncertainty", text: "The sushi line could be read as a diet change. When a candidate is unsure, the safe choice is to skip it, or to ask the user." },
+            { title: "A timestamp on every write", text: "The updated `city` memory gets day 40. Later, recency scoring and audits both depend on knowing when a fact was last confirmed." }
+          ] },
+        { type: "p", text: "After reconciling, the store holds `diet`: vegetarian, `city`: Munich and `pet`: dog named Rex. Five candidates came in; the store still has three entries, with no contradiction and no duplicate. That is the sign of a healthy memory." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code showed how to *read* memories with a score. Here we build the *write* side: a background job that looks at each user message, extracts candidate facts, and reconciles them with the store. The extractor is a scripted stand-in for an LLM. The reconcile logic is real." },
+        { type: "code", lang: "python", title: "practice_memory_reconcile.py", code: `# Background memory writing: extract candidate facts, then reconcile with the store.
+SCRIPT = {   # what an extractor LLM would pull out of each user message (scripted)
+    "I'm vegetarian and I live in Berlin.": [("diet", "vegetarian"), ("city", "Berlin")],
+    "Nice weather today!":                  [],
+    "As I said, I don't eat meat.":         [("diet", "vegetarian")],
+    "I moved to Munich last week.":         [("city", "Munich")],
+    "Please forget where I live.":          [("city", None)],
+    "My password is tulip42, remember it.": [("password", "tulip42")],
+}
+
+def fake_extractor(message):
+    """Stands in for the LLM call that finds durable facts in a message."""
+    return SCRIPT[message]
+
+BLOCKED = {"password", "card_number"}      # things we never store
+store = {}                                 # long-term memory: key -> record
+
+def reconcile(key, value, day):
+    """Compare one candidate with the store and pick exactly one decision."""
+    if key in BLOCKED:
+        return "REFUSE"
+    if value is None:                      # the user asked us to forget
+        return "DELETE" if store.pop(key, None) else "SKIP"
+    if key not in store:
+        store[key] = {"value": value, "day": day}
+        return "ADD"
+    if store[key]["value"] == value:       # we already know this
+        return "SKIP"
+    store[key] = {"value": value, "day": day}
+    return "UPDATE"
+
+for day, message in enumerate(SCRIPT, start=1):
+    facts = fake_extractor(message)
+    decisions = [f"{reconcile(k, v, day)} {k}" for k, v in facts] or ["nothing durable"]
+    print(f"day {day}: {', '.join(decisions)}")
+print("store:", store)`, output: `day 1: ADD diet, ADD city
+day 2: nothing durable
+day 3: SKIP diet
+day 4: UPDATE city
+day 5: DELETE city
+day 6: REFUSE password
+store: {'diet': {'value': 'vegetarian', 'day': 1}}`,
+          walkthrough: [
+            { lines: [2, 13], note: "Six user messages and the facts an extractor would return for each. Small talk yields an empty list. A forget request yields a key with the value `None`." },
+            { lines: [15, 16], note: "A block list of keys we never store, and the store itself: one record per key." },
+            { lines: [18, 30], note: "Reconcile makes exactly one decision per candidate: refuse, delete, add, skip or update. The order of the checks matters: the block list comes first." },
+            { lines: [32, 36], note: "Run the six days in order and print each decision, then the final store." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change the day 3 fact to `(\"diet\", \"no meat\")`. Predict the decision for day 3. Is the result what a human would want? What would have to change in `reconcile` to get it right?",
+          "Remove `\"password\"` from `BLOCKED`. Predict the final store, then say which row of the “what not to store” table this breaks.",
+          "Swap the order of the day 4 and day 5 messages in `SCRIPT` (forget first, then the move). Predict both decisions and the final store. Is storing Munich after a forget request the right behaviour?"
+        ] },
+        { type: "check", question: "On day 3 the user repeats something we already know, and the decision is SKIP. A simpler design would just write it again. What goes wrong over months with “always write”?", answer: "The store fills with near-copies of the same fact. Retrieval then returns several duplicates in its top few results, pushing out other useful memories and wasting prompt space. Worse, when the fact later changes, an update may fix only one copy, leaving old copies to contradict it. Skipping duplicates at write time is far cheaper than cleaning them up later." },
+        { type: "check", question: "In this toy, exact keys make matching easy. Real extractors often produce free text such as “user relocated to Munich”. Which earlier idea from this lesson would we use to find the memory it conflicts with, and what new risk does that bring?", answer: "We would embed the candidate and search the store by similarity, as in the read operation, then treat a close match as the same topic. The risk is a wrong match. If “user's sister lives in Munich” is judged similar to “user lives in Berlin”, an update would overwrite a true fact with a wrong one. So similarity finds the candidates, and a careful comparison (often an LLM call) should make the final decision." }
       ]
     }
   ],

@@ -1,6 +1,6 @@
 export default {
   id: "kv-cache-in-llms",
-  minutes: 20,
+  minutes: 25,
   hook: "If an LLM re-read its entire conversation before writing every single word, how slow would it be, and how does it avoid that?",
   summary: "When an LLM generates text one token at a time, the keys and values of earlier tokens never change, so recomputing them at every step wastes enormous work. The KV cache stores them once and reuses them, turning quadratic recomputation into linear work per step. The price is memory: the cache grows with every token, layer and user, which is why so much of inference engineering is about managing it.",
   sections: [
@@ -136,6 +136,80 @@ n=1000: no cache 1001000 vs cache 2000 projections`, walkthrough: [
           "**Share it:** reuse the cache of a common system prompt across requests (prefix caching)."
         ] },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Thinking the KV cache changes the model's answers (it does not; it is an exact optimisation). Forgetting the cache when estimating GPU memory: teams size a GPU for the weights only and then hit out-of-memory errors under real traffic. And assuming the cache only holds the prompt: it grows with every generated token too." }
+      ]
+    },
+    {
+      id: "reusing-the-cache-across-turns",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "So far the cache lived for one reply. A chat has many turns, and each new turn sends the whole history again. Do we have to prefill all of it each time? No. The cache rows for a token stay valid as long as **every token before it is unchanged**. So we can keep the cache between turns and compute only what is new." },
+        { type: "steps", title: "Two turns of our support chat", items: [
+          { title: "Turn 1", text: "Prompt “Where is my order” (4 tokens) plus reply “Your order ships today” (4 tokens). The cache ends with 8 rows per layer." },
+          { title: "Turn 2 arrives", text: "The customer adds “Can I change the address” (5 tokens). The full sequence is now 13 tokens, and its first 8 tokens are exactly the ones we cached." },
+          { title: "Reuse the shared prefix", text: "We keep the 8 cached rows and prefill only the 5 new tokens. Without reuse we would compute 13 rows; with reuse, 5." },
+          { title: "What if the history is edited?", text: "Suppose the app rewrites the third token of the history. Rows 1 and 2 are still valid. Every row from the third onward is stale, even though tokens 4 to 13 look the same, so we recompute 11 rows." },
+          { title: "Why later rows go stale", text: "Above the first layer, a token's key and value are built from its hidden state, and that state has already mixed in information from all earlier tokens. Change one early token and every later hidden state changes." }
+        ] },
+        { type: "table", caption: "Cache bugs: what we see and where to look", head: ["What we see", "Likely cause", "How to check"], rows: [
+          ["Answers differ from a run with the cache turned off", "Stale rows kept after the earlier text changed", "Compare the cached token ids with the new sequence, position by position"],
+          ["Replies repeat or drift after the first turn", "The whole history was fed in again on top of an existing cache, so rows are duplicated", "Cache rows should equal tokens processed, never more"],
+          ["Every turn is as slow as a fresh prompt", "Something at the very start changes each turn, such as a timestamp in the system prompt", "Find the first position where two turns differ"],
+          ["Memory grows although chats have ended", "Caches of finished chats are never freed", "Count cached rows against rows owned by live chats"]
+        ] },
+        { type: "p", text: "The rule behind all four rows is the same: a cache is tied to one exact sequence of tokens. Because a cache is exact, the first row gives us a simple test for any cache code we write: run the same input with and without the cache and compare the outputs, as `kv_cache_demo.py` did." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a toy cache that lives across chat turns. It does not run a model. It only tracks which token ids have rows in the cache, reuses the longest shared prefix, and counts rows computed and bytes held. The model shape is tiny and made up: one cached token costs 1,024 bytes." },
+        { type: "code", lang: "python", title: "practice_prefix_reuse.py", code: `# A toy KV cache that survives across chat turns.
+# We reuse rows for the longest shared prefix and compute only the rest.
+LAYERS, KV_HEADS, HEAD_DIM, BYTES = 4, 4, 16, 2       # tiny made-up model, FP16
+ROW_BYTES = 2 * LAYERS * KV_HEADS * HEAD_DIM * BYTES   # K + V for one token
+
+def common_prefix(a, b):
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return n
+
+cached = []             # token ids whose K/V rows are currently in the cache
+total_computed = 0
+
+def run_turn(name, tokens):
+    global cached, total_computed
+    keep = common_prefix(cached, tokens)     # rows that are still valid
+    new = len(tokens) - keep                 # rows we must compute now
+    cached = list(tokens)                    # drop stale rows, append new ones
+    total_computed += new
+    print(f"{name:22s} tokens={len(tokens):2d} reused={keep:2d} "
+          f"computed={new:2d} cache={len(cached) * ROW_BYTES} bytes")
+
+turn1 = [1, 7, 7, 3, 9, 4, 2, 8]                    # prompt + reply, 8 tokens
+turn2 = turn1 + [5, 6, 3, 1, 2]                     # same history + new message
+edited = [1, 7, 0, 3, 9, 4, 2, 8, 5, 6, 3, 1, 2]    # the third token was changed
+run_turn("turn 1", turn1)
+run_turn("turn 2 (appended)", turn2)
+run_turn("turn 2 (edited early)", edited)
+print("rows computed in total:", total_computed, "| without any reuse:", 8 + 13 + 13)`, output: `turn 1                 tokens= 8 reused= 0 computed= 8 cache=8192 bytes
+turn 2 (appended)      tokens=13 reused= 8 computed= 5 cache=13312 bytes
+turn 2 (edited early)  tokens=13 reused= 2 computed=11 cache=13312 bytes
+rows computed in total: 24 | without any reuse: 34`, walkthrough: [
+          { lines: [1, 4], note: "A tiny model shape. The bytes per cached token follow the same formula as the lesson: 2 × layers × KV heads × head size × bytes." },
+          { lines: [6, 10], note: "Count how many leading tokens two sequences share. Only that part of the cache can be reused." },
+          { lines: [15, 22], note: "One turn: keep the valid prefix rows, compute the rest, and report the cache size." },
+          { lines: [24, 30], note: "Three turns: a fresh chat, a follow-up that only appends, and a follow-up where an early token was changed." }
+        ] },
+        { type: "p", text: "Appending reused all 8 rows and computed 5. Changing one early token left only 2 reusable rows and forced 11 new ones. Now change it:" },
+        { type: "list", items: [
+          "Change the edit so that the *last* token of `edited` differs instead of the third. Predict the reused and computed counts before you run it.",
+          "Model a chat app that drops the oldest message when the context is full: call `run_turn` with `turn2[4:]`. Predict how many rows can be reused.",
+          "Set `KV_HEADS = 1` (as in multi-query attention). Predict the new bytes per token and the cache size after turn 2. Do the reused and computed counts change?"
+        ] },
+        { type: "check", question: "In the edited turn, tokens 4 to 13 have the same ids as before. Why can we not keep their cached rows?", answer: "Their rows above the first layer were computed from hidden states that had already attended to the old third token. With a different third token those hidden states, and so their keys and values, would be different numbers. Same token id does not mean same key and value; the whole prefix must match." },
+        { type: "check", question: "A chat app trims old messages from the front of the history to stay under the context limit. What does that do to cache reuse, and what is a cheaper place to trim?", answer: "Trimming from the front changes the very first tokens, so the shared prefix drops to zero and the whole remaining history must be prefilled again. Reuse survives only up to the first changed position. Keeping a fixed start (for example the system prompt) and trimming rarely, in large steps, means most turns still only append." }
       ]
     }
   ],

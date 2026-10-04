@@ -1,6 +1,6 @@
 export default {
   id: "how-does-an-lpu-work",
-  minutes: 23,
+  minutes: 28,
   hook: "If a GPU can do a thousand trillion operations per second, why does a chatbot running on it still type at a few dozen words per second — and how did one chip design make that dramatically faster?",
   summary: "An LPU (Language Processing Unit) is Groq's chip design for fast LLM inference. Token-by-token generation is limited by how fast weights can be read from memory, not by arithmetic, so the LPU keeps model weights in fast on-chip SRAM spread across many chips, and has a compiler plan every operation and every data transfer in advance so nothing ever waits or guesses. The result is very low latency per user, paid for with many chips per model and less flexibility than a GPU.",
   sections: [
@@ -224,6 +224,91 @@ each chip reads its 230 MB slice in 2.87 us
           "**Use both** in a router: fast LPU-served models for interactive turns, GPU-served models for heavy or custom jobs.",
         ] },
         { type: "callout", tone: "example", title: "Decision for our shop", text: "For the live website chat, an LPU-backed API serving an open model is attractive: answers appear almost instantly. For nightly summarisation of thousands of tickets and for fine-tuning on our own data, GPUs are the better fit. The landscape also shifts quickly, and other vendors (for example Cerebras, with wafer-scale on-chip memory) pursue related SRAM-heavy ideas." },
+      ],
+    },
+    {
+      id: "worked-latency-budget",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Faster decoding sounds like a pure win, but how much of it does a customer actually feel? Let us build a **latency budget** for our shop's assistant and compare two endpoints: A streams 40 tokens per second and B streams 400. Both have the same fixed costs: 0.1 s of network time and 0.3 s until the first token. Every figure here is **illustrative**, chosen to make the arithmetic easy; none is a measurement of any real service." },
+        { type: "formula", expr: "time to full answer = network + time to first token + output tokens ÷ tokens per second", caption: "Only the last term depends on decode speed." },
+        { type: "steps", title: "Three situations, two endpoints", items: [
+          { title: "A 300-token answer on A", text: "0.1 + 0.3 + 300 / 40 = 0.4 + 7.5 = **7.9 s**. Almost all of the wait is decoding." },
+          { title: "The same answer on B", text: "0.1 + 0.3 + 300 / 400 = 0.4 + 0.75 = **1.15 s**. Decoding got 10× faster and the whole answer about 6.9× faster." },
+          { title: "A 20-token reply", text: "A: 0.4 + 0.5 = 0.9 s. B: 0.4 + 0.05 = 0.45 s. Only **2×** faster. The fixed 0.4 s is now most of the wait, and no decode speed can remove it." },
+          { title: "An agent that chains 6 calls", text: "Each call writes 150 tokens and must finish before the next begins. A: 6 × (0.4 + 3.75) = **24.9 s**. B: 6 × (0.4 + 0.375) = **4.65 s**. Waiting adds up across the chain, so speed compounds." },
+          { title: "Ask who waits for the last token", text: "A person reading a streamed answer mostly cares when the first words appear. A program that needs the *complete* output before it can act (the next agent step, a tool call, a sentence to be spoken) waits for the final token. That is where decode speed pays off most." },
+        ] },
+        { type: "chart", kind: "bar", title: "Time to the full answer (illustrative)", yLabel: "Seconds", unit: " s", labels: ["20-token reply", "300-token answer", "Agent: 6 × 150 tokens"], series: [
+          { name: "Endpoint A (40 tok/s)", values: [0.9, 7.9, 24.9] },
+          { name: "Endpoint B (400 tok/s)", values: [0.45, 1.15, 4.65] },
+        ], caption: "Computed from the formula above with 0.4 s of fixed overhead per call. The longer the output and the longer the chain, the more a fast decoder helps." },
+        { type: "p", text: "The practical rule: before paying for per-user speed, write down the budget. If most of the wait is fixed overhead, shorten the prompt or move closer to the server first. If most of it is output tokens, and something is waiting for the last one, faster decoding is the right lever." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will turn the budget into a small calculator. It needs nothing but plain Python. We compute the wait for a single answer, for an agent chain, and then ask two sharper questions: how much of each wait is fixed overhead, and how much of a 10× faster decoder the user really feels." },
+        { type: "code", lang: "python", title: "practice_latency_budget.py", code: `# A latency budget for our support assistant. All numbers are illustrative.
+
+def answer_time(tokens, tokens_per_s, first_token_s=0.3, network_s=0.1):
+    """Seconds until the full answer has arrived for one LLM call."""
+    return network_s + first_token_s + tokens / tokens_per_s
+
+speeds = {"endpoint A (40 tok/s)": 40, "endpoint B (400 tok/s)": 400}
+
+# 1) One chat answer of 300 tokens
+print("one 300-token answer")
+for name, tps in speeds.items():
+    print(f"  {name:23s}: {answer_time(300, tps):5.2f} s")
+
+# 2) An agent that chains 6 calls of 150 tokens; each waits for the last
+print("agent workflow: 6 calls x 150 tokens, one after another")
+for name, tps in speeds.items():
+    total = sum(answer_time(150, tps) for _ in range(6))
+    print(f"  {name:23s}: {total:5.2f} s")
+
+# 3) How much of the wait is NOT token generation?
+print("share of the wait that is fixed overhead (network + first token)")
+for tokens in (20, 300):
+    for name, tps in speeds.items():
+        total = answer_time(tokens, tps)
+        fixed = 0.3 + 0.1
+        print(f"  {tokens:3d} tokens, {name:23s}: {fixed / total:4.0%}")
+
+# 4) Speed-up actually felt by the user when the chip is 10x faster
+for tokens in (20, 300, 2000):
+    gain = answer_time(tokens, 40) / answer_time(tokens, 400)
+    print(f"10x faster decoding, {tokens:4d}-token answer: {gain:4.1f}x faster overall")`, output: `one 300-token answer
+  endpoint A (40 tok/s)  :  7.90 s
+  endpoint B (400 tok/s) :  1.15 s
+agent workflow: 6 calls x 150 tokens, one after another
+  endpoint A (40 tok/s)  : 24.90 s
+  endpoint B (400 tok/s) :  4.65 s
+share of the wait that is fixed overhead (network + first token)
+   20 tokens, endpoint A (40 tok/s)  :  44%
+   20 tokens, endpoint B (400 tok/s) :  89%
+  300 tokens, endpoint A (40 tok/s)  :   5%
+  300 tokens, endpoint B (400 tok/s) :  35%
+10x faster decoding,   20-token answer:  2.0x faster overall
+10x faster decoding,  300-token answer:  6.9x faster overall
+10x faster decoding, 2000-token answer:  9.3x faster overall`,
+          walkthrough: [
+            { lines: [3, 7], note: "The whole model in one function: network time, time to first token, then output tokens divided by speed. Two made-up endpoints differ only in tokens per second." },
+            { lines: [10, 18], note: "One 300-token answer, then an agent that makes 6 calls in a row. The chain multiplies every per-call wait by 6." },
+            { lines: [21, 26], note: "The share of each wait that decoding cannot touch. For a 20-token reply on the fast endpoint, 89% of the wait is fixed overhead." },
+            { lines: [29, 31], note: "The speed-up the user actually sees from 10× faster decoding: 2.0× for a short reply, 6.9× for 300 tokens, 9.3× for 2,000 tokens." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change the default `first_token_s` to `1.5`, as if every call carried a very long prompt. Predict whether the overall gain for a 300-token answer goes up or down from 6.9×.",
+          "Add a third entry, `\"endpoint C (4000 tok/s)\": 4000`. Predict the time for one 300-token answer. Is C ten times better than B for the user?",
+          "Change the agent to 20 calls of 50 tokens each. Predict both totals. Does the fast endpoint's advantage grow or shrink compared with 6 calls of 150?",
+        ] },
+        { type: "check", question: "In the run above, a 10× faster decoder made a 20-token reply only 2.0× faster. Why, and what would we change to speed up short replies?", answer: "Only the 'tokens ÷ speed' part of the budget shrinks. For 20 tokens that part was 0.5 s out of 0.9 s; the other 0.4 s (network plus time to first token) did not move. Short replies are limited by fixed overhead, so the useful changes are a shorter prompt (less prefill work), a server closer to the user, or reusing connections. More decode speed gives little." },
+        { type: "check", question: "Every night we summarise 5,000 old tickets. Nobody is watching the output appear. Is tokens per second per user the right number to optimise?", answer: "No. Per-user speed matters when someone, or some program, is waiting on one stream. For an overnight batch what matters is total cost and total throughput: how many tokens the whole system produces per hour and per unit of money. Batching many requests together trades a slower individual stream for more total work, which is exactly the trade this job wants. That is why this lesson points such jobs to GPUs." },
       ],
     },
   ],

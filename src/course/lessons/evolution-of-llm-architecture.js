@@ -1,6 +1,6 @@
 export default {
   id: 'evolution-of-llm-architecture',
-  minutes: 22,
+  minutes: 27,
   hook: 'Why did the field throw away a decade of recurrent networks for one idea called attention, and what has changed since?',
   summary: 'LLM architecture went through clear stages: recurrent networks that read one word at a time, attention that lets every word look at every other word, the Transformer built only from attention, a scaling era where bigger models and more data kept paying off, and Mixture of Experts that grows knowledge without growing cost per token. Today the frontier mixes these with new directions such as efficient attention, reasoning models and diffusion-style generation.',
   sections: [
@@ -142,6 +142,80 @@ n= 100000: RNN steps in a chain =  100000, attention pair scores = 10,000,000,00
           { when: '2023–2024', title: 'Open MoE models', text: 'Mixtral and DeepSeek-V3 bring sparse experts into widely used open models.' },
           { when: '2024–2026', title: 'Reasoning, long context, new paradigms', text: 'Reasoning models, million-token attention tricks, hybrids and diffusion LMs.' },
         ] },
+      ],
+    },
+    {
+      id: 'worked-example-one-sentence',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "Let us push our running sentence, **The cat that the dog chased sat down**, through each design and count. It has 8 tokens. `cat` is token 2 and `sat` is token 7, so the gap between them is 5 tokens." },
+        { type: 'steps', title: "Following `sat` back to `cat`", items: [
+          { title: "RNN: count the overwrites", text: "The memory of `cat` must survive 5 updates before `sat` arrives. If each update keeps 90% of the old memory (an illustrative number), 0.9⁵ ≈ 0.59 of the signal is left." },
+          { title: "Attention: count the hops", text: "The query of `sat` scores the 7 tokens it may see: itself and the 6 before it. One of those scores is for `cat`. That is 1 hop, with no fading on the way." },
+          { title: "Count the price of attention", text: "With a causal mask, token i scores i tokens. For 8 tokens that is 1 + 2 + … + 8 = 36 pair scores per head." },
+          { title: "Scale it up", text: "Make the text 100 times longer: 800 tokens. The RNN chain grows 100 times, to 800 steps. The pair scores grow to 800 × 801 / 2 = 320,400, about 8,900 times more." },
+          { title: "MoE: count the experts", text: "Attention is unchanged. In the feed-forward part, a router with 8 experts and top-2 routing runs 2 experts per token, so each token touches a quarter of the expert weights." },
+        ] },
+        { type: 'table', caption: "The same 8-token sentence in three designs. The 90% figure behind the RNN row is illustrative.", head: ['Design', 'Path from cat to sat', 'Work across tokens', 'Cost for 8 tokens'], rows: [
+          ['RNN', '5 updates in a chain', 'One step after another', '8 sequential steps'],
+          ['Transformer', '1 lookup', 'All tokens at once', '36 pair scores per head'],
+          ['MoE Transformer', '1 lookup (same attention)', 'All tokens at once', '36 pair scores, then 2 of 8 experts per token'],
+        ] },
+        { type: 'p', text: "The pattern to notice: each stage fixes the bottleneck of the stage before it and brings a new cost. Attention removes the long chain but pays for pairs. MoE keeps attention and makes the feed-forward part cheaper per token, but every expert still has to sit in memory." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will build a tiny calculator for the main idea of this lesson: how much of an early token's signal is left when a later token needs it. The RNN loses a little at every step. Attention reads the old token directly." },
+        { type: 'code', lang: 'python', title: 'practice_signal_fade.py', code: `# How much of an early token's signal survives until a later token needs it?
+KEEP = 0.9   # share of old memory an RNN keeps at each step (illustrative)
+
+def rnn_signal(gap):
+    # the signal passes through \`gap\` updates; each one keeps 90% of it
+    return KEEP ** gap
+
+def attention_signal(gap):
+    # attention reads the old token directly: one hop, nothing fades
+    return 1.0
+
+print("gap  rnn_signal  attn_signal  rnn_hops  attn_hops")
+for gap in [1, 5, 10, 50, 100]:
+    print(f"{gap:>3}  {rnn_signal(gap):>10.4f}  {attention_signal(gap):>11.1f}  {gap:>8}  {1:>9}")
+
+# Largest gap where the RNN still holds at least half of the signal
+gap = 0
+while rnn_signal(gap + 1) >= 0.5:
+    gap += 1
+print("RNN keeps at least half the signal for gaps up to", gap)
+
+# Running example: 'sat' must reach back to 'cat'
+sentence = "The cat that the dog chased sat down".split()
+gap = sentence.index("sat") - sentence.index("cat")
+print(f"'cat' -> 'sat' gap = {gap} tokens:",
+      f"RNN keeps {rnn_signal(gap):.2f}, attention keeps {attention_signal(gap):.2f}")`, output: `gap  rnn_signal  attn_signal  rnn_hops  attn_hops
+  1      0.9000          1.0         1          1
+  5      0.5905          1.0         5          1
+ 10      0.3487          1.0        10          1
+ 50      0.0052          1.0        50          1
+100      0.0000          1.0       100          1
+RNN keeps at least half the signal for gaps up to 6
+'cat' -> 'sat' gap = 5 tokens: RNN keeps 0.59, attention keeps 1.00`,
+          walkthrough: [
+            { lines: [1, 10], note: "Two toy models of memory. The RNN multiplies the signal by 0.9 at every step. Attention always returns 1.0 because it reads the old token in one hop. Real networks are not this simple; the shape of the curve is the point." },
+            { lines: [12, 14], note: "Print the signal for growing gaps. At a gap of 50 the RNN holds about half a percent of the signal, and the number of hops equals the gap." },
+            { lines: [16, 20], note: "Search for the largest gap where the RNN still holds half the signal. With 0.9 per step the answer is only 6 tokens." },
+            { lines: [22, 26], note: "Apply it to our sentence. The gap from `cat` to `sat` is 5 tokens, so the toy RNN keeps 0.59 of the signal." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `KEEP = 0.99`, as if gates (the LSTM idea) protected the memory better. Before running, guess: is the half-signal gap closer to 60 or to 600?",
+          "Replace the sentence with a longer one that puts more words between `cat` and `sat`. Predict the RNN signal from the gap first, then run it.",
+          "Add a column that prints the causal pair scores for a text of `gap + 1` tokens, `(gap + 1) * (gap + 2) // 2`. Predict which grows faster as the gap grows: the RNN's loss of signal or attention's bill.",
+        ] },
+        { type: 'check', question: "We raise KEEP to 0.99. Does the toy RNN now match attention on a gap of 500 tokens?", answer: "No. 0.99⁵⁰⁰ is about 0.007, so less than 1% of the signal is left. The loss is exponential in the gap, so a better keep rate only moves the problem further away. Attention avoids it because its path length stays at 1 for any gap." },
+        { type: 'check', question: "A text grows from 8 to 16 tokens. How do the RNN chain and the causal pair scores change, and why is the bigger number still acceptable on a GPU?", answer: "The chain doubles from 8 to 16 steps. The pair scores go from 36 to 16 × 17 / 2 = 136, almost 4 times more. That is more arithmetic, but all pairs can be computed at the same time, while the 16 RNN steps must wait for each other." },
       ],
     },
     {

@@ -1,6 +1,6 @@
 export default {
   id: "diffusion-models",
-  minutes: 22,
+  minutes: 27,
   hook: "How can a model that only ever learned to remove a little noise end up painting a brand-new picture out of pure static?",
   summary: "A diffusion model learns to generate data by reversing a simple destruction process. During training we gradually add Gaussian noise to real images until nothing is left, and teach a network to predict the noise that was added at each level. To generate, we start from pure noise and repeatedly subtract the predicted noise, step by step, until a clean image appears; text conditioning steers which image we get.",
   sections: [
@@ -195,6 +195,80 @@ after step t= 1: [ 2. -2.  2. -2. -2. -2.  2.  2.]`,
           ["Science", "Protein and molecule design (e.g. RFdiffusion for protein structures)"],
         ] },
         { type: "callout", tone: "warn", title: "Limits and common mistakes", text: "Generation is slow because it needs many network calls (fast samplers and distillation help). Very high guidance scales give over-saturated, unnatural images. Models can reproduce memorised training images, raising copyright and privacy concerns, and they inherit biases from web data. Text rendering, counting and exact spatial layouts are still common failure points. And a diffusion model is the wrong tool when we need a *deterministic, exact* output, such as a technical drawing with precise dimensions." },
+      ],
+    },
+    {
+      id: "why-many-steps",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "A fair question: if the network predicts the noise, and knowing the noise gives us the clean image, why not denoise in **one jump** from pure static? The one-jump estimate is x̂₀ = (xₜ − √(1−ᾱₜ)·ε̂) / √ᾱₜ. Look at what happens when the noise guess ε̂ is slightly wrong by some amount e. The image estimate is then wrong by e · √(1−ᾱₜ) / √ᾱₜ. That last ratio is an **amplification factor**, and it depends only on the step." },
+        { type: "chart", kind: "line", title: "How much a noise-prediction error is amplified in a one-jump estimate", xLabel: "Step t", yLabel: "√(1−ᾱₜ) / √ᾱₜ", series: [
+          { name: "Amplification", points: [[1, 0.01], [5, 0.21], [10, 0.45], [15, 0.74], [20, 1.11], [25, 1.6], [30, 2.32], [35, 3.44], [40, 5.31], [45, 8.58], [50, 14.68]] },
+        ], caption: "Exact values for this lesson's 50-step schedule. Near the end of the forward process, a small mistake in the predicted noise becomes a mistake almost 15 times larger in the image." },
+        { type: "steps", title: "The same idea with small numbers", items: [
+          { title: "Light noise, t = 5", text: "The factor is 0.21. A noise guess that is off by 0.1 moves the image estimate by only 0.021. One jump would be fine here." },
+          { title: "Medium noise, t = 25", text: "The factor is 1.6. The same 0.1 mistake now moves the image by 0.16." },
+          { title: "Almost pure noise, t = 50", text: "The factor is 14.68. A 0.1 mistake becomes 1.47. For pixel values of about ±1, that is larger than the picture itself." },
+          { title: "What the sampler does instead", text: "It never trusts the one-jump estimate from heavy noise. It moves a small part of the way, lands on a slightly cleaner xₜ₋₁, and asks the network again. Each new call sees a cleaner input and corrects the earlier guess." },
+          { title: "Why this costs time", text: "Every correction is one more network call. Fewer steps means bigger jumps and less chance to fix mistakes, which is why cutting the step count too far gives blurry or broken images." },
+        ] },
+        { type: "p", text: "This also explains coarse-to-fine. At high noise the network cannot know the details, so its honest answer is close to an *average* of many possible images, which looks blurry. Only as the noise falls does one sharp image win. A blurry one-jump preview at an early step is not a bug; it is the best estimate available there." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will noise a tiny 6-pixel 'image' to three different levels and try to recover it in one jump with a slightly imperfect noise guess. Then we will do classifier-free guidance by hand on two numbers to see what the guidance scale w really does." },
+        { type: "code", lang: "python", title: "practice_one_jump.py", code: `import numpy as np
+rng = np.random.default_rng(1)
+
+# A tiny striped "image" of 6 pixels, and the lesson's 50-step schedule.
+x0 = np.array([1.0, -1.0, 1.0, -1.0, 1.0, -1.0])
+T = 50
+beta = np.linspace(1e-4, 0.2, T)
+abar = np.cumprod(1 - beta)
+eps = rng.normal(size=x0.shape)                  # the true noise we add
+
+print("Part 1: noise the image, then denoise it in ONE jump")
+for t in (4, 24, 49):
+    s, n = np.sqrt(abar[t]), np.sqrt(1 - abar[t])
+    xt = s * x0 + n * eps                        # forward jump to step t+1
+    eps_hat = eps + 0.1                          # a network that is slightly off
+    loss = np.mean((eps - eps_hat) ** 2)         # the training loss it would get
+    x0_hat = (xt - n * eps_hat) / s              # one-jump estimate of the image
+    err = np.abs(x0_hat - x0).max()
+    print(f"  t={t+1:2d}  noise loss={loss:.3f}  error in image={err:.3f}"
+          f"  (amplified x{n / s:.1f})")
+
+print("Part 2: classifier-free guidance on two numbers")
+eps_uncond = np.array([0.20, -0.10])             # prediction with empty prompt
+eps_cond = np.array([0.50, 0.30])                # prediction with our prompt
+for w in (0.0, 1.0, 3.0, 7.5):
+    guided = eps_uncond + w * (eps_cond - eps_uncond)
+    step = np.linalg.norm(guided - eps_uncond)   # how far the prompt pushes us
+    print(f"  w={w:3.1f}  guided={np.round(guided, 2)}  push={step:.2f}")`, output: `Part 1: noise the image, then denoise it in ONE jump
+  t= 5  noise loss=0.010  error in image=0.021  (amplified x0.2)
+  t=25  noise loss=0.010  error in image=0.160  (amplified x1.6)
+  t=50  noise loss=0.010  error in image=1.468  (amplified x14.7)
+Part 2: classifier-free guidance on two numbers
+  w=0.0  guided=[ 0.2 -0.1]  push=0.00
+  w=1.0  guided=[0.5 0.3]  push=0.50
+  w=3.0  guided=[1.1 1.1]  push=1.50
+  w=7.5  guided=[2.45 2.9 ]  push=3.75`,
+          walkthrough: [
+            { lines: [5, 9], note: "A striped image with values ±1, the same 50-step schedule as the lesson, and one fixed noise draw used at every level." },
+            { lines: [12, 20], note: "For each step we jump forward, pretend the network's noise guess is off by 0.1, and rebuild the image in one jump. The noise loss is 0.010 every time, but the image error grows from 0.021 to 1.468." },
+            { lines: [23, 28], note: "Guidance is a straight line through two predictions. w = 0 gives the unconditional one, w = 1 the conditional one, and larger w keeps going in the same direction, far past both." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `eps + 0.1` to `eps + 0.01` (a ten times better network). Predict the image error at t = 50 before running.",
+          "Change the schedule's last value from `0.2` to `0.02`. Predict whether the amplification at t = 50 goes up or down. Then ask: is x₅₀ still close to pure noise, and why would that hurt generation?",
+          "Add `-1.0` to the list of guidance scales. Predict the guided vector by hand first, and say in words which way it moves.",
+        ] },
+        { type: "check", question: "In the run above the noise loss was 0.010 at every step, but the image error ranged from 0.021 to 1.468. What does this say about judging a diffusion model only by its training loss?", answer: "The loss treats an error in the noise the same at every step, but the effect on the image is very different: small at low noise, huge at high noise. One average number hides where the mistakes are and how much they matter. That is why we also look at generated samples, and why samplers take many small steps rather than trust a single estimate from heavy noise." },
+        { type: "check", question: "With w = 7.5 the guided prediction was [2.45, 2.9], far larger than either the unconditional [0.2, −0.1] or the conditional [0.5, 0.3]. Why can that harm the image?", answer: "Guidance extrapolates. It takes the difference between the two predictions and multiplies it, so the result lies outside anything the network actually predicted. Each step then removes too much 'noise' in the prompt direction, pushing values toward extremes. That matches the over-saturated, unnatural look of very high guidance scales." },
       ],
     },
   ],

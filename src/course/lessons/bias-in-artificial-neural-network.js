@@ -1,6 +1,6 @@
 export default {
   id: 'bias-in-artificial-neural-network',
-  minutes: 15,
+  minutes: 20,
   hook: 'If a neuron can already multiply every input by a learned weight, why does it also need one extra number that ignores the input completely?',
   summary: 'A bias is a learned constant added to a neuron\'s weighted sum: `z = w·x + b`. It shifts the neuron\'s output up or down, so the neuron can fit lines that do not pass through the origin and can choose *where* its activation switches on. Without bias, many simple patterns become impossible or much harder to learn.',
   sections: [
@@ -153,6 +153,75 @@ b=+1  ReLU(x + b) = [0. 0. 1. 2. 3.]`, walkthrough: [
           '**Keep it when the data is not centred.** If the target has a non-zero average (prices, temperatures, counts), the output layer almost certainly needs a bias.',
         ] },
         { type: 'p', text: 'Rule of thumb: keep the bias unless you can name the component that already provides the shift.' },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'So far we trusted the code to do the updates. Let us do two of them by hand, so we can see the weight and the bias move together. We use only two houses: size 1 costs 5, and size 3 costs 9. Both follow our rule `price = 2·size + 3`. We start at `w = 0`, `b = 0` and use a learning rate `η = 0.05`.' },
+        { type: 'steps', title: 'One update, by hand', items: [
+          { title: 'Predict', text: 'With `w = 0` and `b = 0` both predictions are 0.' },
+          { title: 'Errors', text: 'Error = prediction − truth: `0 − 5 = −5` and `0 − 9 = −9`. Both are negative, so we predict too low. The loss is the mean of the squares: `(25 + 81) / 2 = 53`.' },
+          { title: 'Weight gradient', text: '`∂L/∂w = 2·mean(error·size) = 2·((−5·1) + (−9·3)) / 2 = −32`. The big house counts three times as much, because its input is 3.' },
+          { title: 'Bias gradient', text: '`∂L/∂b = 2·mean(error) = 2·(−5 − 9) / 2 = −14`. No input appears here. Every house counts the same.' },
+          { title: 'Update both', text: '`w = 0 − 0.05·(−32) = 1.6` and `b = 0 − 0.05·(−14) = 0.7`. New predictions: `1.6·1 + 0.7 = 2.3` and `1.6·3 + 0.7 = 5.5`. The loss falls from 53 to 9.77.' },
+        ] },
+        { type: 'table', caption: 'The same two houses over two updates (computed exactly, rounded)', head: ['Update', 'w', 'b', 'Predictions', 'Loss'], rows: [
+          ['Start', '0', '0', '0 and 0', '53'],
+          ['After 1', '1.6', '0.7', '2.3 and 5.5', '9.77'],
+          ['After 2', '2.26', '1.01', '3.27 and 7.79', '2.23'],
+        ] },
+        { type: 'p', text: 'Look at what happened after the second update: `w` is already 2.26, which is **above** the true slope 2, while `b` is only 1.01, far below the true 3. The weight races ahead because its gradient is multiplied by the inputs. It then has to come back down as the bias slowly rises and takes over the constant part. This is normal. While the bias is still too small, the weight covers for it, just like the bias-free model did with its slope of 2.818.' },
+        { type: 'callout', tone: 'tip', title: 'A quick way to spot a missing bias', text: 'Plot the errors against the input. If small inputs are all predicted too low and large inputs all too high (or the other way round), the model is tilting a line to make up for an offset it cannot express.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'Now we build a tiny spam detector with one sigmoid neuron. An email is spam when it has more than 4 links. We train the neuron twice, with and without a bias, and look at where each one puts its switching point.' },
+        { type: 'code', lang: 'python', title: 'practice_bias_threshold.py', code: `import numpy as np
+
+# Toy task: an email is spam (1) when it has more than 4 links.
+links = np.array([0., 1., 2., 3., 5., 6., 7., 8.])
+spam = np.array([0., 0., 0., 0., 1., 1., 1., 1.])
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def train(use_bias, lr=0.1, steps=20000):
+    w, b = 0.0, 0.0
+    for _ in range(steps):
+        p = sigmoid(w * links + b)         # predicted spam probability
+        err = p - spam                     # error signal for each email
+        w -= lr * np.mean(err * links)     # weight: error times input
+        if use_bias:
+            b -= lr * np.mean(err)         # bias: plain average error
+    return w, b
+
+for use_bias in (False, True):
+    w, b = train(use_bias)
+    pred = (sigmoid(w * links + b) > 0.5).astype(int)
+    acc = np.mean(pred == spam)
+    edge = f"{-b / w:.2f}" if use_bias else "0.00 (pinned)"
+    print(f"bias={use_bias!s:5}  w={w:.3f}  b={b:.3f}  switch point: links={edge}")
+    print(f"   predictions {pred}  accuracy={acc:.3f}")`, output: `bias=False  w=0.264  b=0.000  switch point: links=0.00 (pinned)
+   predictions [0 1 1 1 1 1 1 1]  accuracy=0.625
+bias=True   w=3.566  b=-14.011  switch point: links=3.93
+   predictions [0 0 0 0 1 1 1 1]  accuracy=1.000`, walkthrough: [
+          { lines: [3, 5], note: 'Eight emails. The first four (0 to 3 links) are not spam, the last four (5 to 8 links) are spam. The true switching point is somewhere between 3 and 5.' },
+          { lines: [10, 18], note: 'Gradient descent for a sigmoid neuron. The weight update uses error × input; the bias update uses the plain average error.' },
+          { lines: [20, 26], note: 'We report the switching point `−b / w`, where the probability crosses 0.5. Without a bias it is stuck at 0 links, so every email with at least one link is called spam. With a bias it lands at 3.93.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change the rule so spam starts above 6 links: set `spam` to `[0, 0, 0, 0, 0, 0, 1, 1]`. Before running, predict where the switch point moves and whether `b` becomes more or less negative.',
+          'Subtract 4 from every value in `links` so the data is centred near zero. Predict the accuracy of the bias-free neuron now. Does it still need a bias?',
+          'Lower `steps` from 20000 to 200. Predict whether the neuron with bias already reaches accuracy 1.0, and remember the worked example: which parameter is the slow one?',
+        ] },
+        { type: 'check', question: 'In the run with bias, w is positive (3.566) and b is strongly negative (−14.011). Why does a spam detector need a *negative* bias here?', answer: 'The neuron fires when `w·links + b > 0`. With a positive weight, any email with links would push z above zero. The negative bias is a hurdle the evidence must clear: it takes about 3.93 links (14.011 / 3.566) before `w·links` beats it. The bias encodes "assume not spam until there are enough links".' },
+        { type: 'check', question: 'The bias-free neuron predicts class 0 for the email with 0 links. Did it learn that this email is safe?', answer: 'No. With no bias and an input of 0, the pre-activation is exactly 0 and the sigmoid gives exactly 0.5 for **any** weight. Our rule "spam if p > 0.5" then says 0 by a tie, not by learning. The neuron has no way to move that output away from 0.5.' },
       ],
     },
   ],

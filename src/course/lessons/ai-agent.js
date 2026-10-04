@@ -1,6 +1,6 @@
 export default {
   id: "ai-agent",
-  minutes: 20,
+  minutes: 25,
   hook: "A chatbot can tell you how to book a flight; what does it take for software to actually go and book it?",
   summary: "An AI agent is a program where a language model decides, step by step, which actions to take toward a goal, runs those actions through tools, looks at the results, and repeats until the goal is met. It is built from five parts: a model, instructions, tools, memory, and a loop that ties them together. Agents shine on open-ended, multi-step tasks, but every extra step is another chance to fail, so we add limits, checks and humans where it matters.",
   sections: [
@@ -232,6 +232,100 @@ Step 4: FINAL -> Python 3 is about 18 years old.`,
             ["Prompt injection", "A web page or email it reads tells it to do something else.", "Treat tool output as data, never as instructions; restrict what follows from it."]
           ] },
         { type: "p", text: "**Quick summary.** An AI agent is an LLM inside a loop that chooses actions toward a goal. It has five parts: model, instructions, tools, memory, and the loop. The model only writes requests; our code executes them, which is where we add safety. Agents are great for multi-step, checkable work, but errors compound with every step, so we keep them simple, bounded and supervised." }
+      ]
+    },
+    {
+      id: "worked-example-run-cost",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We said that every model call re-reads the whole history. Let us put small numbers on that, because it changes how we design agents. All numbers here are illustrative and chosen to be easy to add up." },
+        { type: "p", text: "Say the system prompt plus the tool list is 500 tokens. The user's question is 50 tokens. Each round adds about 200 tokens to the history: the model's tool request plus the tool's result. The run needs three tool calls and then a final answer, so the model is called four times." },
+        { type: "table", caption: "Input tokens read by each model call (illustrative numbers)",
+          head: ["Model call", "What it reads", "Input tokens"],
+          rows: [
+            ["1", "Prompt + question", "550"],
+            ["2", "Prompt + question + 1 round", "750"],
+            ["3", "Prompt + question + 2 rounds", "950"],
+            ["4", "Prompt + question + 3 rounds", "1,150"],
+            ["Total", "All four calls", "3,400"]
+          ] },
+        { type: "steps", title: "Reading the table",
+          items: [
+            { title: "The history only grows", text: "Each call reads everything the earlier calls read, plus one more round. Nothing is dropped unless we drop it." },
+            { title: "The total is more than the final history", text: "The finished history is 1,150 tokens, but we paid to read 3,400. Early tokens are read again and again: the 500-token prompt was read four times." },
+            { title: "Cost grows faster than steps", text: "With n calls, the total is n × 550 + 200 × (0 + 1 + … + (n − 1)). Double the steps and the second part roughly quadruples." },
+            { title: "Big tool results hurt most", text: "If one search returned 3,000 tokens in round 1, every later call would carry those 3,000 tokens too. Trimming tool output is often the cheapest fix." }
+          ] },
+        { type: "p", text: "This is why real agents keep tool results short, summarise old history, and cap the number of steps. Many providers also offer prompt caching, which makes the repeated prefix cheaper to re-read, but the pattern of growth stays the same." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a small support agent that handles refund requests. It has all five parts: a scripted model, instructions (a refund limit), two tools, a memory list, and a loop. The new idea is an approval rule that lives in the loop, so the model cannot skip it." },
+        { type: "code", lang: "python", title: "practice_support_agent.py", code: `# A support agent with an approval rule: the loop, not the model, enforces it.
+ORDERS = {"A17": {"item": "kettle", "paid": 40},
+          "B42": {"item": "laptop", "paid": 900}}
+REFUND_LIMIT = 100                       # instructions: bigger refunds need a human
+
+def get_order(order_id):                 # read-only tool
+    return ORDERS.get(order_id, "unknown order")
+
+def issue_refund(order_id):              # tool with a real side effect
+    return f"refunded {ORDERS[order_id]['paid']} for {order_id}"
+
+TOOLS = {"get_order": get_order, "issue_refund": issue_refund}
+
+def fake_model(order_id, memory):
+    """Scripted stand-in for the LLM: look up the order, then refund it."""
+    if not memory:
+        return ("get_order", order_id)
+    if len(memory) == 1 and isinstance(memory[0], dict):
+        return ("issue_refund", order_id)
+    return ("final", f"Ticket closed: {memory[-1]}")
+
+def run_agent(order_id, max_steps=4):
+    memory = []                          # observations for this task only
+    for step in range(1, max_steps + 1):
+        action, arg = fake_model(order_id, memory)
+        if action == "final":
+            return f"  step {step}: {arg}"
+        if action == "issue_refund" and ORDERS[arg]["paid"] > REFUND_LIMIT:
+            result = "BLOCKED: sent to a human for approval"   # guardrail in code
+        else:
+            result = TOOLS[action](arg)
+        memory.append(result)
+        print(f"  step {step}: {action}({arg!r}) -> {result}")
+    return "  stopped: step limit"
+
+for oid in ["A17", "B42", "Z99"]:
+    print(f"Refund request for {oid}")
+    print(run_agent(oid))`, output: `Refund request for A17
+  step 1: get_order('A17') -> {'item': 'kettle', 'paid': 40}
+  step 2: issue_refund('A17') -> refunded 40 for A17
+  step 3: Ticket closed: refunded 40 for A17
+Refund request for B42
+  step 1: get_order('B42') -> {'item': 'laptop', 'paid': 900}
+  step 2: issue_refund('B42') -> BLOCKED: sent to a human for approval
+  step 3: Ticket closed: BLOCKED: sent to a human for approval
+Refund request for Z99
+  step 1: get_order('Z99') -> unknown order
+  step 2: Ticket closed: unknown order`,
+          walkthrough: [
+            { lines: [2, 12], note: "The data, the rule and the tools. `get_order` only reads. `issue_refund` has a side effect, so it is the one we must guard." },
+            { lines: [14, 20], note: "The scripted model. It asks for the order first. If the lookup returned an order (a dict), it asks for a refund. After that it writes a final message from the last observation." },
+            { lines: [22, 34], note: "The loop. Before running `issue_refund` it checks the amount against the limit. Above the limit, the tool is never called and the model sees a `BLOCKED` observation instead." },
+            { lines: [36, 38], note: "Three tickets: a small refund, a large one, and an order that does not exist." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `REFUND_LIMIT = 1000`. Before running, predict what changes for order `B42` and what stays the same for `A17`.",
+          "Set `max_steps=2` in `run_agent`. Predict which line each ticket ends with. Does any refund still happen?",
+          "Delete the guardrail `if` so every call goes straight to `TOOLS[action](arg)`. Predict the output for `B42`, then say why relying on the model's instructions alone would be risky here."
+        ] },
+        { type: "check", question: "For order `Z99` the model never asks for a refund. Which line of the scripted model causes that, and what would a real LLM need in order to behave the same way?", answer: "The check `isinstance(memory[0], dict)` fails, because the lookup returned the text “unknown order”, so the model skips the refund and goes to the final message. A real LLM would need to read the observation and notice the order was not found. That works only because our code fed the tool result back into the history; without the observation the model would have nothing to react to." },
+        { type: "check", question: "The refund limit could be written only in the system prompt (“never refund more than 100”). Why do we also enforce it in the loop code?", answer: "A prompt rule is a request; the model usually follows it but can get it wrong, or be talked out of it by text it reads. A check in code runs every time, whatever the model outputs. Since the model only writes requests and our code runs the tools, the code is the one place where a rule can be guaranteed." }
       ]
     }
   ],

@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-prefix-tuning-work',
-  minutes: 19,
+  minutes: 24,
   hook: 'Can we teach a frozen language model a new task by training nothing but a handful of invisible “words” placed in front of every input?',
   summary: 'Prefix tuning keeps every weight of a pretrained model frozen and learns a short sequence of continuous vectors, the prefix, that is prepended to the keys and values at every attention layer. Real tokens attend to this prefix, which steers the model toward the task. Only around 0.1% of the parameters are trained, and one model can serve many tasks by swapping prefixes.',
   sections: [
@@ -193,6 +193,81 @@ model.print_trainable_parameters()                  # tiny share of the total
         ] },
         { type: 'callout', tone: 'example', title: 'Where it is used', text: 'Prefix tuning was evaluated on table-to-text generation with GPT-2 and on summarisation with BART. Today it appears mostly in research, in PEFT libraries as one option among many, and as the conceptual ancestor of soft-prompt methods. In industry, LoRA has become the more common choice for adapting LLMs.' },
         { type: 'callout', tone: 'warn', title: 'Common mistake', text: 'Treating a longer prefix as always better. Very long prefixes add compute and can make training less stable without improving results. Start small (around 10–20) and measure on a validation set.' },
+      ],
+    },
+    {
+      id: 'worked-example-by-hand',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us follow one query through one attention layer by hand, first without a prefix and then with one. We use two real tokens and a single prefix position, with scores small enough to compute on paper. All numbers are illustrative.' },
+        { type: 'steps', title: 'One query, with and without a prefix', items: [
+          { title: 'Scores without the prefix', text: 'The query scores the two real tokens: token 1 gets **1.0**, token 2 gets **0.0**. Softmax gives `e¹ / (e¹ + e⁰) = 2.72 / 3.72 ≈ 0.73` for token 1 and `0.27` for token 2.' },
+          { title: 'Output without the prefix', text: 'The output is the weighted mix of the values: `0.73 · v₁ + 0.27 · v₂`. Only real tokens contribute.' },
+          { title: 'Add one prefix position', text: 'Training has produced a prefix key that this query scores at **2.0**. Now there are three scores: 2.0 (prefix), 1.0 and 0.0.' },
+          { title: 'Softmax again', text: '`e² = 7.39`, `e¹ = 2.72`, `e⁰ = 1`. The sum is 11.11. Weights: prefix `7.39 / 11.11 ≈ 0.665`, token 1 `≈ 0.245`, token 2 `≈ 0.090`.' },
+          { title: 'New output', text: '`0.665 · p_v + 0.245 · v₁ + 0.090 · v₂`. Two thirds of this token’s output now comes from the prefix value `p_v`, a vector that training chose freely.' },
+          { title: 'What did not change', text: 'The model weights, the token keys and the token values are exactly as before. The ratio between the two real tokens is also unchanged: `0.245 / 0.090 ≈ 2.72`, the same as `0.73 / 0.27`.' },
+        ] },
+        { type: 'p', text: 'So a prefix has two separate levers. The **prefix key** decides *how much attention* the prefix takes from the real tokens. The **prefix value** decides *what is written* into the output with that attention. Training adjusts both, at every layer.' },
+        { type: 'table', caption: 'The same query, before and after (illustrative)', head: ['Position', 'Score', 'Weight without prefix', 'Weight with prefix'], rows: [
+          ['Prefix', '2.0', 'not present', '0.665'],
+          ['Token 1', '1.0', '0.731', '0.245'],
+          ['Token 2', '0.0', '0.269', '0.090'],
+        ] },
+        { type: 'p', text: 'This also shows a failure case. If a prefix key scores very high for *every* query, attention to the real input collapses and the model starts ignoring what the user wrote. When a prefix-tuned model produces fluent text that does not depend on the input, that is the first thing to suspect.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will reproduce the hand calculation in code and then turn a dial: we scale the prefix key from 0 to 2 and watch how much attention the prefix takes and how far the output moves. Nothing is trained here. We are looking at the mechanism itself.' },
+        { type: 'code', lang: 'python', title: 'practice_prefix_attention.py', code: `import numpy as np
+
+def softmax(z):
+    e = np.exp(z - z.max())
+    return e / e.sum()
+
+q = np.array([1.0, 0.0])                   # query of the token being computed
+K = np.array([[1.0, 0.0], [0.0, 1.0]])     # frozen keys of 2 real tokens
+V = np.array([[1.0, 0.0], [0.0, 1.0]])     # frozen values of 2 real tokens
+p_k = np.array([2.0, 0.0])                 # learned prefix key
+p_v = np.array([0.0, 3.0])                 # learned prefix value
+
+w = softmax(K @ q)
+print("no prefix  weights", w.round(3), " output", (w @ V).round(3))
+
+# Prepend the prefix to keys and values. Scaling its key mimics training.
+for scale in [0.0, 0.5, 1.0, 2.0]:
+    K_all = np.vstack([scale * p_k, K])    # [prefix ; real tokens]
+    V_all = np.vstack([p_v, V])
+    w = softmax(K_all @ q)                 # the query now also sees the prefix
+    out = w @ V_all                        # weighted mix of all values
+    print(f"key x{scale:<3}   prefix share {w[0]:.3f}   output {out.round(3)}")
+
+# Size of a whole prefix: layers x 2 (key and value) x length x width
+layers, length, width = 12, 10, 768
+print("prefix size:", layers * 2 * length * width, "numbers")`, output: `no prefix  weights [0.731 0.269]  output [0.731 0.269]
+key x0.0   prefix share 0.212   output [0.576 0.848]
+key x0.5   prefix share 0.422   output [0.422 1.422]
+key x1.0   prefix share 0.665   output [0.245 2.086]
+key x2.0   prefix share 0.936   output [0.047 2.826]
+prefix size: 184320 numbers`,
+          walkthrough: [
+            { lines: [7, 11], note: 'One query, two frozen real tokens, and one prefix position with its own key and value.' },
+            { lines: [13, 14], note: 'Attention without a prefix: the 0.731 / 0.269 split from the worked example.' },
+            { lines: [16, 22], note: 'Stack the prefix on top of the real keys and values, then recompute attention for four key sizes.' },
+            { lines: [24, 26], note: 'Count the numbers in a full prefix for a 12-layer model of width 768.' },
+          ] },
+        { type: 'p', text: 'Look at the row `key x0.0`. Even a prefix key of all zeros takes 21% of the attention, because a score of 0 still gets a share after softmax.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change the query on line 7 to `[0.0, 1.0]`. Predict first: will the prefix share at `key x1.0` be larger or smaller than 0.665? (Hint: compute the prefix score `p_k · q`.)',
+          'Set the prefix value on line 11 to `[0.0, 0.0]`. Predict what happens to the output as the key grows. Does the prefix still matter?',
+          'Change `length` on line 25 from 10 to 100. Predict the new size, then compare it with a model of about 124 million weights. Is it still a small fraction?',
+        ] },
+        { type: 'check', question: 'At `key x2.0` the prefix takes 93.6% of the attention and the output is `[0.047, 2.826]`. Why might this be a bad prefix even if the training loss is low?', answer: 'Almost nothing from the real tokens reaches the output (0.047 in the first dimension, where token 1 used to contribute 0.731). The layer is now driven by the prefix and nearly blind to the input. A prefix like this can fit the training set by producing a typical answer, but it will respond poorly when the input changes. We want the prefix to steer attention, not replace it.' },
+        { type: 'check', question: 'In the code, the prefix is added only to `K` and `V`, never to the queries. What would be missing in the output if we also added a prefix query?', answer: 'Nothing useful would be gained. A query belongs to a position that produces an output. Prefix positions do not need outputs of their own; they only need to be *looked at* by real tokens. That is why prefix tuning stores just keys and values per layer, which is also where the count `layers × 2 × length × width` comes from.' },
       ],
     },
   ],

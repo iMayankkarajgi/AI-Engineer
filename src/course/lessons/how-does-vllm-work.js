@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-vllm-work',
-  minutes: 22,
+  minutes: 27,
   hook: 'Why could the same GPU and the same model serve several times more users simply by changing how memory for past tokens is organised?',
   summary: 'vLLM is an open-source engine for serving LLMs to many users at once. Its core idea, PagedAttention, stores each request\'s KV cache in small fixed-size blocks that can live anywhere in GPU memory, like pages in an operating system, so almost no memory is wasted and identical prefixes can be shared. Combined with continuous batching and an OpenAI-compatible API server, this lets one GPU run far bigger batches and deliver much higher throughput.',
   sections: [
@@ -170,6 +170,98 @@ curl http://localhost:8000/v1/chat/completions \\
         ], rows: [ ['KV allocation', 'Max length up front, contiguous', '16-token blocks on demand'], ['Batching', 'Static groups', 'Re-formed every step'], ['Shared prompts', 'Recomputed per request', 'Cached and shared'] ], verdict: 'For multi-user GPU serving, vLLM-style paging and batching are now the baseline; the next lessons show SGLang and TensorRT-LLM building on the same ideas.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes and limits', text: 'Paging does not make memory infinite: a few very long conversations can still occupy most of the block pool and force other requests to wait or be preempted, and if --max-model-len is larger than the KV pool can hold for even one sequence, vLLM refuses to start. Size the context limit to your real traffic. Running another program on the same GPU breaks vLLM\'s memory budgeting (it claims a fraction of GPU memory set by --gpu-memory-utilization). And vLLM is not the right tool for a laptop without a suitable GPU: a local runner like llama.cpp fits that job better.' },
       ],
+    },
+    {
+      id: "capacity-in-blocks",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The lesson's ideas become concrete once we count in blocks. Suppose that on our 80 GB GPU, after the weights are loaded, the pool of KV blocks comes to 60 GiB. That figure is illustrative; the real one depends on the settings. Everything else below follows from numbers the lesson already gave: 128 KiB per token and 16 tokens per block." },
+        { type: "steps", title: "How many conversations fit in the pool?", items: [
+          { title: "Size of one block", text: "16 tokens × 128 KiB = 2 MiB per block." },
+          { title: "Blocks in the pool", text: "60 GiB ÷ 2 MiB = 30,720 blocks." },
+          { title: "Short requests, paged", text: "A 350-token request needs ceil(350 ÷ 16) = 22 blocks. 30,720 ÷ 22 → 1,396 requests fit." },
+          { title: "The same requests, reserved the old way", text: "Reserving 2,048 tokens each means 128 blocks per request. 30,720 ÷ 128 = 240 requests. Paging fits almost 6 times more." },
+          { title: "Long conversations", text: "Our support chats reach 2,000 tokens: 125 blocks each. 30,720 ÷ 125 → 245 conversations." },
+          { title: "Add prefix sharing", text: "1,500 of those tokens are the shared system prompt. It fills 93 whole blocks (1,488 tokens), stored once. Each chat then needs only the remaining 512 tokens: 32 blocks of its own. (30,720 − 93) ÷ 32 → 957 conversations." }
+        ] },
+        { type: "table", caption: "Conversations that fit in a 30,720-block pool (illustrative pool size)", head: ["Case", "Blocks per conversation", "Conversations that fit"], rows: [
+          ["350 tokens, 2,048 reserved up front", "128", "240"],
+          ["350 tokens, paged", "22", "1,396"],
+          ["2,000 tokens, paged", "125", "245"],
+          ["2,000 tokens, paged, 1,500-token prompt shared", "32 (+ 93 shared once)", "957"]
+        ] },
+        { type: "p", text: "Two details are easy to miss. Only **whole** blocks can be shared, because matching is done per full block. The last 12 tokens of the system prompt sit in a block that also holds the start of each chat, so every chat keeps its own copy of that block. And these counts assume every chat is at its full length at the same moment. The pool is a hard limit: when chats grow past what it can hold, some request has to wait or be preempted. The practice below shows that moment." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a toy serving loop that joins the two halves of this lesson: continuous batching and a pool of KV blocks. Four requests share a pool of only 12 blocks. A request is admitted when its tokens fit. Every step, each running request writes one token and takes a new block when its last block is full. If the pool is empty at that moment, our toy preempts the newest request and puts it back in the queue. That policy is our own simple choice for the demo." },
+        { type: "code", lang: "python", title: "practice_block_pool_loop.py", code: `# A toy serving loop: continuous batching on top of a small pool of KV blocks.
+import math
+BLOCK, POOL = 16, 12        # tokens per block, blocks in the whole pool
+# (name, tokens so far, output tokens still to write), all waiting at step 0
+waiting = [("A", 40, 40), ("B", 30, 24), ("C", 60, 30), ("D", 20, 16)]
+running, free, step = [], POOL, 0
+
+def blocks(tokens):
+    return math.ceil(tokens / BLOCK)
+
+while waiting or running:
+    while waiting and blocks(waiting[0][1]) <= free:    # admit while the tokens fit
+        name, length, left = waiting.pop(0)
+        free -= blocks(length)
+        running.append([name, length, left])
+        print(f"step {step:2d}: admit {name} with {length} tokens "
+              f"({blocks(length)} blocks), free={free}")
+    step += 1
+    for r in list(running):                             # one decode step for each request
+        if r not in running:
+            continue                                    # it was preempted in this step
+        if r[1] % BLOCK == 0 and free == 0:             # needs a block, the pool is empty
+            victim = running.pop()                      # toy policy: preempt the newest
+            free += blocks(victim[1])
+            waiting.insert(0, tuple(victim))            # its tokens must be prefilled again
+            print(f"step {step:2d}: preempt {victim[0]} at {victim[1]} tokens, free={free}")
+            if victim is r:
+                continue
+        if r[1] % BLOCK == 0:
+            free -= 1                                   # last block is full: take a new one
+        r[1], r[2] = r[1] + 1, r[2] - 1                 # write one token
+        if r[2] == 0:
+            running.remove(r)
+            free += blocks(r[1])                        # give every block back
+            print(f"step {step:2d}: finish {r[0]} at {r[1]} tokens, free={free}")
+print("all done at step", step)`, output: `step  0: admit A with 40 tokens (3 blocks), free=9
+step  0: admit B with 30 tokens (2 blocks), free=7
+step  0: admit C with 60 tokens (4 blocks), free=3
+step  0: admit D with 20 tokens (2 blocks), free=1
+step  5: preempt D at 24 tokens, free=2
+step 19: preempt C at 78 tokens, free=5
+step 24: finish B at 54 tokens, free=8
+step 24: admit C with 78 tokens (5 blocks), free=3
+step 24: admit D with 24 tokens (2 blocks), free=1
+step 27: preempt D at 26 tokens, free=2
+step 36: finish C at 90 tokens, free=7
+step 36: admit D with 26 tokens (2 blocks), free=5
+step 40: finish A at 80 tokens, free=10
+step 46: finish D at 36 tokens, free=12
+all done at step 46`, walkthrough: [
+          { lines: [1, 9], note: "A pool of 12 blocks of 16 tokens, and four waiting requests. Each has a current length and a number of tokens still to write." },
+          { lines: [11, 17], note: "Admission at the start of every step: take requests from the queue while the blocks for their current tokens are free." },
+          { lines: [19, 28], note: "A running request whose last block is full needs a new block. If none is free, the newest request loses its blocks and goes back to the front of the queue." },
+          { lines: [29, 36], note: "Take the new block if needed, write one token, and return every block to the pool when the request finishes." }
+        ] },
+        { type: "p", text: "All four requests are admitted at step 0, because their prompts need only 11 blocks. But their final lengths need 18. So the pool runs dry as they grow: D is preempted at step 5, C at step 19, and D again at step 27. Now change it:" },
+        { type: "list", items: [
+          "Set `POOL = 18`. Predict the number of preemptions and the step at which everything is done, then check.",
+          "Be more careful at admission: change the test to `blocks(waiting[0][1]) + 2 <= free`, which keeps two blocks spare. Predict which request now waits at step 0 and whether the preemptions go away.",
+          "Change the policy to preempt the oldest request: use `running.pop(0)`. Predict which request suffers now. Why is throwing away the longest-running request more costly?"
+        ] },
+        { type: "check", question: "In the practice run, request D was preempted twice. What does each preemption cost, and what does that say about how to size a server?", answer: "Each time, D's blocks are freed and its tokens must be prefilled again later, so the earlier work on them is wasted, and D's user waits while it sits in the queue. Preemption keeps the server alive when the pool is full, but it is a safety valve, not a normal mode. We should set context limits and concurrency so that the pool rarely runs dry." },
+        { type: "check", question: "A teammate personalises the support bot by putting the customer's name at the very start of the prompt, before the 1,500-token policy text. What happens to the 957 conversations from the worked example?", answer: "Sharing is lost. A prefix can be reused only when the tokens match from the very first one, and now every prompt starts differently, so no block of the policy text matches another chat's block. Each conversation needs all 125 blocks again and capacity falls back to about 245. Putting the name after the shared text keeps the sharing." }
+      ]
     },
   ],
   quiz: [

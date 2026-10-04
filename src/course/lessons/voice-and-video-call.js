@@ -1,6 +1,6 @@
 export default {
   id: 'voice-and-video-call',
-  minutes: 24,
+  minutes: 29,
   hook: 'When you video-call a friend, your faces often travel directly between your two phones, so how do two devices hidden behind home routers even find each other?',
   summary: 'A call has two phases. First, signaling: the two apps exchange messages through a server to agree on codecs and share possible network addresses (session descriptions and ICE candidates). Then media flows, ideally peer-to-peer over UDP using WebRTC. Because most devices sit behind NAT routers, a STUN server tells each device its public address so a direct path can be punched through, and when that fails a TURN server relays the media. Codecs such as Opus, VP8, H.264 and AV1 compress the audio and video so it fits the network.',
   sections: [
@@ -161,6 +161,87 @@ peer behind symmetric   -> relay via 198.51.100.9:3478`,
           '**Testing only on perfect networks.** Simulate loss, jitter and low bandwidth; tune jitter buffers and bitrate adaptation.',
         ] },
         { type: 'check', question: 'Ben is on a corporate network with a symmetric NAT and a firewall that blocks UDP. Which candidate type will the call most likely use, and over what transport?', answer: 'A relay candidate on a TURN server, reached over TCP or TLS on port 443. The STUN-learned address is useless with a symmetric NAT, and UDP is blocked, so TURN over TLS is the path that gets through.' },
+      ],
+    },
+    {
+      id: "worked-jitter-buffer",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The jitter buffer got one line earlier. It deserves a closer look, because it is where a call trades **delay** against **gaps**. Suppose Asha's phone sends one audio packet every 20 ms. The network does not deliver them evenly. Here are five packets with **illustrative** network delays." },
+        { type: "table", caption: "Five audio packets (all times in ms)", head: ["Packet", "Sent at", "Network delay", "Arrives at", "Play time, 20 ms buffer", "Play time, 60 ms buffer"], rows: [
+          ["1", "0", "40", "40", "60 (on time)", "100 (on time)"],
+          ["2", "20", "55", "75", "80 (on time)", "120 (on time)"],
+          ["3", "40", "45", "85", "100 (on time)", "140 (on time)"],
+          ["4", "60", "90", "150", "120 (too late)", "160 (on time)"],
+          ["5", "80", "50", "130", "140 (on time)", "180 (on time)"],
+        ] },
+        { type: "steps", title: "Reading the table", items: [
+          { title: "Without a buffer, playback stutters", text: "If Ben's phone played each packet the moment it arrived, the gaps between them would be 35, 10, 65 ms instead of a steady 20. Speech would speed up and slow down." },
+          { title: "A buffer fixes a schedule", text: "The receiver decides: 'I play each packet at its send time, plus the usual 40 ms of network delay, plus my buffer.' With a 20 ms buffer, packet 1 plays at 60, packet 2 at 80, and so on, exactly 20 ms apart." },
+          { title: "A late packet is a lost packet", text: "Packet 4 arrives at 150 but was due at 120. Its slot has already passed, so the receiver must hide the gap (packet loss concealment) even though the packet was never lost by the network." },
+          { title: "A bigger buffer saves it", text: "With a 60 ms buffer, packet 4 is due at 160 and arrives at 150, in time. But now *every* packet is played 40 ms later than before." },
+          { title: "Packets can overtake each other", text: "Packet 5 arrives at 130, before packet 4 at 150. The sequence numbers in RTP let the buffer put them back in order." },
+          { title: "So the buffer adapts", text: "Real receivers measure recent jitter and grow the buffer on a rough network and shrink it on a calm one, looking for the smallest delay that keeps late packets rare." },
+        ] },
+        { type: "p", text: "Delay matters because conversation is two-way. Once the total mouth-to-ear delay grows to a few hundred milliseconds, people start talking over each other. So a call that 'sounds choppy' and a call where 'we keep interrupting each other' can be the same problem seen from opposite ends of this one trade-off." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will send 1,000 audio packets through a simulated network that loses a few, delays most a little and delays some a lot. Then we play them through jitter buffers of four sizes and count how many packets arrive too late to be played. At the end we weigh one audio packet to see how much of it is headers." },
+        { type: "code", lang: "python", title: "practice_jitter_buffer.py", code: `# A jitter buffer: trade a little delay for fewer late (unplayable) packets.
+import random
+random.seed(21)
+
+PACKET_MS = 20                                   # one audio packet every 20 ms
+N = 1000                                         # 20 seconds of speech
+
+# Network delay per packet: a 40 ms base, usually small jitter, sometimes a spike.
+arrivals = []
+for seq in range(N):
+    if random.random() < 0.02:
+        continue                                 # 2% of packets are lost for good
+    jitter = random.expovariate(1 / 8)           # mean 8 ms of extra delay
+    if random.random() < 0.05:
+        jitter += random.uniform(30, 90)         # an occasional burst of delay
+    arrivals.append((seq, seq * PACKET_MS + 40 + jitter))
+
+lost = N - len(arrivals)
+print(f"sent {N}, lost in the network {lost} ({lost / N:.1%})")
+print("buffer   delay before playing   late packets   gaps heard")
+for buffer_ms in (0, 20, 60, 120):
+    # Packet seq must be played at: its send time + base delay + the buffer.
+    late = sum(1 for seq, t in arrivals
+               if t > seq * PACKET_MS + 40 + buffer_ms)
+    gaps = (late + lost) / N                     # late packets are as bad as lost
+    print(f"{buffer_ms:4d} ms {40 + buffer_ms:16d} ms {late:14d} {gaps:12.1%}")
+
+# What one audio packet weighs on the wire (24 kbps Opus, 20 ms packets)
+payload = 24_000 / 8 * PACKET_MS / 1000          # bytes of compressed audio
+headers = 12 + 8 + 20                            # RTP + UDP + IPv4 headers
+print(f"payload {payload:.0f} B + headers {headers} B "
+      f"-> {(payload + headers) * 8 * 50 / 1000:.0f} kbps on the wire")`, output: `sent 1000, lost in the network 18 (1.8%)
+buffer   delay before playing   late packets   gaps heard
+   0 ms               40 ms            982       100.0%
+  20 ms               60 ms            127        14.5%
+  60 ms              100 ms             32         5.0%
+ 120 ms              160 ms              0         1.8%
+payload 60 B + headers 40 B -> 40 kbps on the wire`,
+          walkthrough: [
+            { lines: [5, 16], note: "The network model. 2% of packets vanish. The rest take 40 ms plus a random extra delay that is usually small; 5% of the time a burst adds another 30 to 90 ms." },
+            { lines: [21, 26], note: "For each buffer size we count packets that arrive after their play time. With no buffer, nearly everything is 'late'. A 20 ms buffer leaves 127 late packets, 60 ms leaves 32, and 120 ms leaves none, so only the 18 truly lost packets remain. Each step costs more delay." },
+            { lines: [29, 32], note: "One 20 ms Opus packet at 24 kbps holds 60 bytes of audio. RTP, UDP and IPv4 headers add 40 bytes, so the call uses about 40 kbps on the wire, not 24. (SRTP adds a small authentication tag on top, which we leave out.)" },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change the burst probability from `0.05` to `0.20` (a crowded Wi-Fi network). Predict what happens to the 'gaps heard' column for the 60 ms buffer.",
+          "Set `PACKET_MS = 40`, so each packet carries twice as much audio. Predict the kbps on the wire. What is the downside when one packet is lost?",
+          "Add a buffer size of `300` to the list. Predict its 'gaps heard' value. Then say why nobody would choose it for a live call.",
+        ] },
+        { type: "check", question: "In the run above, the network lost only 1.8% of packets, yet with a 20 ms buffer the listener hears gaps for 14.5% of them. Where do the other gaps come from?", answer: "From packets that did arrive, but after their play time had passed. A real-time player cannot wait: when a packet's slot comes and the packet is not there, the gap must be concealed, and the packet is useless when it shows up later. That is why a call can sound bad on a network with little real loss, and why the receiver's buffer size matters as much as the loss rate." },
+        { type: "check", question: "A teammate wants to send call audio over TCP so that no packet is ever lost. Using the simulation, what would happen to the packets behind one that needs retransmitting?", answer: "TCP delivers in order, so everything behind the missing packet waits until the retransmission arrives. One delayed packet turns into a whole run of late packets, and in a jitter buffer late means unplayable. To hide that, the buffer would have to grow, adding delay to the entire call. Over UDP the receiver simply conceals the one missing 20 ms and carries on, which is the better trade for live speech." },
       ],
     },
   ],

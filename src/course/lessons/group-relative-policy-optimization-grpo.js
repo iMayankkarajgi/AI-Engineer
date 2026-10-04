@@ -1,6 +1,6 @@
 export default {
   id: 'group-relative-policy-optimization-grpo',
-  minutes: 20,
+  minutes: 25,
   hook: 'Instead of training a whole second network to guess how good an answer “should” be, what if we just asked the model the same question eight times and compared the answers with each other?',
   summary: 'GRPO (Group Relative Policy Optimization) is a reinforcement learning method for language models that removes PPO’s value model. For each prompt it samples a group of answers, scores them, and uses each answer’s reward relative to the group’s mean (divided by the group’s standard deviation) as its advantage. It keeps PPO’s clipped update and a KL penalty to a reference model. Introduced with DeepSeekMath and used for DeepSeek-R1, it is a popular choice for training reasoning models with verifiable rewards.',
   sections: [
@@ -165,6 +165,83 @@ all-correct group advantages: [0. 0. 0. 0. 0. 0. 0. 0.]`, walkthrough: [
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Using a prompt set that is far too easy or too hard (most groups have zero variance); trusting a buggy answer checker; setting the temperature so low that all G answers are identical; and assuming GRPO needs no reference model (most implementations keep one for the KL term, although some recipes drop it).' },
         { type: 'chart', kind: 'bar', title: 'Learning signal vs prompt difficulty (group of 8, 0/1 rewards)', yLabel: 'Std of rewards in group', labels: ['0/8 correct', '1/8', '2/8', '4/8', '6/8', '7/8', '8/8 correct'], series: [ { name: 'Reward std', values: [0, 0.331, 0.433, 0.5, 0.433, 0.331, 0] } ], caption: 'Computed values. Groups with all-same rewards give zero advantages; mixed groups carry the signal. Prompts the model solves about half the time are the most informative.' },
+      ],
+    },
+    {
+      id: 'one-level-deeper',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'Our worked example used one prompt. Real training batches mix easy and hard prompts, and this is where “relative to the group” starts to matter. Take two pricing questions with **4 answers each**. On the easy one, three answers are correct. On the hard one, only one is. Rewards are 1 for correct and 0 for wrong.' },
+        { type: 'table', caption: 'The same reward means different things in different groups', head: ['Prompt', 'Rewards', 'Mean', 'Std', 'Advantage of a correct answer', 'Advantage of a wrong answer'], rows: [
+          ['Easy', '[1, 1, 1, 0]', '0.75', '0.433', '+0.58', '−1.73'],
+          ['Hard', '[0, 0, 0, 1]', '0.25', '0.433', '+1.73', '−0.58'],
+        ] },
+        { type: 'steps', title: 'Reading the two rows', items: [
+          { title: 'Easy prompt, correct answer', text: '`(1 − 0.75) / 0.433 ≈ +0.58`. Being right here is normal, so it earns a small push up.' },
+          { title: 'Easy prompt, wrong answer', text: '`(0 − 0.75) / 0.433 ≈ −1.73`. Failing where most samples succeed is a strong signal: push this answer down hard.' },
+          { title: 'Hard prompt, correct answer', text: '`(1 − 0.25) / 0.433 ≈ +1.73`. A rare success is the most valuable sample in the batch.' },
+          { title: 'Hard prompt, wrong answers', text: '`−0.58` each. Failing a hard question is expected, so the push down is mild.' },
+          { title: 'Compare with raw rewards', text: 'With raw rewards, every correct answer would get +1 and every wrong one 0. Wrong answers would never be pushed down, and the rare success on the hard prompt would count no more than a routine one.' },
+        ] },
+        { type: 'p', text: 'Dividing by the standard deviation has a second effect that cuts both ways. It makes the advantage **independent of reward scale**: rewards `[10, 0, 0, 0]` give exactly the same advantages as `[1, 0, 0, 0]`. That is convenient when prompts use different scoring ranges.' },
+        { type: 'p', text: 'The same property is also a failure case. Suppose a graded reward gives `[0.51, 0.50, 0.50, 0.50]`, a difference that is probably noise. After normalisation the first answer still gets `+1.73`, as if it were a clear winner. So when rewards are graded rather than 0/1, we should make sure small differences are meaningful, or round the scores before training.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will run **40 GRPO steps** on the smallest policy we can write: a single number `theta` that sets the chance of answering one pricing question correctly. Each step samples a group of 8 answers, checks them, computes group-relative advantages and updates `theta`. We also count how many groups carried no signal at all.' },
+        { type: 'code', lang: 'python', title: 'practice_grpo_loop.py', code: `import numpy as np
+rng = np.random.default_rng(0)
+
+G = 8            # answers sampled per prompt
+theta = -1.5     # one policy parameter: P(correct answer) = sigmoid(theta)
+lr = 0.5
+skipped = 0
+
+def p_correct(theta):
+    return 1 / (1 + np.exp(-theta))
+
+print("step  P(correct)  rewards in the group")
+for step in range(1, 41):
+    p = p_correct(theta)
+    rewards = (rng.random(G) < p).astype(float)   # 1 = checker says correct
+    if step in (1, 10, 20, 30, 40):
+        print(f"{step:>4}  {p:10.2f}  {rewards.astype(int)}")
+    if rewards.std() == 0:                        # all right or all wrong
+        skipped += 1                              # no signal: nothing to learn
+        continue
+    adv = (rewards - rewards.mean()) / rewards.std()   # group-relative advantage
+    # Gradient of log-probability for this toy policy:
+    # a correct answer gives (1 - p), a wrong answer gives (-p).
+    grad_logp = np.where(rewards == 1, 1 - p, -p)
+    theta += lr * np.mean(adv * grad_logp)        # raise good, lower bad
+
+print(f"final P(correct) = {p_correct(theta):.2f}")
+print(f"groups with zero variance (skipped): {skipped} of 40")`, output: `step  P(correct)  rewards in the group
+   1        0.18  [0 0 1 1 0 0 0 0]
+  10        0.57  [1 0 1 1 0 0 0 1]
+  20        0.90  [1 1 1 1 0 1 1 1]
+  30        0.96  [1 1 1 1 1 1 1 0]
+  40        0.98  [1 1 1 1 1 1 1 1]
+final P(correct) = 0.98
+groups with zero variance (skipped): 13 of 40`,
+          walkthrough: [
+            { lines: [4, 10], note: 'Group size, the single policy parameter, the learning rate, and how `theta` maps to the chance of a correct answer.' },
+            { lines: [13, 17], note: 'Sample a group of 8 answers; each is correct with the current probability. Print a few groups along the way.' },
+            { lines: [18, 20], note: 'If every answer got the same reward, the standard deviation is 0. There is nothing to compare, so we skip the update.' },
+            { lines: [21, 25], note: 'Group-relative advantages, then a policy-gradient step: answers with positive advantage become more likely.' },
+          ] },
+        { type: 'p', text: 'The policy climbs from 18% to 98% correct without any value model. Notice that 13 of the 40 groups were skipped: once the policy is nearly always right, most groups are all-correct and teach nothing.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Make the prompt far too hard: set `theta = -5.0` on line 5 (under 1% correct). Predict the number of skipped groups and the final P(correct).',
+          'Shrink the group: set `G = 2` on line 4. Predict: do more or fewer groups get skipped, and why does a tiny group so often have zero variance?',
+          'Remove the division by the standard deviation on line 21, leaving `adv = rewards - rewards.mean()`. Predict: does learning get faster or slower? (Hint: for 0/1 rewards the standard deviation is at most 0.5.)',
+        ] },
+        { type: 'check', question: 'Groups are skipped at the start (all wrong) and at the end (all right). Both have zero variance. Are they equally worrying?', answer: 'No. All-right groups at the end mean the prompt is mastered; skipping them costs nothing. All-wrong groups at the start mean the model never produces a success to learn from, and if that persists, training stalls completely (try `theta = -5.0`). The fix for the second kind is easier prompts first, larger groups, or partial-credit rewards so that some answers score above others.' },
+        { type: 'check', question: 'This toy policy serves one prompt. A real model uses the same weights for thousands of prompts of mixed difficulty. Why does normalising *within each prompt’s group* matter more there?', answer: 'Because one update mixes signals from all prompts. With raw rewards, easy prompts would dominate: they produce many 1s, so their answers get pushed up constantly, while hard prompts contribute almost nothing. Per-group normalisation puts every prompt on the same footing: each asks only “which of *my* answers were better than my average?”, so a rare success on a hard prompt counts strongly.' },
       ],
     },
     {

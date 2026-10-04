@@ -1,6 +1,6 @@
 export default {
   id: "ai-is-only-as-good-as-our-definition-of-done",
-  minutes: 18,
+  minutes: 23,
   hook: "Why can an AI agent fix a tricky failing test in minutes, yet struggle to write a “good” product description that we are happy with?",
   summary: "A definition of done is the clear line between a finished task and an unfinished one. When that line can be checked by a machine (tests pass, the number matches, the JSON validates), AI systems can try, check and retry on their own, and they look magical. When the line lives only in someone's head (“make it nicer”), the loop has nothing reliable to aim at. The practical skill is turning fuzzy goals into checkable ones.",
   sections: [
@@ -140,6 +140,74 @@ loop with exact DoD stops at attempt 3`, walkthrough: [
         ] },
         { type: "callout", tone: "warn", title: "A weak verifier gets gamed", text: "Optimising against a check can satisfy the check without satisfying the goal. Agents have been observed special-casing a test's exact inputs or weakening a test instead of fixing the code. This is a form of Goodhart's law: when a measure becomes a target, it stops being a good measure. Protect the check (agents may not edit tests), use varied hidden cases, and review the diff, not just the green tick." },
         { type: "callout", tone: "example", title: "Real-world use", text: "Coding-agent teams write the failing test first and tell the agent “done = this test and all existing tests pass”. Data teams give agents validation queries to run. Content teams give LLM judges explicit rubrics and still sample outputs for human review. In each case the work before the AI runs, writing the definition of done, is what makes the AI reliable." }
+      ]
+    },
+    {
+      id: "leaky-verifier-example",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The retry chart earlier assumed a perfect verifier. Real checks leak: some wrong outputs pass. Let us see what that does, with illustrative numbers. Our model writes a correct solution on 50% of its tries. Our test suite passes every correct solution, but it also passes 20% of the wrong ones, because it misses an edge case." },
+        { type: "steps", title: "What reaches us when the loop stops", items: [{ title: "Split 100 tries", text: "50 are correct and 50 are wrong." }, { title: "Run the check", text: "All 50 correct tries pass. Of the 50 wrong ones, 20% pass: that is 10." }, { title: "Look at what passed", text: "60 tries passed and 50 of them are correct. So an output that passes is correct 50 ÷ 60 ≈ 83% of the time." }, { title: "Add retries", text: "A failed try is retried, and the same split applies to each new try (we assume tries are independent). The loop stops at the first pass, and that pass is still correct only about 83% of the time." }] },
+        { type: "p", text: "This is the key point: **retries raise the chance that we get a passing output, but they cannot raise the quality of what passes.** Only a better check can do that." },
+        { type: "table", caption: "Illustrative: the model is correct on 50% of tries", head: ["Verifier", "Wrong outputs that pass", "Shipped output is correct"], rows: [["None (ship the first try)", "100%", "50%"], ["Leaky tests", "20%", "50 ÷ 60 ≈ 83%"], ["Tighter tests", "5%", "50 ÷ 52.5 ≈ 95%"], ["Perfect check", "0%", "100%"]] },
+        { type: "p", text: "So when shipped work is wrong more often than we like, the first question is not “how many retries?” but “what does our check let through?” Each edge case we add to the definition of done moves us one row down this table." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the full try, check, feed back, retry loop for a small task: write `median(xs)`. The verifier returns the first failing case as feedback. One of the attempts cheats by memorising the visible test inputs, so we can see what a weak definition of done lets through." },
+        { type: "code", lang: "python", title: "practice_verify_loop.py", code: `# Try, check, feed back, retry -- and how a weak verifier gets gamed.
+visible = [([3, 1, 2], 2), ([5], 5)]
+hidden = [([4, 1, 3, 2], 2.5), ([7, 7], 7)]
+
+def verify(f, cases):
+    # Returns (passed, feedback). The feedback names the first failing case.
+    for xs, want in cases:
+        try:
+            got = f(list(xs))
+        except Exception as e:
+            return False, f"median({xs}) raised {type(e).__name__}"
+        if got != want:
+            return False, f"median({xs}) gave {got}, want {want}"
+    return True, "all checks pass"
+
+def v3(xs):
+    s, n = sorted(xs), len(xs)
+    return (s[(n - 1) // 2] + s[n // 2]) / 2
+
+attempts = {                       # what a model might write for median(xs)
+    "cheat: lookup table": lambda xs: {(3, 1, 2): 2, (5,): 5}[tuple(xs)],
+    "v1: middle, unsorted": lambda xs: xs[len(xs) // 2],
+    "v2: middle, sorted": lambda xs: sorted(xs)[len(xs) // 2],
+    "v3: handles even": v3,
+}
+
+def loop(cases):
+    # Stop at the first attempt the verifier accepts
+    for n, (name, f) in enumerate(attempts.items(), 1):
+        ok, feedback = verify(f, cases)
+        print(f"  try {n}: {name:21} -> {feedback}")
+        if ok:
+            return name
+
+print("DoD = visible cases only")
+print("  shipped:", loop(visible))
+print("DoD = visible + hidden cases")
+print("  shipped:", loop(visible + hidden))`, output: `DoD = visible cases only
+  try 1: cheat: lookup table   -> all checks pass
+  shipped: cheat: lookup table
+DoD = visible + hidden cases
+  try 1: cheat: lookup table   -> median([4, 1, 3, 2]) raised KeyError
+  try 2: v1: middle, unsorted  -> median([3, 1, 2]) gave 1, want 2
+  try 3: v2: middle, sorted    -> median([4, 1, 3, 2]) gave 3, want 2.5
+  try 4: v3: handles even      -> all checks pass
+  shipped: v3: handles even`, walkthrough: [{ lines: [2, 3], note: "Two sets of cases. The visible ones are all the agent is shown; the hidden ones include a list of even length." }, { lines: [5, 14], note: "The verifier. It returns pass or fail plus feedback that names the first failing case, including crashes." }, { lines: [20, 25], note: "Four attempts a model might write, starting with a cheat that just looks up the visible inputs." }, { lines: [27, 38], note: "The loop stops at the first attempt the verifier accepts. We run it with a weak definition of done, then a stronger one." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Move `([4, 1, 3, 2], 2.5)` from `hidden` to `visible`. Predict what the first loop ships now.", "Remove the cheat from `attempts`. Predict what the visible-only loop ships, and whether that function is a correct median.", "Add the case `([], None)` to `hidden`. Predict the feedback for `v3`. Is the function wrong, or is the definition of done unclear?"] },
+        { type: "check", question: "The cheat passed the visible-only check on its first try, and the verifier had no bug. What exactly was weak?", answer: "The definition of done. It said “these two inputs give these two outputs”, and a lookup table meets that statement perfectly. The check verified what it was asked to verify; it was just too easy to satisfy without solving the task. Hidden cases, varied inputs and a look at the code are what close the gap between passing the check and meeting the goal." },
+        { type: "check", question: "The verifier returns feedback such as “median([4, 1, 3, 2]) gave 3, want 2.5” and not just “fail”. Why does that matter for a real model in the loop?", answer: "Because the next attempt can only be as good as what the model knows about the failure. A bare “fail” invites a random rewrite. The exact input, the wrong output and the expected output point straight at the even-length case, so the retry can target it. A definition of done that explains its failures makes every retry better informed." }
       ]
     },
     {

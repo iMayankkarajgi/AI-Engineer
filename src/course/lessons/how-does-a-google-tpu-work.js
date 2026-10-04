@@ -1,6 +1,6 @@
 export default {
   id: "how-does-a-google-tpu-work",
-  minutes: 21,
+  minutes: 26,
   hook: "What if, instead of building a chip that can do anything, we built one that does almost nothing except multiply matrices — but does that thousands of times more efficiently?",
   summary: "A TPU (Tensor Processing Unit) is Google's custom chip for neural networks. Its heart is a systolic array: a grid of simple multiply-add cells through which data pulses in lockstep, so each number fetched from memory is reused many times without being re-read. That makes matrix multiplication very fast and power-efficient, at the cost of flexibility: TPUs shine on large, regular, compiled workloads and struggle with irregular or dynamic ones.",
   sections: [
@@ -188,6 +188,87 @@ match: True | cycles: 6 | useful multiply-adds: 18`,
           "**Not general-purpose:** no graphics, little use outside dense tensor maths.",
         ] },
         { type: "p", text: "When not to choose a TPU: for small experiments that need many CUDA-specific libraries, for workloads with constantly changing shapes, or when data must stay on-premises." },
+      ],
+    },
+    {
+      id: "worked-array-utilisation",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The simulation above produced the right answer. Now let us ask how *well* the tiny array was used. We stay with the same toy: a 3×3 weight-stationary array and X with M = 2 rows. Everything here is arithmetic on our own toy model; it shows the design idea and is not a measurement of any real TPU." },
+        { type: "steps", title: "Scoring the 2 × 3 × 3 example", items: [
+          { title: "Useful work", text: "M × K × N = 2 × 3 × 3 = **18** multiply-accumulates, as the program printed." },
+          { title: "Time taken", text: "M + K + N − 2 = **6 ticks**: the staircase needs a few ticks to fill the array and a few to drain it." },
+          { title: "Capacity offered", text: "9 cells × 6 ticks = 54 cell-ticks. Only 18 of them did useful work: the array was **33%** busy. The rest were cells waiting for data to arrive or leave." },
+          { title: "Memory reads with reuse", text: "Each X value enters once (2 × 3 = 6 reads) and each weight is loaded once (9 reads): **15** reads in total." },
+          { title: "Memory reads without reuse", text: "A design that fetched both operands for every multiply would need 2 × 18 = **36** reads. The array saved a factor of 2.4, even on this tiny job." },
+          { title: "Feed it more rows", text: "With M input rows the busy share is M / (M + K + N − 2) = M / (M + 4). At M = 16 it is 80%; at M = 96 it is 96%. The fill and drain cost is paid once, so longer streams make it matter less." },
+        ] },
+        { type: "chart", kind: "line", title: "Toy 3×3 array: busy share vs number of input rows", xLabel: "Input rows M", yLabel: "Busy cells (%)", series: [
+          { name: "Busy share", points: [[1, 20], [2, 33], [4, 50], [8, 67], [16, 80], [36, 90], [96, 96]] },
+        ], caption: "Exact for our toy model: M / (M + 4), in percent. A single input row keeps the array only 20% busy; a long stream of rows keeps it nearly full." },
+        { type: "p", text: "This is the arithmetic behind two limits listed in this lesson. **Small batches** leave the array mostly empty, because fill and drain dominate. And **sizes that do not line up** with the array waste cells: in a toy with 128×128 tiles, a 130×128 weight matrix needs two tiles, and almost half of their cells would hold padding zeros. When a job runs slower than expected on this kind of hardware, batch size and layer sizes are the first two things to look at." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will write a small calculator for our toy systolic array. It counts useful multiply-accumulates, ticks, how busy the cells are, and how many memory reads the reuse saves. Then it checks how well weight matrices of different sizes fit into square tiles." },
+        { type: "code", lang: "python", title: "practice_array_planner.py", code: `import math
+import numpy as np
+
+def plan(M, K, N):
+    """Cost of Y = X @ W (X is M x K, W is K x N) on a K x N toy array."""
+    macs = M * K * N                             # useful multiply-accumulates
+    naive_reads = 2 * macs                       # fetch both operands every time
+    reuse_reads = M * K + K * N                  # read each X and each W once
+    ticks = M + K + N - 2                        # fill + steady state + drain
+    busy = macs / (ticks * K * N)                # share of cell-ticks doing work
+    return macs, naive_reads, reuse_reads, ticks, busy
+
+# Check the toy model against the lesson's 2 x 3 x 3 example.
+X = np.array([[1, 2, 3], [4, 5, 6]])
+W = np.array([[1, 0, 2], [0, 1, 1], [1, 1, 0]])
+macs, naive, reuse, ticks, busy = plan(*X.shape, W.shape[1])
+print(f"lesson example: {macs} MACs in {ticks} ticks, array busy {busy:.0%}")
+print(f"  memory reads: {naive} without reuse, {reuse} with reuse")
+
+print("more input rows through the same 3x3 array:")
+for M in (1, 2, 16, 96):
+    macs, naive, reuse, ticks, busy = plan(M, 3, 3)
+    print(f"  M={M:3d}: ticks={ticks:3d}  busy={busy:4.0%}  "
+          f"reads saved={naive / reuse:.1f}x")
+
+print("fitting a K x N weight matrix into square tiles of 128:")
+for K, N in [(128, 128), (130, 128), (200, 200), (256, 256)]:
+    tiles = math.ceil(K / 128) * math.ceil(N / 128)
+    used = K * N / (tiles * 128 * 128)           # the rest is zero padding
+    print(f"  {K}x{N}: {tiles} tile(s), {used:.0%} of the cells hold real weights")`, output: `lesson example: 18 MACs in 6 ticks, array busy 33%
+  memory reads: 36 without reuse, 15 with reuse
+more input rows through the same 3x3 array:
+  M=  1: ticks=  5  busy= 20%  reads saved=1.5x
+  M=  2: ticks=  6  busy= 33%  reads saved=2.4x
+  M= 16: ticks= 20  busy= 80%  reads saved=5.1x
+  M= 96: ticks=100  busy= 96%  reads saved=5.8x
+fitting a K x N weight matrix into square tiles of 128:
+  128x128: 1 tile(s), 100% of the cells hold real weights
+  130x128: 2 tile(s), 51% of the cells hold real weights
+  200x200: 4 tile(s), 61% of the cells hold real weights
+  256x256: 4 tile(s), 100% of the cells hold real weights`,
+          walkthrough: [
+            { lines: [4, 11], note: "The planner. Useful work is M·K·N. Without reuse we would read two operands per multiply-accumulate; with reuse we read each X value and each weight once. Ticks follow the fill-run-drain formula from the simulation." },
+            { lines: [14, 18], note: "A check against the lesson's example: 18 MACs in 6 ticks, 33% busy, 36 reads without reuse against 15 with it." },
+            { lines: [21, 24], note: "More input rows through the same 3×3 array. The busy share climbs from 20% to 96%, and the reads saved approach 6×." },
+            { lines: [27, 30], note: "Tiling in the toy model. A matrix that is slightly too big for one tile needs a whole extra tile, and most of that tile is padding." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "In the second loop, call `plan(M, 256, 256)` with `M` in `(1, 256, 4096)`. Predict the busy share for each. How many rows does a big array need before it is mostly full?",
+          "Add `(129, 129)` to the list of matrix sizes. Predict the number of tiles and the share of cells holding real weights.",
+          "Give `X` a third row, `[7, 8, 9]`. Predict the MACs, ticks and busy share printed on the 'lesson example' line.",
+        ] },
+        { type: "check", question: "In the run above, 'reads saved' rose from 1.5× to 5.8× as M grew, and it will never pass 6× for this 3×3 array. Why 6?", answer: "Without reuse we read 2·M·K·N = 18·M values. With reuse we read M·K + K·N = 3·M + 9. For large M the fixed 9 weight reads stop mattering, and the ratio tends to 18·M / 3·M = 6, which is 2 × N. Each X value is used N = 3 times after a single read, and each weight is reused for every row. A wider array (larger N) would save even more per value read." },
+        { type: "check", question: "In the toy tiling, a 130×128 matrix used 2 tiles with 51% real weights. A teammate suggests making the layer 128 wide instead of 130. What would we gain, and what must we check?", answer: "In the toy model the matrix would then fit one tile exactly: half the tiles and no padding, so no cells spend ticks multiplying zeros. What we must check is the model itself: a slightly narrower layer has fewer parameters, so we should confirm that accuracy does not suffer. The general habit is to pick sizes that line up with the hardware when the model does not care about the difference." },
       ],
     },
   ],

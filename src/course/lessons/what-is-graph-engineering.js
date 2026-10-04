@@ -1,6 +1,6 @@
 export default {
   id: "what-is-graph-engineering",
-  minutes: 22,
+  minutes: 27,
   hook: "What if, instead of hoping one giant prompt or one endless loop does the right thing, we drew the whole job as a map of small steps and arrows that we can see, test and pause?",
   summary: "Graph engineering builds an AI system as a graph: nodes are small steps (an LLM call, a tool, a check), edges are the paths between them, and a shared state object carries data from step to step. Conditional edges let the graph make decisions, cycles let it redo work, parallel branches save time, and checkpoints let it pause for a human or resume after a crash. It trades some of a free loop's flexibility for control, visibility and reliability.",
   sections: [
@@ -153,6 +153,66 @@ checkpoints saved: 5 | resume point after 1st review: review False`, walkthrough
           ["Pause for a human", "Possible, ad hoc", "Built in at any node"],
           ["Typical risk", "Drift, endless loops", "Over-rigid flows, missing branches"]
         ], verdict: "They combine well: a graph for the overall workflow, with an agent loop living inside one node where flexibility is needed." }
+      ]
+    },
+    {
+      id: "worked-resume-example",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Checkpoints sound abstract until something breaks. Let us replay the run from our first graph, and make the email API fail at the worst moment." },
+        { type: "table", caption: "The five checkpoints of that run", head: ["Checkpoint", "After node", "Next node", "Key state"], rows: [["1", "draft", "review", "tries = 1"], ["2", "review", "draft", "tries = 1, approved = False"], ["3", "draft", "review", "tries = 2"], ["4", "review", "send", "tries = 2, approved = True"], ["5", "send", "END", "sent = True"]] },
+        { type: "steps", title: "The send node crashes", items: [{ title: "What we have", text: "Two drafts and two reviews are done, then `send` raises an error. Checkpoint 4 is the last one saved: approved draft v2, next node `send`." }, { title: "Restart without checkpoints", text: "We begin again at `draft` with tries = 0. That repeats four node runs, which in a real system are four model calls. The new draft may also differ from the one that was approved." }, { title: "Resume from checkpoint 4", text: "We load the saved state and run only `send`. One node, no model call, and the reply that goes out is exactly the one that passed review." }, { title: "Count the saving", text: "Five node runs from scratch against one from the checkpoint. On a long graph the gap is larger." }] },
+        { type: "p", text: "Resuming has one trap. Suppose `send` did email the customer and then crashed before its checkpoint was saved. On resume it runs again, and the customer gets two emails. A node with an outside effect should be safe to repeat: for example, `send` first looks for a “sent” record keyed by the ticket id." },
+        { type: "p", text: "The same checkpoints give us time travel. To try a stricter reviewer, we load checkpoint 1 and run on from `review` with the new node. We do not pay for the first draft again." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the fan-out and fan-in from the parallel-branches section. Three lookup nodes read the same state and return updates. A reducer appends their facts, a plain field shows what “last write wins” means, and a failed lookup is routed to a fallback node instead of crashing the run." },
+        { type: "code", lang: "python", title: "practice_fanout_reducer.py", code: `# Fan-out and fan-in with a reducer, plus an error route to a fallback node.
+def order(s):   return {"facts": ["order 42: kettle, delivered"], "source": "orders"}
+def docs(s):    return {"facts": ["returns accepted within 30 days"], "source": "docs"}
+def history(s):
+    if s["history_down"]:
+        return {"error": "history API down"}          # write the failure into state
+    return {"facts": ["2 past tickets, both solved"], "source": "history"}
+
+REDUCERS = {"facts": lambda old, new: old + new}      # list field: append
+
+def merge(state, update):
+    for key, value in update.items():
+        if key in REDUCERS:
+            state[key] = REDUCERS[key](state[key], value)
+        else:
+            state[key] = value                        # default: last write wins
+    return state
+
+def run(history_down):
+    state = {"ticket": "kettle broken", "history_down": history_down, "facts": []}
+    snapshot = dict(state)                            # every branch reads the same state
+    updates = [node(snapshot) for node in (order, docs, history)]   # fan-out
+    for update in updates:                            # fan-in: merge the updates
+        state = merge(state, update)
+    nxt = "fallback" if "error" in state else "draft" # conditional edge
+    if nxt == "draft":
+        state["reply"] = f"draft built from {len(state['facts'])} facts"
+    else:
+        state["reply"] = "holding reply sent; ticket queued for a human"
+    return nxt, state
+
+for down in (False, True):
+    nxt, state = run(down)
+    print("route:", nxt, "| facts:", len(state["facts"]), "| source:", state["source"])
+    print("  reply:", state["reply"])`, output: `route: draft | facts: 3 | source: history
+  reply: draft built from 3 facts
+route: fallback | facts: 2 | source: docs
+  reply: holding reply sent; ticket queued for a human`, walkthrough: [{ lines: [2, 7], note: "Three lookup nodes. Each returns only its update. The history node writes an `error` field when its API is down." }, { lines: [9, 17], note: "The merge rule: a field with a reducer is combined, here by appending; any other field is simply overwritten." }, { lines: [20, 24], note: "Fan-out and fan-in: every branch reads the same snapshot, then the updates are merged one by one." }, { lines: [25, 30], note: "A conditional edge routes on the `error` field: to `draft` normally, to a fallback when a lookup failed." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Delete the `facts` entry from `REDUCERS`, so that every field uses last write wins. Predict the `facts` count in the first run.", "Change the branch order to `(history, docs, order)`. Predict the `source` printed for each run. What does this tell us about fields without a reducer?", "Soften the route: go to `draft` whenever at least 2 facts arrived, even with an error. Predict the reply for the second run."] },
+        { type: "check", question: "In the first run `facts` holds 3 items but `source` holds only `history`. All three branches wrote both fields. Why the difference?", answer: "`facts` has a reducer that appends, so each branch's list was added to the others. `source` has no reducer, so each write replaced the one before, and only the last merged branch is left. Any field that parallel branches share needs a reducer, or each branch needs its own field. Otherwise results vanish without any error." },
+        { type: "check", question: "Each branch received `snapshot`, a copy taken before the fan-out, and not the live `state`. What could go wrong if branches read the live state while others were updating it?", answer: "A branch's input would depend on which branches happened to finish first, so the same ticket could give different results from run to run. With a snapshot, every branch sees the same input and no branch can affect another. The only place their results meet is the merge step, where the reducer rules are explicit. That is what makes it safe to run the branches truly in parallel." }
       ]
     },
     {

@@ -1,6 +1,6 @@
 export default {
   id: 'direct-preference-optimization-dpo',
-  minutes: 20,
+  minutes: 25,
   hook: 'What if the whole reward-model-plus-PPO machinery of RLHF could be replaced by one loss function you train like ordinary fine-tuning?',
   summary: 'DPO (Direct Preference Optimization) trains a language model straight from preference pairs (a prompt, a chosen answer and a rejected answer) with a simple classification-style loss. It uses a frozen reference model and a math result showing that the RLHF objective’s optimal policy defines an implicit reward, so no separate reward model and no reinforcement learning loop are needed. It is cheaper and more stable than PPO-based RLHF, but it learns only from fixed data and does not explore.',
   sections: [
@@ -166,6 +166,81 @@ step 3: logp chosen  -39.3  rejected  -42.7  margin +0.54  loss 0.458  grad weig
           '**Overfitting and verbosity:** it can overfit small datasets and inherit biases in the data, such as preferring longer answers.',
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Skipping SFT and running DPO on a base model; using a reference model different from the starting policy; setting β too small so the policy drifts far from the reference; training many epochs on a small dataset; and judging success by training loss instead of win rate on held-out prompts. Variants such as IPO, KTO, ORPO and SimPO each target some of these issues.' },
+      ],
+    },
+    {
+      id: 'spotting-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'A DPO run can report a falling loss and still produce a worse model. The loss only sees the **gap** between the chosen and the rejected answer, so we need to know what it hides. One worked case shows the main trap. Numbers are illustrative.' },
+        { type: 'steps', title: 'A falling loss with a falling chosen answer', items: [
+          { title: 'Start', text: 'The reference gives the chosen answer a log-probability of −42 and the rejected one −40. The policy is a copy, so the margin is 0 and the loss is `ln 2 ≈ 0.693`.' },
+          { title: 'After training', text: 'The policy now gives the chosen answer **−45** and the rejected answer **−50**. Both went *down*.' },
+          { title: 'Shifts', text: 'Chosen: `−45 − (−42) = −3`. Rejected: `−50 − (−40) = −10`.' },
+          { title: 'Margin and loss', text: 'With `β = 0.1`: margin `= 0.1 × (−3 − (−10)) = 0.7`. Loss `= −log σ(0.7) ≈ 0.40`. The loss improved from 0.693 to 0.40.' },
+          { title: 'What really happened', text: 'The chosen answer is now `e⁻³ ≈ 0.05` times as likely as before. The probability that left both answers went to *other* text, which no pair in the dataset describes.' },
+          { title: 'How to catch it', text: 'Log the average chosen log-probability next to the loss. If it keeps sinking while the loss falls, sample some outputs and read them before training further.' },
+        ] },
+        { type: 'table', caption: 'Diagnosing a DPO run', head: ['What we see', 'Likely cause', 'What to check'], rows: [
+          ['Loss stays at 0.693', 'The policy is not moving, or the “reference” is being updated together with the policy so every shift is 0', 'Confirm the reference is a separate frozen copy; confirm the policy has trainable weights'],
+          ['Loss falls close to 0 within a few steps', 'Learning rate too high, or a tiny dataset being memorised', 'Read sampled outputs for repetition or nonsense; lower the learning rate'],
+          ['Loss falls, chosen log-probability falls too', 'Both answers are being pushed down, as in the example above', 'Raise β, lower the learning rate, or stop earlier'],
+          ['High accuracy on training pairs, about 50% on held-out pairs', 'Memorised the pairs instead of learning the preference', 'Hold out pairs from the start; add data or train for fewer epochs'],
+        ] },
+        { type: 'p', text: 'The useful number here is **pair accuracy**: the share of pairs with a positive margin. It is easy to explain to a teammate, and on held-out pairs it tells us whether the preference generalises.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will score a small **batch of four preference pairs** the way a DPO training step does. For each pair we compute how far the policy has moved from the reference on each answer, the margin, the loss, and the weight that pair gets in the next update. The four pairs are chosen to show four different situations.' },
+        { type: 'code', lang: 'python', title: 'practice_dpo_batch.py', code: `import numpy as np
+
+beta = 0.1
+# Four preference pairs. Summed log-probs: (chosen, rejected)
+ref = np.array([[-42.0, -40.0],     # frozen reference model
+                [-30.0, -35.0],
+                [-55.0, -50.0],
+                [-20.0, -21.0]])
+pol = np.array([[-36.0, -47.0],     # policy after some DPO training
+                [-30.0, -35.0],     # pair 2: policy has not moved at all
+                [-58.0, -49.0],     # pair 3: policy moved the WRONG way
+                [-26.0, -47.0]])    # pair 4: both answers became less likely
+
+shift = pol - ref                              # log(pi / pi_ref) per answer
+margin = beta * (shift[:, 0] - shift[:, 1])    # chosen shift minus rejected shift
+loss = -np.log(1 / (1 + np.exp(-margin)))      # -log sigma(margin)
+weight = 1 / (1 + np.exp(margin))              # sigma(-margin): gradient weight
+
+print("pair  chosen shift  rejected shift  margin   loss  weight")
+for i in range(4):
+    print(f"{i + 1:>4}  {shift[i, 0]:12.1f}  {shift[i, 1]:14.1f}  {margin[i]:6.2f}  {loss[i]:5.3f}  {weight[i]:6.3f}")
+
+print(f"mean loss: {loss.mean():.3f}")
+print(f"pairs ranked the right way (margin > 0): {int((margin > 0).sum())} of 4")
+print(f"loss of an untrained policy: ln 2 = {np.log(2):.3f}")`, output: `pair  chosen shift  rejected shift  margin   loss  weight
+   1           6.0            -7.0    1.30  0.241   0.214
+   2           0.0             0.0    0.00  0.693   0.500
+   3          -3.0             1.0   -0.40  0.913   0.599
+   4          -6.0           -26.0    2.00  0.127   0.119
+mean loss: 0.494
+pairs ranked the right way (margin > 0): 2 of 4
+loss of an untrained policy: ln 2 = 0.693`,
+          walkthrough: [
+            { lines: [3, 12], note: 'β, then summed log-probabilities of (chosen, rejected) for four pairs, under the frozen reference and under the policy.' },
+            { lines: [14, 17], note: 'The whole DPO loss in four lines: shifts, margin, loss and gradient weight, for all pairs at once.' },
+            { lines: [19, 25], note: 'Print one row per pair, then the batch loss and the pair accuracy.' },
+          ] },
+        { type: 'p', text: 'Pair 2 sits exactly at the untrained value 0.693. Pair 3 is worse than untrained. Pair 4 has the lowest loss of all, although the policy made *both* of its answers less likely.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change `beta` on line 3 from `0.1` to `0.5`. Predict: which pair’s loss rises, which pairs’ losses fall, and what happens to pair 2?',
+          'Change pair 4 on line 12 to `[-26.0, -27.0]`, so both answers dropped by the same 6. Predict its margin and loss before running.',
+          'Repair pair 3 on line 11 by setting it to `[-52.0, -53.0]`. Predict the new “ranked the right way” count and whether the mean loss drops below 0.4.',
+        ] },
+        { type: 'check', question: 'Pair 4 has the lowest loss (0.127). If we now sample replies for that prompt, is the chosen answer more likely to appear than before training?', answer: 'No. Its log-probability fell by 6, so it is about `e⁻⁶ ≈ 0.0025` times as likely as under the reference. The loss is low only because the rejected answer fell much further (by 26). DPO guarantees nothing about where the freed probability goes. For this prompt we should read actual samples, not trust the loss.' },
+        { type: 'check', question: 'The mean loss (0.494) is clearly better than the untrained 0.693, yet only 2 of 4 pairs are ranked the right way. How can both be true, and which number would we show a teammate?', answer: 'The mean is pulled down by two confident pairs (0.241 and 0.127), which more than offsets the one bad pair (0.913). Loss rewards being *very* right on some pairs; accuracy counts each pair once. We would report both, on held-out pairs: accuracy to say how often the preference is respected, and loss to see confidence. A good loss with poor accuracy means the model is over-fitting a subset.' },
       ],
     },
   ],

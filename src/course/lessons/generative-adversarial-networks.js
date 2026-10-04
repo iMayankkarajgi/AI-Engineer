@@ -1,6 +1,6 @@
 export default {
   id: "generative-adversarial-networks",
-  minutes: 22,
+  minutes: 27,
   hook: "What happens if we train one network to forge images and a second network to catch the forgeries — and let them compete until the forger wins?",
   summary: "A Generative Adversarial Network (GAN) trains two networks against each other: a generator that turns random noise into fake samples, and a discriminator that tries to tell real samples from fakes. Each improves by exploiting the other's weaknesses, and at the ideal end point the fakes are indistinguishable from real data. GANs generate sharp images in a single fast pass, but training is a delicate balancing act that can oscillate or collapse to a few repeated outputs.",
   sections: [
@@ -229,6 +229,85 @@ target: mean=4.00  std=0.50`,
           ],
           verdict: "For open-ended text-to-image work, diffusion is the default today. GANs still win when speed is critical or the domain is narrow." },
         { type: "callout", tone: "warn", title: "Responsible use", text: "GANs made convincing fake faces and 'deepfake' videos easy to produce. Synthetic media can be used for fraud, harassment and misinformation. Label generated content, respect consent and likeness rights, and do not use synthetic people where real identities are expected." },
+      ],
+    },
+    {
+      id: "worked-loss-example",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "GAN losses are hard to read because there are two of them and neither simply falls. Let us compute both by hand for one tiny batch, then learn what the numbers mean. Our batch has two real kettle photos and two fakes. The discriminator outputs D = 0.9 and 0.6 on the real ones, and 0.2 and 0.4 on the fakes. We use natural logs and average over each pair, as the PyTorch sketch does." },
+        { type: "steps", title: "One batch, both losses", items: [
+          { title: "D on real photos", text: "D wants 1. Loss = −(ln 0.9 + ln 0.6) / 2 = (0.105 + 0.511) / 2 = **0.308**." },
+          { title: "D on fakes", text: "D wants 0, so we score 1 − D. Loss = −(ln 0.8 + ln 0.6) / 2 = (0.223 + 0.511) / 2 = **0.367**." },
+          { title: "Discriminator loss", text: "0.308 + 0.367 = **0.675**." },
+          { title: "Generator loss (non-saturating)", text: "G wants D to say 1 on fakes. Loss = −(ln 0.2 + ln 0.4) / 2 = (1.609 + 0.916) / 2 = **1.263**." },
+          { title: "The balance point for reference", text: "If D said 0.5 for everything, its loss would be ln 2 + ln 2 = **1.386** and G's would be ln 2 = **0.693**." },
+          { title: "Read the result", text: "D's 0.675 is well below 1.386, and G's 1.263 is well above 0.693. So D is ahead right now. That is healthy as long as G keeps getting a useful signal." },
+        ] },
+        { type: "chart", kind: "line", title: "Size of the generator's learning signal vs D(G(z))", xLabel: "D(G(z)): how real D thinks the fake is", yLabel: "Gradient size at D's raw score", series: [
+          { name: "Minimise log(1 − D(G(z)))", points: [[0.01, 0.01], [0.1, 0.1], [0.3, 0.3], [0.5, 0.5], [0.7, 0.7], [0.9, 0.9]] },
+          { name: "Maximise log D(G(z))", points: [[0.01, 0.99], [0.1, 0.9], [0.3, 0.7], [0.5, 0.5], [0.7, 0.3], [0.9, 0.1]] },
+        ], caption: "Exact derivatives with respect to D's raw score (the logit): D for the original loss, 1 − D for the non-saturating one. When fakes are poor (left side), the original loss gives almost no signal." },
+        { type: "table", caption: "Reading the two losses during training", head: ["What we see", "What it usually means", "What to check"], rows: [
+          ["D loss ≈ 1.386, G loss ≈ 0.693 at the very start", "D has learned nothing yet and says 0.5 for everything", "Nothing; this is the normal starting point"],
+          ["D loss ≈ 1.386, G loss ≈ 0.693 late in training", "Possibly the balance point", "Look at many samples; the numbers alone cannot tell this from the row above"],
+          ["D loss near 0, G loss large and rising", "D is overpowering G", "Slow D down: lower its learning rate or give it fewer steps"],
+          ["G loss small, D loss large, samples all alike", "G found one output that fools the current D", "Diversity across many samples: likely mode collapse"],
+        ] },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will not train anything this time. Instead we freeze four different generators and, for each, compute the **best possible discriminator** and the score of the game. This shows what a perfect critic would say about an untrained, a nearly right, a collapsed and a perfect generator." },
+        { type: "code", lang: "python", title: "practice_best_discriminator.py", code: `import numpy as np
+
+# For a FIXED generator, the best possible discriminator is known:
+#   D*(x) = p_data(x) / (p_data(x) + p_g(x))
+# We compute it on a grid for several generators and score the game.
+x = np.linspace(-6, 10, 16001)
+dx = x[1] - x[0]
+
+def bell(mean, std):
+    """Density of a normal distribution on the grid."""
+    return np.exp(-0.5 * ((x - mean) / std) ** 2) / (std * np.sqrt(2 * np.pi))
+
+p_data = bell(4.0, 0.5)                          # real data: mean 4, std 0.5
+tiny = 1e-300                                    # avoids log(0) where both are 0
+
+def play(name, mean, std):
+    p_g = bell(mean, std)
+    d_star = p_data / (p_data + p_g + tiny)      # best D for this generator
+    # V = E_data[log D] + E_fake[log(1 - D)], as integrals over the grid
+    v = np.sum(p_data * np.log(d_star + tiny)) * dx \\
+        + np.sum(p_g * np.log(1 - d_star + tiny)) * dx
+    js = max(0.0, (v + np.log(4)) / 2)           # Jensen-Shannon divergence
+    at4 = d_star[np.argmin(np.abs(x - 4.0))]     # D*'s verdict at x = 4
+    print(f"{name:22s} V={v:+.3f}  JS={js:.3f}  D*(4)={at4:.2f}")
+
+play("untrained  N(0, 1)", 0.0, 1.0)
+play("close      N(3.5, 0.5)", 3.5, 0.5)
+play("collapsed  N(4, 0.05)", 4.0, 0.05)
+play("perfect    N(4, 0.5)", 4.0, 0.5)
+print(f"reference: -log 4 = {-np.log(4):.3f},  log 2 = {np.log(2):.3f}")`, output: `untrained  N(0, 1)     V=-0.023  JS=0.682  D*(4)=1.00
+close      N(3.5, 0.5) V=-1.163  JS=0.111  D*(4)=0.62
+collapsed  N(4, 0.05)  V=-0.520  JS=0.433  D*(4)=0.09
+perfect    N(4, 0.5)   V=-1.386  JS=0.000  D*(4)=0.50
+reference: -log 4 = -1.386,  log 2 = 0.693`,
+          walkthrough: [
+            { lines: [6, 13], note: "A fine grid of x values and a helper that returns a bell curve on it. The real data are the same as in the lesson: mean 4, standard deviation 0.5." },
+            { lines: [16, 24], note: "For one generator we build D*(x) = p_data / (p_data + p_g), then compute the game value V as two sums over the grid. (V + log 4) / 2 is the Jensen–Shannon divergence from the 'deeper' panel." },
+            { lines: [26, 30], note: "Four generators. The untrained one is caught almost perfectly (V near 0, JS near its maximum log 2). The perfect one gives V = −log 4, JS = 0 and D* = 0.5. The collapsed one has the right mean but still scores badly." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Add `play(\"too wide   N(4, 1.0)\", 4.0, 1.0)`. Predict first: is a generator that is too spread out punished more or less than the collapsed one (JS = 0.433)?",
+          "Move the 'close' generator's mean from `3.5` to `3.9`. Predict whether D*(4) moves toward 0.5 or away from it, and what happens to JS.",
+          "Make the real data two clusters: `p_data = (bell(2.0, 0.5) + bell(6.0, 0.5)) / 2`, and test a generator `N(2, 0.5)` that covers only one of them. Predict whether JS lands near 0, near log 2, or in between.",
+        ] },
+        { type: "check", question: "The collapsed generator N(4, 0.05) has exactly the right mean, yet the best discriminator gives D*(4) = 0.09. Why would a perfect critic call a sample at x = 4 'probably fake'?", answer: "Because the collapsed generator puts almost all its samples in a tiny range around 4, while the real data spread theirs over a much wider range. At x = 4 there are about ten fake samples for every real one, so 'fake' is the smart guess there. Away from 4 the opposite holds: D* is close to 1, since the generator never produces those values. A good D notices the missing spread, not just the mean." },
+        { type: "check", question: "We log D loss ≈ 1.386 and G loss ≈ 0.693 at step 0 and again at step 5,000. Does that prove training has reached the ideal end point?", answer: "No. Those values only say that D outputs about 0.5 on everything. At step 0 that is because D knows nothing. Later it could be the true balance point, or D could have become too weak to tell anything apart. The losses look the same in all three cases, so we have to inspect many samples (and a metric such as FID) to know which one we are in." },
       ],
     },
   ],

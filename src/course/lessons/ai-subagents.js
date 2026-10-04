@@ -1,6 +1,6 @@
 export default {
   id: 'ai-subagents',
-  minutes: 15,
+  minutes: 20,
   hook: 'Why would an AI agent hand part of its own job to another AI agent, and then throw away almost everything that helper read?',
   summary: 'A subagent is a helper agent that a main agent starts for one focused subtask. It runs with its own fresh context window, its own instructions and often a restricted set of tools, and it returns only a short result. This keeps the main agent\'s context clean, allows parallel work and lets us give each helper only the permissions it needs.',
   sections: [
@@ -169,6 +169,100 @@ Return (max 15 lines):
         { type: 'check', question: 'Two subagents are asked to refactor two different functions in the same file at the same time. What can go wrong, and how would we avoid it?', answer: 'Their edits can conflict: one writes the file based on an old version and overwrites the other\'s change. Avoid it by giving parallel subagents read-only work, by assigning non-overlapping files, or by running the editing subagents one after another.' },
       ],
     },
+    {
+      id: "worked-example-break-even",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The best-practice list ends with “do not over-delegate”. How do we know when a task is too small to hand off? We can estimate it with simple arithmetic. All numbers below are illustrative, and the model is deliberately rough." },
+        { type: "p", text: "The idea: anything that lands in the main context is re-read on every later turn. So the cost of doing a task directly is its raw output multiplied by the turns still to come. The cost of delegating is a one-off: the subagent's start-up plus its reading, and then only the short summary is re-read." },
+        { type: "formula", expr: "direct ≈ R × T        delegated ≈ S + R + A × T",
+          where: [
+            ["R", "tokens of raw tool output the task produces"],
+            ["T", "main-agent turns still to come after the task"],
+            ["S", "start-up cost of a subagent: its system prompt, tool definitions and brief"],
+            ["A", "tokens in the summary that comes back"]
+          ],
+          caption: "A rough estimate of extra input tokens. It ignores the subagent re-reading its own context across its turns, so it flatters delegation a little." },
+        { type: "p", text: "We take S = 1,600, A = 150 and T = 10 turns left, and compare two tasks." },
+        { type: "table", caption: "Two tasks, same formula (illustrative numbers)",
+          head: ["Task", "R", "Direct: R × T", "Delegated: S + R + A × T", "Better choice"],
+          rows: [
+            ["Explore 20 files to find the login flow", "40,000", "400,000", "1,600 + 40,000 + 1,500 = 43,100", "Delegate"],
+            ["Read one short config file", "300", "3,000", "1,600 + 300 + 1,500 = 3,400", "Do it directly"]
+          ] },
+        { type: "steps", title: "Reading the result",
+          items: [
+            { title: "Big raw output, many turns left: delegate", text: "The exploration would be re-read ten times in the main context. Delegating cuts the estimate by roughly nine tenths." },
+            { title: "Small raw output: do it directly", text: "For the config file, the start-up cost alone is more than five times the file. Delegation costs more and adds a handoff that can lose detail." },
+            { title: "Few turns left changes the answer", text: "With T = 1, the exploration costs 40,000 directly and 41,750 delegated. Near the end of a task, even a big read may not be worth a subagent." },
+            { title: "Tokens are not the only reason", text: "The estimate ignores the other benefits: parallel work, a fresh view, and restricted tools. A read-only reviewer can be worth spawning even when the token sums are equal." }
+          ] }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code measured context sizes. Now we build the mechanism: a `spawn_subagent` function that the main agent calls like a tool. The subagent starts from a fresh context holding only the brief, runs its own loop with an allow-list of tools, and hands back one line. Its model is scripted, and we make it overstep once, so we can see the tool restriction work." },
+        { type: "code", lang: "python", title: "practice_spawn_subagent.py", code: `# A subagent exposed as a tool: fresh context, restricted tools, short result.
+REPO = {"auth/login.py": "def login(user): return check_password(user)",
+        "auth/limits.py": "def rate_limit(key, per_minute): ...",
+        "tests/test_login.py": "def test_login(): assert login('ann')"}
+ORIGINAL = dict(REPO)
+
+def read_file(path):
+    return REPO[path]
+def write_file(path, text):
+    REPO[path] = text
+    return "written"
+TOOLS = {"read_file": read_file, "write_file": write_file}
+
+def spawn_subagent(brief, allowed):
+    """Run a separate agent loop. Only the summary goes back to the caller."""
+    context = [brief]                            # fresh: it sees the brief, nothing else
+    script = [("read_file", ("auth/login.py",)), ("read_file", ("auth/limits.py",)),
+              ("write_file", ("auth/login.py", "# tidy up")),     # it oversteps
+              ("read_file", ("tests/test_login.py",))]            # scripted model choices
+    seen = {}
+    for tool, args in script:                    # the subagent's own loop
+        if tool not in allowed:
+            context.append(f"DENIED: {tool} is not in your tool list")
+            continue
+        seen[args[0]] = TOOLS[tool](*args)
+        context.append(f"{args[0]}: {seen[args[0]]}")
+    handler = [p for p, text in seen.items() if "def login" in text]
+    limiter = [p for p, text in seen.items() if "rate_limit" in text]
+    return f"login handler: {handler}; existing limiter: {limiter}", context
+
+main_context = ["user: add rate limiting to the login endpoint"]
+brief = "Find the login handler and any existing rate limiter. Do not edit files."
+summary, sub_context = spawn_subagent(brief, allowed={"read_file"})
+main_context.append("subagent result: " + summary)   # arrives like a tool result
+
+size = lambda ctx: sum(len(item.split()) for item in ctx)
+print("summary:", summary)
+print("subagent context:", len(sub_context), "items,", size(sub_context), "words (discarded)")
+print("main context:    ", len(main_context), "items,", size(main_context), "words")
+print("denied calls:", sum("DENIED" in c for c in sub_context), "| repo unchanged:", REPO == ORIGINAL)`, output: `summary: login handler: ['auth/login.py']; existing limiter: ['auth/limits.py']
+subagent context: 5 items, 36 words (discarded)
+main context:     2 items, 16 words
+denied calls: 1 | repo unchanged: True`,
+          walkthrough: [
+            { lines: [2, 12], note: "A three-file repository and two tools. `write_file` changes the repo, so it is the one we will withhold. `ORIGINAL` is a copy for checking that nothing changed." },
+            { lines: [14, 20], note: "The subagent starts with a context that holds only the brief. Its scripted model wants to read three files and, against the brief, edit one." },
+            { lines: [21, 29], note: "The subagent's own loop. A tool outside the allow-list is refused and the refusal becomes an observation. The summary is built only from what it actually read." },
+            { lines: [31, 40], note: "The main agent spawns the subagent with read-only tools, appends the one-line result to its own context, and compares the two contexts." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Spawn with `allowed={\"read_file\", \"write_file\"}`. Predict the last output line and what the summary now says about the login handler. Why did one extra permission make the *answer* worse, not just the repo?",
+          "Remove the `tests/test_login.py` step from `script` and add a third finding to the summary that lists files containing `test_`. Predict what it reports. What does the main agent learn about tests in that case?",
+          "Append `sub_context` to `main_context` instead of the summary (use `main_context += sub_context`). Predict the new size of the main context in items and words. Which benefit of subagents did we just give up?"
+        ] },
+        { type: "check", question: "The brief said “Do not edit files”, and the tool list also blocked `write_file`. The subagent still tried to write. Which of the two protections actually stopped it, and what is the brief's instruction still good for?", answer: "The allow-list stopped it: the loop refused the call, so the repo stayed unchanged whatever the model wanted. The sentence in the brief is guidance, which a model usually follows but can ignore. It is still useful: it tells the subagent not to waste turns trying, and it documents the intent. For anything that must not happen, the restriction has to live in the tools, not only in the words." },
+        { type: "check", question: "The main agent sees a 2-item context and a confident one-line summary. From that alone, can it tell that the subagent was denied a write, or which files it never opened?", answer: "No. Both facts live only in the subagent's context, which is discarded. The summary mentions neither. This is the handoff risk in practice: the main agent trusts a result it cannot inspect. Two habits reduce it: ask in the brief for a structured result that lists what was checked and what was not, and keep the subagent's full transcript in a log so a person can look when something seems off." }
+      ]
+    }
   ],
   quiz: [
     { q: 'What is the main reason a subagent protects the main agent\'s context window?', options: ['It runs on a model that has a much bigger context window', 'It compresses tokens so they take up less space', 'It reads in its own context and returns only a summary', 'It deletes older messages from the main conversation'], answer: 2, explain: 'The subagent\'s working notes stay in its own window, which is discarded. Only the summary enters the main context. It does not need a bigger model or edit the parent\'s history.' },

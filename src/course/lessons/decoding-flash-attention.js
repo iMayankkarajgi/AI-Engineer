@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-flash-attention',
-  minutes: 24,
+  minutes: 29,
   hook: 'How can an algorithm that does the exact same math as standard attention, and even some extra math, run several times faster?',
   summary: 'Standard attention writes a huge n × n score matrix to slow GPU memory and reads it back, so it spends most of its time moving data rather than computing. Flash Attention computes exactly the same result in small tiles that stay in fast on-chip memory, using an online softmax so the full matrix never exists, and recomputes it during the backward pass instead of storing it. Flash Attention 2 and 3 improve how the work is split across the GPU and exploit newer hardware features.',
   sections: [
@@ -172,6 +172,78 @@ n=131072: full score matrix per head =    34.36 GB`,
         ], verdict: 'Flash Attention wins by moving less data, not by doing less math. It is now the default attention kernel in PyTorch (scaled_dot_product_attention can dispatch to it) and in serving engines.' },
         { type: 'callout', tone: 'warn', title: 'Common misconceptions', text: 'Flash Attention does **not** make attention linear in compute: scores for all n² pairs are still computed. It makes **memory** linear and removes the IO bottleneck. It also does not shrink the KV cache during generation; that is the job of GQA, quantization or compressed attention. And during single-token decoding, the gains come from different kernels (such as Flash-Decoding), because there is only one query row.' },
         { type: 'check', question: 'A team doubles their context from 32K to 64K tokens and switches to Flash Attention. Will attention compute (FLOPs) per layer stay the same?', answer: 'No. Doubling n still roughly quadruples the number of score computations, because Flash Attention is exact attention. What it fixes is memory (no n × n matrix stored) and memory traffic, which makes the longer context fit and run much faster than it otherwise would.' },
+      ],
+    },
+    {
+      id: 'worked-example-tile-budget',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "How small must a tile be to stay on chip? Let us do the budget for one query block of 128 rows, head size d = 64, numbers stored in FP16 (2 bytes each), and a sequence of 4,096 tokens. This is an illustrative budget; real kernels choose block sizes per GPU." },
+        { type: 'table', caption: "What must be held in fast memory while one tile is processed (illustrative)", head: ['Item', 'Numbers', 'Size in FP16'], rows: [
+          ['Score tile, 128 × 128', '16,384', '32 KiB'],
+          ['Query block, 128 × 64', '8,192', '16 KiB'],
+          ['Key block, 128 × 64', '8,192', '16 KiB'],
+          ['Value block, 128 × 64', '8,192', '16 KiB'],
+          ['Running output plus m and ℓ', '8,448', 'about 16.5 KiB'],
+          ['Total for one tile', '49,408', 'about 97 KiB'],
+          ['Full 4,096 × 4,096 score matrix, for comparison', '16,777,216', '32 MiB'],
+        ] },
+        { type: 'p', text: "About 97 KiB is on the order of the on-chip memory of one streaming multiprocessor. The full score matrix for a single head is roughly 340 times larger, so it can only live in HBM. The same sequence needs (4,096 / 128)² = 1,024 tiles, each one created, used and thrown away." },
+        { type: 'p', text: "When we write our own tiled attention and it does not match the standard result, the cause is almost always one of three slips:" },
+        { type: 'list', items: [
+          "**Rescaling ℓ but not O.** Both running numbers were computed against the old maximum, so both need the factor e^(m − m′).",
+          "**Starting m at 0 instead of −∞.** If every score in a row is negative, a start value of 0 is treated as a maximum that never existed and the row is scaled wrongly.",
+          "**Normalising inside the loop.** Dividing by ℓ after each block and then adding more blocks mixes normalised and un-normalised terms. Divide once, at the end.",
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will run the online softmax by hand for a single query row, in plain Python, and print the running maximum, the running sum and the answer so far after each block. One row is enough to see every moving part." },
+        { type: 'code', lang: 'python', title: 'practice_online_softmax.py', code: `import math
+
+scores = [1.0, 3.0, 2.0, 5.0, 0.5, 4.0]        # one query row, 6 keys (illustrative)
+values = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]  # one number per key, to keep it small
+BLOCK = 2
+
+m, l, o = -math.inf, 0.0, 0.0                  # running max, sum, un-normalised output
+for start in range(0, len(scores), BLOCK):
+    sb, vb = scores[start:start + BLOCK], values[start:start + BLOCK]
+    m_new = max(m, max(sb))
+    scale = math.exp(m - m_new)                # shrink old results to the new max
+    pb = [math.exp(s - m_new) for s in sb]
+    l = l * scale + sum(pb)
+    o = o * scale + sum(p * v for p, v in zip(pb, vb))
+    m = m_new
+    print(f"block {start // BLOCK}: m={m:.1f} scale={scale:.3f} l={l:.4f} "
+          f"output so far={o / l:.3f}")
+
+# Check against the ordinary softmax that sees the whole row at once
+top = max(scores)
+w = [math.exp(s - top) for s in scores]
+direct = sum(wi * vi for wi, vi in zip(w, values)) / sum(w)
+print(f"online={o / l:.6f} direct={direct:.6f}")
+print("scores held at once:", BLOCK, "instead of", len(scores))`, output: `block 0: m=3.0 scale=0.000 l=1.1353 output so far=18.808
+block 1: m=5.0 scale=0.135 l=1.2034 output so far=36.881
+block 2: m=5.0 scale=1.000 l=1.5824 output so far=42.347
+online=42.347429 direct=42.347429
+scores held at once: 2 instead of 6`,
+          walkthrough: [
+            { lines: [3, 7], note: "One row of six scores, one value per key, and blocks of two. The running maximum starts at −∞, the running sum and output at 0." },
+            { lines: [8, 15], note: "For each block: find the new maximum, compute the correction factor, rescale the old sum and old output, then add the new block's terms." },
+            { lines: [16, 17], note: "Print the state after each block. The first two blocks reproduce the numbers of the small example from the online softmax section: ℓ = 1.135, then 1.203." },
+            { lines: [19, 24], note: "Compare with a softmax over the whole row. The two answers agree to six decimals, while the loop never held more than two scores." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `BLOCK = 1`, then `BLOCK = 3`. Predict whether the final answer changes, and how many lines the loop prints.",
+          "Move the score `5.0` to the front of the list (and its value `40.0` with it). Predict the `scale` printed for the second and third block.",
+          "Break it on purpose: change line 14 to `o = o + sum(...)` without the `scale`. Predict whether the wrong answer lands above or below 42.35, and say why.",
+        ] },
+        { type: 'check', question: "In the output, block 2 prints scale=1.000. Why, and what does that say about how often the correction costs anything?", answer: "Block 2 holds the scores 0.5 and 4.0, both below the current maximum of 5.0. The maximum does not change, so the factor is e⁰ = 1 and the old results are kept as they are. A real correction only happens when a block brings a new row maximum." },
+        { type: 'check', question: "Block 0 prints scale=0.000. Is that a bug?", answer: "No. The running maximum starts at −∞, so the factor is e^(−∞ − 3) = 0. It multiplies a running sum and output that are still 0, so nothing is lost. This start value is what lets the first block use the same update rule as every other block, with no special case." },
       ],
     },
   ],

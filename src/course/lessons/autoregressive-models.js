@@ -1,6 +1,6 @@
 export default {
   id: "autoregressive-models",
-  minutes: 22,
+  minutes: 27,
   hook: "Why does ChatGPT type its answer one word at a time instead of showing the whole reply at once?",
   summary: "An autoregressive model generates a sequence one piece at a time, and each new piece is predicted from all the pieces before it. The chain rule of probability says this is a complete way to describe any sequence, which is why GPT-style language models use it. It needs a causal mask during training, benefits hugely from a KV cache during generation, and is accurate but inherently sequential and therefore slow for long outputs.",
   sections: [
@@ -180,6 +180,77 @@ sampled: ['the cat sat', 'the dog sat', 'the cat ran', 'the cat ran']`,
           ["WaveNet (2016)", "DeepMind", "Raw audio, one sample at a time"],
         ] },
         { type: "callout", tone: "note", title: "What varies by vendor", text: "Companies do not always publish architecture details for closed models. What is public and consistent is that these chat models produce text token by token, which is why responses stream." },
+      ],
+    },
+    {
+      id: "worked-example-greedy-trap",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We said greedy decoding is not guaranteed to find the most likely sentence. Here is a case small enough to check by hand. We use a new toy model with two-word sentences (illustrative numbers). The first word is `the` (0.6) or `a` (0.4). After `the` comes `cat` (0.55) or `dog` (0.45). After `a` comes `bird` (0.9) or `fish` (0.1)." },
+        { type: "table", caption: "All four sentences of the toy model. The probabilities add up to 1.", head: ["Sentence", "Factors", "Probability"], rows: [
+          ["the cat", "0.6 × 0.55", "0.33"],
+          ["the dog", "0.6 × 0.45", "0.27"],
+          ["a bird", "0.4 × 0.9", "0.36"],
+          ["a fish", "0.4 × 0.1", "0.04"],
+        ] },
+        { type: "steps", title: "Greedy versus a wider search", items: [
+          { title: "Greedy, step 1", text: "Greedy looks only at the first word. `the` has 0.6 and `a` has 0.4, so it commits to `the`. It can never undo this." },
+          { title: "Greedy, step 2", text: "After `the`, the best word is `cat` (0.55). Greedy returns “the cat” with probability 0.33." },
+          { title: "The real winner", text: "The table shows “a bird” has 0.36. It starts with the less likely first word, but the second word is almost certain, so the product ends up higher." },
+          { title: "Beam search with 2 beams", text: "Keep the two best prefixes instead of one: `the` (0.6) and `a` (0.4). Extend both and score all four sentences. Now “a bird” (0.36) is found." },
+          { title: "The price", text: "Two beams mean about twice the model work per step. And on real models beams can still miss the best sentence, because the tree is far too large to search fully." },
+        ] },
+        { type: "p", text: "The lesson: a choice that looks best right now can close off a better path later. This is why decoding is a search problem and not a simple lookup. It also shows that the most likely *sentence* and the most likely *next token* are different questions." },
+        { type: "callout", tone: "note", title: "Most likely is not always best", text: "For chat, we usually do not want the single most likely text anyway. It tends to be short and bland. That is why sampling is the common default for open-ended writing, while greedy or beam search suits tasks with one right answer." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will score two finished replies the way real systems do: with log probabilities instead of products. We will also see the exact moment a plain product breaks, and compute perplexity by hand." },
+        { type: "code", lang: "python", title: "practice_log_probs.py", code: `import math
+
+# Next-token probabilities a model gave at each step of two replies (illustrative)
+fluent = [0.9, 0.6, 0.7, 0.8, 0.95]
+odd = [0.9, 0.05, 0.3, 0.1, 0.95]
+
+def score(step_probs):
+    # Chain rule in log space: add logs instead of multiplying probabilities
+    log_p = sum(math.log(p) for p in step_probs)
+    avg_nll = -log_p / len(step_probs)   # average negative log-likelihood
+    return log_p, math.exp(avg_nll)      # perplexity = exp(average NLL)
+
+for name, probs in [("fluent", fluent), ("odd", odd)]:
+    log_p, ppl = score(probs)
+    print(f"{name:6s} P = {math.exp(log_p):.5f}  log P = {log_p:7.3f}  perplexity = {ppl:.2f}")
+
+# Why logs? A long text multiplies many small numbers.
+long_text = [0.1] * 400
+product = 1.0
+for p in long_text:
+    product *= p
+print("product of 400 steps:", product)
+print("sum of 400 log steps:", round(sum(math.log(p) for p in long_text), 1))
+print("perplexity          :", round(score(long_text)[1], 2))`, output: `fluent P = 0.28728  log P =  -1.247  perplexity = 1.28
+odd    P = 0.00128  log P =  -6.659  perplexity = 3.79
+product of 400 steps: 0.0
+sum of 400 log steps: -921.0
+perplexity          : 10.0`,
+          walkthrough: [
+            { lines: [3, 5], note: "Each list holds the probability the model gave to the token that was actually written, one number per step. The second reply has three surprising tokens." },
+            { lines: [7, 11], note: "Add the logs of the step probabilities. Divide by the number of steps and flip the sign to get the average loss, then take exp to get perplexity." },
+            { lines: [13, 15], note: "Score both replies. exp(log P) gives back the plain product, so we can see both views agree." },
+            { lines: [17, 24], note: "A 400-token text where every step has probability 0.1. The product underflows to 0.0, but the sum of logs is a normal number." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change the `0.05` in `odd` to `0.5`. Predict first: will the perplexity of `odd` fall below 2?",
+          "Change `[0.1] * 400` to `[0.1] * 300`. Predict: does the product still print `0.0`, and does the perplexity change?",
+          "Append one more `0.95` to `fluent`. Predict: does log P go up or down, and does perplexity go up or down?",
+        ] },
+        { type: "check", question: "The long text has 400 tokens and the fluent reply has 5, yet we can compare their perplexities (10.0 and 1.28). Why can we not compare their log P values (−921.0 and −1.247) in the same way?", answer: "log P is a sum over all steps, so it gets more negative as a text gets longer, even when every step is predicted well. Perplexity is built from the *average* per step, so length is divided out. To compare texts of different lengths we need the per-token view." },
+        { type: "check", question: "A perplexity of 10.0 came out for the text where every step had probability 0.1. Why exactly 10?", answer: "The average negative log-likelihood is −log(0.1) = log(10), and exp(log(10)) = 10. It matches the meaning of perplexity: the model is as unsure as if it picked evenly among 10 tokens at every step, and a probability of 0.1 is exactly a one-in-ten guess." },
       ],
     },
     {

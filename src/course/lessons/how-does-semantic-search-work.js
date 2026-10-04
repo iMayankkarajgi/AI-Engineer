@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-semantic-search-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'A customer types "I forgot my login" and the perfect help article is called "How to reset your password". They share zero words. How can search still find it?',
   summary: 'Keyword search matches the exact words of a query, so it misses synonyms and paraphrases. Semantic search turns the query and every document into embeddings (vectors that capture meaning), stores them in a vector database, and returns the documents whose vectors are closest to the query vector, usually by cosine similarity. Approximate nearest neighbour indexes keep this fast for millions of documents.',
   sections: [
@@ -145,6 +145,83 @@ Track where your parcel is right now     keyword=0  cosine=0.14`,
         { type: 'callout', tone: 'example', title: 'Where semantic search is used', text: '**RAG chatbots** use it to fetch passages for the LLM. **Help centres and e-commerce** use it so shoppers find products described in their own words. **Enterprise search** finds internal documents across teams that use different jargon. **Code search** finds functions by describing what they do. **Recommendations** find "more like this" content.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes and limits', text: 'Embedding the query and documents with **different models**. Embedding whole long documents as one vector, which blurs many topics together (chunk them). Trusting semantic search for **exact identifiers** like order numbers. Never evaluating: build a small set of real queries with known correct answers and measure how often the right document is in the top 5. Also remember that "similar" is not "correct": a document can be on-topic yet outdated or wrong.' },
         { type: 'check', question: 'A user searches for "SKU 88-4410-B" and semantic search returns three general articles about product codes, but not the product itself. Why, and what would fix it?', answer: 'Embeddings capture general meaning, so a rare code may embed close to generic "product code" text rather than to the exact item. Keyword search (or a hybrid of keyword and semantic) matches the exact string and would find the product.' },
+      ],
+    },
+    {
+      id: 'worked-example-measuring-quality',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The warning box said "never evaluating" is a common mistake. Here is the smallest evaluation that works, done by hand. We write down four real queries and, for each, the one article that should come back. Then we run the search and note the **rank** (position) of that article in the results. The ranks below are illustrative.' },
+        { type: 'table', caption: 'A four-query test set (illustrative ranks).', head: ['Query', 'Right article', 'Rank found', '1 / rank'], rows: [
+          ['"I forgot my login"', 'How to reset your password', '1', '1.00'],
+          ['"can I get my money back"', 'Refund policy', '3', '0.33'],
+          ['"where is my parcel"', 'Track your order', '2', '0.50'],
+          ['"SKU 88-4410-B"', 'The product page', 'not in top 5', '0'],
+        ] },
+        { type: 'steps', title: 'Turning ranks into scores', items: [
+          { title: 'Hit rate at 1', text: 'How many queries have the right article in first place? 1 of 4, so 0.25.' },
+          { title: 'Hit rate at 3', text: 'How many have it in the top 3? 3 of 4, so 0.75. This number matters most when we pass the top 3 to an LLM.' },
+          { title: 'Mean reciprocal rank (MRR)', text: 'Average the 1 / rank column: (1 + 0.33 + 0.5 + 0) / 4 ≈ 0.46. MRR rewards putting the right article high, not just somewhere in the list.' },
+          { title: 'Read the failures', text: 'The miss is an exact product code, the known weak spot of embeddings. That points to keyword or hybrid search, not to a bigger embedding model.' },
+          { title: 'Change one thing and repeat', text: 'Swap the model, the chunk size or the search type, run the same queries again and compare the same three numbers.' },
+        ] },
+        { type: 'p', text: 'Do not mix this up with the ANN recall we met earlier. ANN recall asks "did the index return what brute force would return?". The hit rate here asks "did the whole system return the article a human says is right?". A system can have perfect ANN recall and a poor hit rate, because the embedding model itself ranked the wrong article first. A real test set needs more like 30 to 100 queries taken from logs.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will test one warning from this lesson with numbers: embedding a **whole long document** as one vector blurs its topics. We build two tiny indexes over the same content, one vector per document and one vector per chunk, and send the same two queries to both. The vectors use the same three readable axes as before: account, money and delivery.' },
+        { type: 'code', lang: 'python', title: 'practice_whole_vs_chunks.py', code: `import numpy as np
+
+def unit(v):
+    v = np.array(v, dtype=float)
+    return v / np.linalg.norm(v)
+
+# Toy chunk embeddings over 3 meaning axes: [account, money, delivery]
+handbook = {"handbook / reset password":  [0.90, 0.05, 0.05],
+            "handbook / refund rules":    [0.05, 0.90, 0.10],
+            "handbook / parcel tracking": [0.05, 0.10, 0.90]}
+gift_faq = {"gift card FAQ": [0.20, 0.70, 0.30]}
+
+queries = {"I forgot my login":       [0.80, 0.10, 0.10],
+           "can I get my money back": [0.10, 0.85, 0.10]}
+
+# Index A: one vector per whole document (the average of its chunks)
+index_a = {"handbook (whole)": unit(np.mean(list(handbook.values()), axis=0)),
+           "gift card FAQ":    unit(gift_faq["gift card FAQ"])}
+# Index B: one vector per chunk
+index_b = {name: unit(v) for name, v in {**handbook, **gift_faq}.items()}
+
+def search(index, q, k=2):
+    q = unit(q)
+    hits = sorted(((float(v @ q), name) for name, v in index.items()), reverse=True)
+    return [(name, round(score, 2)) for score, name in hits[:k]]
+
+for text, q in queries.items():
+    print(text)
+    print("   whole docs:", search(index_a, q))
+    print("   chunks    :", search(index_b, q))`, output: `I forgot my login
+   whole docs: [('handbook (whole)', 0.69), ('gift card FAQ', 0.41)]
+   chunks    : [('handbook / reset password', 1.0), ('gift card FAQ', 0.41)]
+can I get my money back
+   whole docs: [('gift card FAQ', 0.95), ('handbook (whole)', 0.71)]
+   chunks    : [('handbook / refund rules', 1.0), ('gift card FAQ', 0.95)]`,
+          walkthrough: [
+            { lines: [7, 14], note: 'A handbook with three chunks on three different topics, a short one-topic gift card FAQ, and two queries. All vectors are hand-made stand-ins for real embeddings.' },
+            { lines: [16, 20], note: 'Index A stores one vector per document: the handbook vector is the average of its three chunks. Index B stores every chunk on its own.' },
+            { lines: [22, 25], note: 'Search: cosine similarity (dot product of unit vectors) against every entry, best k first.' },
+            { lines: [27, 30], note: 'Run both queries against both indexes and print the top 2 of each.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add a fourth chunk to the handbook, for example `"handbook / gift wrapping": [0.10, 0.30, 0.20]`. Predict whether the whole-handbook score for "I forgot my login" goes up or down.',
+          'Change `k=2` to `k=1`. Predict for which of the two queries the whole-document index still returns the document that really holds the answer.',
+          'Add a query that mixes two topics, such as `"refund to my account": [0.50, 0.50, 0.00]`. Predict whether the whole-handbook vector now scores better or worse than it did for the single-topic queries.',
+        ] },
+        { type: 'check', question: 'For "can I get my money back", the whole-document index ranks the gift card FAQ (0.95) above the handbook (0.71), although the handbook is where the refund rules live. Why?', answer: 'The handbook vector is the average of three unrelated topics, so it points somewhere between them and matches no single topic strongly. The short FAQ is about one thing, money, so its vector points almost straight at the query. Averaging blurred the handbook; chunking fixes it, and the refund chunk then wins.' },
+        { type: 'check', question: 'In the chunk index, the gift card FAQ still scores 0.95 for the money-back query and comes second. Is the search broken?', answer: 'No. The FAQ really is about money, so it is similar. But similar is not the same as correct: it does not answer the refund question. This is why we look at what lands in the top k, keep k small, and often add a reranker before passing results to an LLM.' },
       ],
     },
   ],

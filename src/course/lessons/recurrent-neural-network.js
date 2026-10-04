@@ -1,6 +1,6 @@
 export default {
   id: 'recurrent-neural-network',
-  minutes: 20,
+  minutes: 25,
   hook: 'How can a network read "the movie was not good" one word at a time and still remember the "not" by the time it reaches "good"?',
   summary: 'A recurrent neural network (RNN) processes a sequence one step at a time and carries a hidden state, a small vector of memory, from each step to the next. The same weights are reused at every step: `hₜ = tanh(Wₓₕxₜ + Wₕₕhₜ₋₁ + b)`. RNNs are trained with backpropagation through time, struggle with long-range memory because gradients vanish or explode, and led to LSTMs, GRUs and eventually Transformers.',
   sections: [
@@ -163,6 +163,82 @@ recurrent scale 1.5: |dh_t/dh_0| at t=1,10,50 -> ['1.50e+00', '2.86e+01', '2.26e
           '**Do consider one** for small, streaming, low-latency problems, or as a baseline for time series.',
         ] },
         { type: 'check', question: 'An LSTM trains well on short sentences but its loss suddenly becomes NaN on long documents. What is the first fix to try?', answer: 'Add **gradient clipping**. Long sequences mean long products in backpropagation through time, and occasional exploding gradients produce huge updates that turn the loss into NaN. Truncated BPTT and a lower learning rate are also worth trying.' },
+      ],
+    },
+    {
+      id: 'clipping-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'We named gradient clipping as the standard fix for exploding gradients, but we never did one. Let us clip a gradient by hand. Suppose backpropagation through time on a long review gives this gradient for three recurrent weights: `g = [3, 4, 12]`. Our clipping threshold is 1.0 and the learning rate is 0.1.' },
+        { type: 'steps', title: 'Clipping by norm', items: [
+          { title: 'Measure the size', text: 'The **norm** is the length of the gradient vector: `‖g‖ = √(3² + 4² + 12²) = √169 = 13`.' },
+          { title: 'Compare with the threshold', text: '13 is larger than 1.0, so we clip. If it were 1.0 or less we would leave the gradient alone.' },
+          { title: 'Compute the scale', text: '`scale = threshold / ‖g‖ = 1 / 13 ≈ 0.077`.' },
+          { title: 'Rescale every entry', text: '`g · scale = [0.231, 0.308, 0.923]`. The new norm is exactly 1.0.' },
+          { title: 'Update', text: 'The weights move by `0.1 × [0.231, 0.308, 0.923]`. Without clipping they would have moved by `[0.3, 0.4, 1.2]`, thirteen times further.' },
+        ] },
+        { type: 'p', text: 'Notice what stayed the same: the **ratios**. The third weight still gets four times the update of the first (0.923 vs 0.231, like 12 vs 3). Clipping by norm keeps the direction of the step and only shortens it. There is a second, cruder way, which cuts each entry on its own:' },
+        { type: 'compare', title: 'Two ways to clip g = [3, 4, 12] with threshold 1', options: [
+          { name: 'Clip by norm', summary: 'Shrink the whole vector so its length is at most the threshold.', pros: ['Keeps the direction of the gradient', 'One threshold for the whole model'], cons: ['One huge entry shrinks all the others too'], bestFor: 'The usual choice for RNNs and Transformers' },
+          { name: 'Clip by value', summary: 'Cut every entry to the range −1 to 1 separately.', pros: ['Very simple', 'A single bad entry does not shrink the rest'], cons: ['Changes the direction of the step'], bestFor: 'A quick safety net' },
+        ], rows: [
+          ['Result', '[0.231, 0.308, 0.923]', '[1, 1, 1]'],
+          ['Ratio third : first', '4 : 1 (unchanged)', '1 : 1 (lost)'],
+          ['Length of the result', '1.0', '√3 ≈ 1.73'],
+        ], verdict: 'Clipping by norm is a speed limit, not a steering change: same direction, shorter step.' },
+        { type: 'p', text: 'How do we pick the threshold? A practical way is to log the gradient norm during training. Most steps will sit in a normal range, with rare spikes far above it. A threshold a little above the normal range leaves ordinary steps untouched and only catches the spikes. If almost **every** step is clipped, the threshold is acting as a hidden learning-rate cut, and it is better to lower the learning rate itself.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We build the smallest possible RNN: one hidden unit, one input number, two weights. First we watch how long it remembers a single 1 for three values of the recurrent weight. Then we use it as a many-to-one detector that answers "did a 1 appear anywhere?" for sequences of different lengths.' },
+        { type: 'code', lang: 'python', title: 'practice_rnn_memory.py', code: `import math
+
+W_X = 2.0     # input -> hidden weight (one hidden unit, one input number)
+
+def run(seq, w_h):
+    """Read the sequence with h_t = tanh(W_X * x_t + w_h * h_(t-1))."""
+    h, trace = 0.0, []
+    for x in seq:
+        h = math.tanh(W_X * x + w_h * h)     # the same two weights at every step
+        trace.append(h)
+    return trace
+
+# 1) A single 1 followed by silence: how long does the memory last?
+seq = [1, 0, 0, 0, 0, 0, 0, 0]
+for w_h in (0.5, 1.0, 2.5):
+    trace = run(seq, w_h)
+    shown = "  ".join(f"{h:.3f}" for h in trace)
+    # local gradient factor dh_t/dh_(t-1) = w_h * (1 - h_t^2) at the last step
+    factor = w_h * (1 - trace[-1] ** 2)
+    print(f"w_h={w_h}:  {shown}   last factor={factor:.3f}")
+
+# 2) Many-to-one: "did a 1 appear anywhere?" for sequences of any length
+for seq in ([0, 0, 0], [0, 1, 0, 0, 0], [0] * 49 + [1], [1] + [0] * 49):
+    h_last = run(seq, w_h=2.5)[-1]
+    answer = "yes" if h_last > 0.5 else "no"
+    print(f"length {len(seq):2d}, a 1 at position "
+          f"{seq.index(1) + 1 if 1 in seq else '-':>2}: h_last={h_last:.3f} -> {answer}")`, output: `w_h=0.5:  0.964  0.448  0.220  0.110  0.055  0.027  0.014  0.007   last factor=0.500
+w_h=1.0:  0.964  0.746  0.633  0.560  0.508  0.468  0.437  0.411   last factor=0.831
+w_h=2.5:  0.964  0.984  0.986  0.986  0.986  0.986  0.986  0.986   last factor=0.071
+length  3, a 1 at position  -: h_last=0.000 -> no
+length  5, a 1 at position  2: h_last=0.986 -> yes
+length 50, a 1 at position 50: h_last=0.964 -> yes
+length 50, a 1 at position  1: h_last=0.986 -> yes`, walkthrough: [
+          { lines: [3, 11], note: 'The whole RNN. One input weight, one recurrent weight, and the update rule from the lesson with hidden size 1. The loop runs once per element, whatever the length.' },
+          { lines: [13, 20], note: 'One 1, then seven zeros. With `w_h = 0.5` the memory halves each step. With 1.0 it fades slowly. With 2.5 the unit locks near 0.986 and stays there. We also print the local gradient factor of the last step.' },
+          { lines: [22, 27], note: 'With `w_h = 2.5` the unit works as a latch. The same two weights give the right answer for lengths 3, 5 and 50, even when the 1 was 49 steps ago.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'In part 2, change `w_h=2.5` to `w_h=0.5`. Before running, predict which of the four answers flip from "yes" to "no", and which one survives.',
+          'In part 1, use the sequence `[1, 0, 0, -1, 0, 0, 0, 0]`. Predict whether a single −1 can erase the memory of the unit with `w_h = 2.5`. What does the result say about a memory that can only be written, never cleared?',
+          'Add `1.5` to the tuple of `w_h` values. Predict whether the memory fades to zero or settles at a fixed level, and whether its last factor is above or below 1.',
+        ] },
+        { type: 'check', question: 'With w_h = 2.5 the unit remembers the 1 perfectly, yet its local gradient factor is only 0.071. What does that mean for training?', answer: 'The forward memory and the backward signal are two different things. The unit holds its value because tanh is **saturated** near 1, and a saturated tanh has a derivative near 0. Each step back in time multiplies the gradient by about 0.071, so after 10 steps almost nothing is left. The unit can *keep* a fact, but gradient descent can hardly reach back to adjust how that fact was stored. This tension is what the additive cell state of an LSTM was designed to remove.' },
+        { type: 'check', question: 'With w_h = 0.5 the last factor is 0.500 and with w_h = 1.0 it is 0.831. Using these, which setting lets an error signal travel further back, and is that enough for a review of 80 words?', answer: 'The setting 1.0 is better, because each step keeps 83% of the signal instead of 50%. But neither is enough. Even 0.831 multiplied 80 times is below one millionth (and the true factors are a little different at each step, but all below 1). Any factor that stays under 1 gives a product that shrinks towards zero as the sequence grows. That is the vanishing gradient problem in one number.' },
       ],
     },
   ],

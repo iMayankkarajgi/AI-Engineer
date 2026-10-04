@@ -1,6 +1,6 @@
 export default {
   id: 'http-request-long-polling-websocket-sse',
-  minutes: 22,
+  minutes: 27,
   hook: 'HTTP lets a browser ask a server questions, but how does the server tell the browser "you have a new message" the instant it arrives?',
   summary: 'Plain HTTP is request-response: the client asks, the server answers, and the server cannot speak first. Polling asks again and again on a timer; long polling keeps each request open until there is news; WebSocket upgrades one connection into a two-way channel; Server-Sent Events keep one HTTP response open and stream text events from server to client. They trade simplicity, latency, server load and direction of data, and LLM token streaming usually uses SSE.',
   sections: [
@@ -167,6 +167,89 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`,
           '**Polling too fast.** Polling every 100 ms "to feel real-time" multiplies server load; switch to a push method instead.',
         ] },
         { type: 'check', question: 'We are adding a feature that streams an AI assistant\'s reply into a web page, token by token. The user sends a prompt and then only reads. Which technique fits best, and why?', answer: 'SSE. The prompt goes up in a normal POST, and the reply flows one way, server to client, as a stream of text events. SSE is plain HTTP, reconnects automatically and is what most LLM APIs use; WebSocket would work but adds two-way machinery we do not need.' },
+      ],
+    },
+    {
+      id: "worked-overhead-at-scale",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The simulation counted requests for one client. Two questions remain: how many **bytes** does each method spend on overhead, and what does the **server** see when 10,000 clients are connected? We reuse the simulation's result (20 messages in 10 minutes) and add three **illustrative** sizes: 500 bytes of headers for one HTTP request plus its response, about 25 bytes of field names around each SSE event, and about 4 bytes of frame header per WebSocket message." },
+        { type: "steps", title: "Overhead for one client in 10 minutes", items: [
+          { title: "Polling every second", text: "600 requests × 500 bytes = **300,000 bytes** of headers to deliver 20 small messages. Almost every request carries nothing." },
+          { title: "Long polling", text: "32 requests × 500 bytes = **16,000 bytes**. Far better, but each message still pays for a full set of headers." },
+          { title: "SSE", text: "One request and response (500 bytes) to open the stream, then 20 events × 25 bytes: 500 + 500 = **1,000 bytes**." },
+          { title: "WebSocket", text: "One upgrade handshake (about 500 bytes), then 20 frames × 4 bytes: 500 + 80 = **580 bytes**." },
+          { title: "Now multiply by 10,000 clients", text: "Polling every second means 10,000 requests per second arriving at the server, nearly all empty. Long polling means 10,000 parked requests, plus about 10,000 / 30 ≈ 333 timeout re-requests per second when nothing is happening. SSE and WebSocket mean 10,000 open connections and almost no requests." },
+        ] },
+        { type: "chart", kind: "hbar", title: "Overhead bytes for one client: 20 messages in 10 minutes (illustrative)", xLabel: "Bytes of overhead", unit: " B", labels: ["Polling 1 s", "Long polling", "SSE", "WebSocket"], series: [{ name: "Overhead", values: [300000, 16000, 1000, 580] }], caption: "Computed from the request counts in the simulation and the illustrative sizes above. Real header sizes vary a lot, but the ordering does not." },
+        { type: "table", caption: "What a server with 10,000 mostly idle clients has to handle", head: ["Method", "Requests per second", "Connections held open"], rows: [
+          ["Polling every 1 s", "10,000", "Few (each closes quickly)"],
+          ["Long polling, 30 s timeout", "About 333", "10,000"],
+          ["SSE or WebSocket", "Close to 0", "10,000"],
+        ] },
+        { type: "p", text: "The push methods move the cost from **requests** to **open connections**. That is cheap for a server built to hold many idle connections, and expensive for one that dedicates a thread to each. So when choosing a method, ask two questions: how often does data really change, and what does our server pay for an idle connection?" },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will write the two halves of SSE ourselves, without any network: a tiny 'server' that writes events in the wire format, and a parser that reads them back. Then we cut the connection in the middle and reconnect twice: once the right way, with the last event ID, and once the careless way." },
+        { type: "code", lang: "python", title: "practice_sse_resume.py", code: `# Build an SSE stream, parse it, drop the connection, and resume without loss.
+
+def sse_bytes(event_id, text):
+    """What the server writes for one event (the lesson's wire format)."""
+    return f"id: {event_id}\\nevent: chat\\ndata: {text}\\n\\n"
+
+messages = ["hi Bob", "are you there?", "lunch at 1?", "bring the laptop", "see you"]
+log = {i + 1: m for i, m in enumerate(messages)}          # server keeps id -> text
+
+def serve(last_event_id=0, drop_after=None):
+    """Stream every event newer than last_event_id; maybe cut the line early."""
+    out, sent = "", 0
+    for event_id in sorted(log):
+        if event_id > last_event_id:
+            if drop_after is not None and sent == drop_after:
+                break                                     # connection lost here
+            out += sse_bytes(event_id, log[event_id]); sent += 1
+    return out
+
+def parse(stream):
+    """Split on blank lines, then read 'field: value' lines of each event."""
+    events = []
+    for block in stream.strip().split("\\n\\n"):
+        fields = dict(line.split(": ", 1) for line in block.split("\\n"))
+        events.append((int(fields["id"]), fields["data"]))
+    return events
+
+first = parse(serve(drop_after=2))                        # line drops after 2 events
+print("before the drop:", first)
+last_id = first[-1][0]
+print("reconnect with Last-Event-ID:", last_id)
+
+resumed = first + parse(serve(last_event_id=last_id))
+naive = first + parse(serve(last_event_id=4))             # client that only gets what comes next
+print("with resume   :", [i for i, _ in resumed], "- complete:", len(resumed) == len(log))
+print("without resume:", [i for i, _ in naive], "- missed:", len(log) - len(naive))
+print("bytes for event 1:", len(sse_bytes(1, log[1])), "of which text:", len(log[1]))`, output: `before the drop: [(1, 'hi Bob'), (2, 'are you there?')]
+reconnect with Last-Event-ID: 2
+with resume   : [1, 2, 3, 4, 5] - complete: True
+without resume: [1, 2, 5] - missed: 2
+bytes for event 1: 32 of which text: 6`,
+          walkthrough: [
+            { lines: [3, 8], note: "The wire format from the lesson: `id`, `event` and `data` lines, then a blank line. The server keeps a log that maps each event ID to its text, which is what makes resuming possible." },
+            { lines: [10, 18], note: "The server streams every event newer than the ID the client says it has seen. `drop_after` lets us cut the connection after a chosen number of events." },
+            { lines: [20, 26], note: "The parser: split the stream on blank lines, then split each line into a field name and a value." },
+            { lines: [28, 37], note: "The line drops after two events. Reconnecting with Last-Event-ID 2 gets events 3, 4 and 5: nothing lost, nothing repeated. A client that only picks up whatever comes next misses events 3 and 4. The last line shows that event 1 took 32 bytes to carry 6 bytes of text." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `drop_after=0`, so the line drops before any event arrives. Predict what goes wrong, and how a real client should handle 'no events seen yet'.",
+          "Reconnect with `last_event_id=last_id - 1` instead of `last_id`. Predict the list of IDs the client ends up with. How could the client protect itself from the repeat?",
+          "Add a message that contains a line break, such as `\"line one\\nline two\"`. Predict what the parser does. (Real SSE sends each line of the text as its own `data:` line for this reason.)",
+        ] },
+        { type: "check", question: "In the run above, resuming worked because the server kept a log of events by ID. What happens to a reconnecting client if the server only keeps the last 3 events and the client was offline for 10?", answer: "The server can replay only the 3 it still has, so 7 events are gone and the client's view is silently wrong. Resume is only as good as the server's memory. Real systems choose how much history to keep, and when a client asks for an ID that is too old they tell it to reload the full state with a normal request instead of pretending the stream is complete." },
+        { type: "check", question: "Using the worked example, our dashboard shows a number that changes about once an hour, and 10,000 users keep it open. Is SSE clearly better than polling every 60 seconds?", answer: "Not clearly. Polling every 60 s costs about 10,000 / 60 ≈ 167 small requests per second, which is easy to serve and cache, and a delay of up to a minute hardly matters for hourly data. SSE would deliver the change at once but needs 10,000 connections held open all day. For rare updates where some delay is fine, plain polling is the simpler and often cheaper choice. Push pays off when updates are frequent or must arrive immediately." },
       ],
     },
   ],

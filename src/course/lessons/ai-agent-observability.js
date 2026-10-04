@@ -1,6 +1,6 @@
 export default {
   id: "ai-agent-observability",
-  minutes: 19,
+  minutes: 24,
   hook: "A customer says our agent took 30 seconds and then refunded the wrong order: how do we find out exactly what it did, step by step?",
   summary: "AI agent observability is the ability to see and understand what an agent did on every run: each model call, prompt, tool call, result, decision, token count, latency and cost. It is built from traces made of nested spans, plus metrics and logs. Observability lets us debug failures, control cost and latency, detect quality drift and feed real failures back into evaluation.",
   sections: [
@@ -199,7 +199,81 @@ slowest: s4 tool.issue_refund 2300 ms (timeout)`,
         ] },
         { type: "callout", tone: "example", title: "Real-world use", text: "A team sees daily cost double overnight. Sorting traces by cost reveals an agent stuck re-calling a search tool after a schema change in its results. They fix the parser, add an alert on steps per run, and add that failing case to their evaluation suite." }
       ]
-    }
+    },
+    {
+      id: 'spotting-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'Collecting traces is the easy half. Reading the numbers built from them is where teams go wrong, and the most common mistake is trusting an **average**. A small example shows why. Ten refund runs finish; nine take 1.0 second and one, stuck on a slow tool, takes 11.0 seconds. The numbers are illustrative.' },
+        { type: 'steps', title: 'One slow run, three different stories', items: [
+          { title: 'The mean', text: '`(9 × 1.0 + 11.0) / 10 = 2.0` seconds. No user waited 2 seconds. The mean describes a run that never happened.' },
+          { title: 'The median (p50)', text: 'Sort the ten values and take the middle: **1.0 second**. This is the typical experience, and it hides the slow run completely.' },
+          { title: 'A high percentile', text: 'p95 asks: how long did the slowest 5% take? With only 10 runs, the one slow run is the slowest 10%, so p95 is pulled far above 1 second (the exact value depends on how the tool interpolates). Now the problem is visible.' },
+          { title: 'Grow the sample', text: 'With 100 runs and still one slow one, that run is the slowest 1%. It sits *above* p95, so p95 goes back to about 1 second. We need p99 or the maximum to see it.' },
+          { title: 'The rule', text: 'Report p50 for the typical user, p95 or p99 for the unlucky ones, and keep the maximum in view. Then open the trace of the worst run rather than staring at the dashboard.' },
+        ] },
+        { type: 'table', caption: 'A symptom on the dashboard, and where to look in the trace', head: ['What the metric shows', 'Likely cause', 'What to open in the trace'], rows: [
+          ['Mean latency up, p50 flat', 'A few very slow runs', 'Sort traces by duration; look for one long span such as a tool timeout'],
+          ['Cost up, request count flat', 'More tokens per run: a longer prompt, or more steps', 'Compare input tokens and step count per run before and after the change'],
+          ['Steps per run creeping up', 'The agent repeats a tool call that keeps failing or returns nothing useful', 'Look for the same tool name with the same arguments several times in a row'],
+          ['Error rate flat, complaints up', 'Silent failures: the run “succeeds” with a wrong answer', 'Traces with low judge scores or negative feedback; read input, retrieved data and output'],
+          ['One user or tenant dominates cost', 'An unusual input, or an automated caller', 'Group traces by user or session ID'],
+        ] },
+        { type: 'p', text: 'Two instrumentation mistakes make all of this impossible: spans without a parent link, so a run cannot be reassembled, and traces without version attributes, so we cannot say which prompt or model produced a bad run.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'Earlier we looked inside one trace. Now we stand one level up: we take summaries of **40 finished runs** and compute what a dashboard would show, namely latency percentiles, cost and error rate. Then we add a simple alert rule that finds a run stuck in a loop.' },
+        { type: 'code', lang: 'python', title: 'practice_trace_metrics.py', code: `import numpy as np
+rng = np.random.default_rng(11)
+
+# 40 finished agent runs, as a tracing backend would summarise them.
+runs = []
+for i in range(40):
+    steps = int(rng.integers(3, 7))                  # normal runs: 3 to 6 steps
+    runs.append({"id": f"run-{i:02d}", "steps": steps,
+                 "ms": int(steps * rng.integers(300, 700)),
+                 "tokens": int(steps * rng.integers(800, 1500)),
+                 "error": bool(rng.random() < 0.05)})
+# One run got stuck in a loop, calling the same tool again and again.
+runs[17].update(steps=38, ms=41000, tokens=95000)
+
+ms = np.array([r["ms"] for r in runs])
+tokens = np.array([r["tokens"] for r in runs])
+PRICE = 5e-6                                         # illustrative $ per token
+
+print(f"latency  mean {ms.mean():.0f} ms | p50 {np.percentile(ms, 50):.0f} ms | p95 {np.percentile(ms, 95):.0f} ms | max {ms.max()} ms")
+print(f"cost     total \${tokens.sum() * PRICE:.2f} | mean per run \${tokens.mean() * PRICE:.4f}")
+print(f"errors   {sum(r['error'] for r in runs)} of {len(runs)} runs")
+
+# Alert rule: flag any run with far more steps than a typical run.
+typical = np.median([r["steps"] for r in runs])
+for r in runs:
+    if r["steps"] > 3 * typical:
+        share = r["tokens"] / tokens.sum()
+        print(f"ALERT {r['id']}: {r['steps']} steps (typical {typical:.0f}), {share:.0%} of all tokens")`, output: `latency  mean 3344 ms | p50 2489 ms | p95 3571 ms | max 41000 ms
+cost     total $1.49 | mean per run $0.0372
+errors   3 of 40 runs
+ALERT run-17: 38 steps (typical 5), 32% of all tokens`,
+          walkthrough: [
+            { lines: [4, 13], note: 'Simulate 40 run summaries with steps, latency, tokens and an error flag. Then overwrite one run with a runaway loop.' },
+            { lines: [15, 21], note: 'Dashboard numbers: mean, p50, p95 and maximum latency; total and mean cost; error count.' },
+            { lines: [23, 28], note: 'An alert rule: flag any run with more than three times the typical number of steps, and show its share of all tokens.' },
+          ] },
+        { type: 'p', text: 'One run out of 40 used about a third of all tokens. Look at the latency line: p95 (3,571 ms) gives no hint of a 41-second run, because a single run in 40 lies above the 95th percentile. The maximum and the step alert are what expose it.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add a second stuck run after line 13: `runs[5].update(steps=30, ms=33000, tokens=70000)`. Predict: does p95 move now? Why does two runs out of 40 change it when one did not?',
+          'Make the alert too sensitive: on line 26 change `3 * typical` to `1.0 * typical`. Predict roughly how many alerts fire. Would we still read them?',
+          'Remove the runaway run by commenting out line 13. Predict how the mean compares with p50 once the outlier is gone.',
+        ] },
+        { type: 'check', question: 'The mean latency (3,344 ms) is higher than the p50 (2,489 ms) and close to the p95. What does that pattern alone tell us, before we look at any trace?', answer: 'That the distribution has a long tail: a few runs are far slower than the rest and drag the mean up. In a healthy, symmetric set of runs the mean sits near the median. A mean well above p50 is a cue to sort traces by duration and open the slowest ones. Here that leads straight to run-17.' },
+        { type: 'check', question: 'The alert names run-17 and says it took 38 steps. Is that enough to fix the problem?', answer: 'No. The metric tells us *that* something looped and *which* run. Only the trace tells us *why*: which tool was repeated, with what arguments, what it returned each time, and what the model decided after each result. The fix might be a tool that returns an unclear error, a missing stop condition, or a step limit. We need the spans to choose between them.' },
+      ],
+    },
   ],
   quiz: [
     { q: "In tracing, what is a span?", options: ["The whole conversation history stored for one user", "A dashboard chart showing latency across the week", "One timed step in a trace, like an LLM or tool call", "The maximum context window of the model being used"], answer: 2, explain: "A trace is the whole request; spans are its timed, nested steps with a parent and attributes. Dashboards show metrics, and the context window is unrelated." },

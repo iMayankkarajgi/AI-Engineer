@@ -1,6 +1,6 @@
 export default {
   id: "multimodal-ai",
-  minutes: 18,
+  minutes: 23,
   hook: "A customer sends our support bot a photo of a cracked blender jar and a voice note saying 'it leaks here' — how can one model understand both at once?",
   summary: "Multimodal AI is AI that takes in or produces more than one kind of data, such as text, images, audio and video. It works by turning each kind of data into vectors with its own encoder, mapping those vectors into a shared space, and letting one model reason over all of them together. It is what powers photo-aware chatbots, text-to-image tools, image search by description and video understanding.",
   sections: [
@@ -201,6 +201,87 @@ image of pizza -> best caption: 'pizza'`,
           "**Evaluating only on clean data.** Real user photos are blurry, dark and rotated. Build the test set from real traffic.",
         ] },
         { type: "p", text: "When should we *not* use multimodal AI? When the extra modality adds no information, when latency and cost budgets are tight, or when a simple, specialised tool (a barcode scanner, a classic OCR engine, a speech-to-text API followed by a text model) solves the problem more reliably." },
+      ],
+    },
+    {
+      id: "worked-token-budget",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Let us follow one support request through the recipe and count what the reasoning model really receives. The customer sends one photo of the cracked jar and types 'Is this covered by warranty?'. All sizes below are **illustrative**; real models differ, but the arithmetic is the same." },
+        { type: "steps", title: "One photo plus one question, counted", items: [
+          { title: "Resize the photo", text: "Suppose the vision encoder expects 336×336 pixels and uses 14×14-pixel patches. The phone photo is shrunk to that size first, whatever its original resolution." },
+          { title: "Count the patches", text: "336 / 14 = 24 patches per side, so 24 × 24 = **576 patch vectors** come out of the encoder." },
+          { title: "Project them", text: "Say each patch vector has 1,024 numbers and the language model works with 4,096. The projector maps 1,024 → 4,096 for each of the 576 vectors. The count stays 576; only the width changes." },
+          { title: "Tokenise the question", text: "'Is this covered by warranty?' becomes roughly 7 text tokens, each looked up as a 4,096-number vector." },
+          { title: "Fuse", text: "We place the image vectors and the text vectors in one sequence: 576 + 7 = **583 tokens**. About 99% of the sequence is the photo." },
+          { title: "Reason", text: "Self-attention now lets each of the 7 word tokens look at all 576 patches, so 'this' can attach to the region with the crack." },
+        ] },
+        { type: "table", caption: "Illustrative sequence lengths with the same encoder (576 tokens per photo, 7-token question)", head: ["Request", "Image tokens", "Text tokens", "Total"], rows: [
+          ["Question only", "0", "7", "7"],
+          ["1 photo + question", "576", "7", "583"],
+          ["3 photos + question", "1,728", "7", "1,735"],
+          ["1 photo, patches merged 2×2 → 1", "144", "7", "151"],
+        ] },
+        { type: "p", text: "Two lessons fall out of the numbers. First, the image dominates the bill, so sending three photos 'just in case' triples the cost. Second, any step that merges or drops patch vectors saves tokens but also throws away fine detail. If the answer depends on a hairline crack or a tiny serial number, heavy merging is exactly what makes the model miss it. When a multimodal bot gives a vague answer about a small detail, check how many vectors that detail was given before blaming the language model." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will simulate **late fusion** for our support bot. A photo model and a voice-note model each score three fault classes for 2,000 tickets. We measure each one alone, then average them, then see what happens when one modality goes bad." },
+        { type: "code", lang: "python", title: "practice_late_fusion.py", code: `import numpy as np
+rng = np.random.default_rng(7)
+
+# Late fusion: two separate models each score 3 fault classes for a ticket.
+# Each score = a signal on the true class + that modality's own noise.
+N, K = 2000, 3
+truth = rng.integers(0, K, size=N)
+signal = np.eye(K)[truth]                        # 1.0 on the true class
+
+def scores(noise):
+    """Pretend output of one unimodal model (photo model or voice model)."""
+    return signal + rng.normal(0, noise, size=(N, K))
+
+def accuracy(s):
+    return (s.argmax(axis=1) == truth).mean()
+
+photo = scores(noise=0.9)                        # photo model: fairly noisy
+voice = scores(noise=0.9)                        # voice-note model: just as noisy
+print(f"photo only  : {accuracy(photo):.2f}")
+print(f"voice only  : {accuracy(voice):.2f}")
+print(f"late fusion : {accuracy((photo + voice) / 2):.2f}")
+
+# Now the microphone is bad: the voice scores are almost pure noise.
+bad_voice = scores(noise=4.0)
+print(f"bad voice only        : {accuracy(bad_voice):.2f}")
+print(f"equal-weight fusion   : {accuracy((photo + bad_voice) / 2):.2f}")
+
+# Weight each modality by how much we trust it (1 / noise variance).
+w_photo, w_voice = 1 / 0.9**2, 1 / 4.0**2
+fused = (w_photo * photo + w_voice * bad_voice) / (w_photo + w_voice)
+print(f"trust-weighted fusion : {accuracy(fused):.2f}")
+print(f"weight on voice       : {w_voice / (w_photo + w_voice):.2f}")`, output: `photo only  : 0.67
+voice only  : 0.68
+late fusion : 0.80
+bad voice only        : 0.42
+equal-weight fusion   : 0.49
+trust-weighted fusion : 0.69
+weight on voice       : 0.05`,
+          walkthrough: [
+            { lines: [6, 12], note: "The setup. Every ticket has one true class. A model's score is 1.0 on the true class plus random noise; more noise means a weaker model." },
+            { lines: [17, 21], note: "Two equally noisy models. Each is right about two times in three. Averaging their scores lifts accuracy to 0.80, because the two noises are independent and partly cancel." },
+            { lines: [24, 26], note: "A bad microphone makes the voice scores nearly random. Plain averaging now gives 0.49, which is worse than the photo alone (0.67). The noisy modality drowns the good one." },
+            { lines: [29, 32], note: "We weight each modality by 1 / variance of its noise. The voice gets only 5% of the weight, and fusion climbs back above the photo-only score." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set the first voice noise to `0.3` (a very clear voice note). Predict first: will fusion beat the voice model alone, or will the noisy photo drag it down?",
+          "Add a third modality, `text = scores(noise=0.9)`, and average all three. Predict whether accuracy rises above 0.80, and by more or less than the jump from one model to two.",
+          "Change `K` from 3 to 10 classes. Predict which way every accuracy moves, and whether fusion still helps.",
+        ] },
+        { type: "check", question: "In the run above, equal-weight fusion with the bad microphone scored 0.49 while the photo alone scored 0.67. Why can adding a second signal make things worse?", answer: "Averaging adds the noise of both inputs as well as their signal. The bad voice scores have noise far larger than the signal, so the average is mostly noise. Fusion only helps when each modality is weighted by how reliable it is; a model has to learn, or be told, when to ignore a modality." },
+        { type: "check", question: "Using the worked example's numbers, a customer attaches 3 photos and a 7-token question. A teammate suggests shortening the question to save cost. Is that a good plan?", answer: "No. The photos are 1,728 of the 1,735 tokens, so trimming the text saves almost nothing. The real levers are sending fewer photos, cropping to the damaged region, or using a lower-detail image setting when fine detail is not needed." },
       ],
     },
     {

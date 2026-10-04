@@ -1,6 +1,6 @@
 export default {
   id: 'reinforcement-learning',
-  minutes: 22,
+  minutes: 27,
   hook: 'Nobody gave AlphaGo a labelled list of "correct moves", and nobody hands a robot the right motor command for every millisecond. How do machines learn when the only feedback is "that went well" or "that went badly"?',
   summary: 'In reinforcement learning (RL), an agent learns by trial and error: it observes a state, takes an action, receives a reward, and adjusts its behaviour (its policy) to maximise the total reward it collects over time. Rewards can be delayed, so the agent must work out which earlier actions deserved credit, and it must balance exploring new actions against exploiting what already works. RL powers game-playing systems, robotics, and the RLHF and reasoning-model training behind modern LLMs.',
   sections: [
@@ -177,6 +177,79 @@ Q(state, right): [3.12, 4.58, 6.2, 8.0, 10.0]`, walkthrough: [
           { when: '2024–2025', title: 'RL for reasoning', text: 'Reasoning models are trained with RL on tasks with checkable answers (maths, code); for example, DeepSeek-R1 used GRPO.' },
         ] },
         { type: 'callout', tone: 'example', title: 'Applications today', text: 'Game playing; robot locomotion and manipulation (often trained in simulation first); recommendation and ad systems that optimise long-term engagement; resource scheduling and data-centre cooling control; and, most relevant to this course, **aligning and improving LLMs**: RLHF trains a model with rewards from a learned model of human preferences, and RL with verifiable rewards trains reasoning on maths and code.' },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The code printed the final Q-values: 10, 8, 6.2 and so on. But how does an empty table get there? Let us follow just two entries by hand, `Q(cell 4, right)` and `Q(cell 3, right)`, over the first few episodes. We use the same settings as the code (α = 0.5, γ = 0.9) and assume the robot walks right through cells 3 and 4 in each episode.' },
+        { type: 'p', text: 'The update rule is: new Q = old Q + α × (target − old Q). With α = 0.5, each update moves the entry **halfway** to its target.' },
+        { type: 'steps', title: 'Watching value flow backwards', items: [
+          { title: 'Episode 1, leaving cell 3', text: 'The move costs −1 and lands in cell 4, whose best Q is still 0. Target = −1 + 0.9 × 0 = −1. New Q(3, right) = 0 + 0.5 × (−1 − 0) = −0.5. The robot has no idea yet that the dock is near.' },
+          { title: 'Episode 1, leaving cell 4', text: 'The robot reaches the dock. Target = 10. New Q(4, right) = 0 + 0.5 × (10 − 0) = 5.' },
+          { title: 'Episode 2, leaving cell 3', text: 'Now cell 4 looks good. Target = −1 + 0.9 × 5 = 3.5. New Q(3, right) = −0.5 + 0.5 × (3.5 + 0.5) = 1.5. The good news has moved one cell back.' },
+          { title: 'Episode 2, leaving cell 4', text: 'Target is still 10. New Q(4, right) = 5 + 0.5 × (10 − 5) = 7.5.' },
+          { title: 'Episode 3', text: 'Q(3, right): target = −1 + 0.9 × 7.5 = 5.75, so it becomes 1.5 + 0.5 × 4.25 = 3.625. Q(4, right) becomes 8.75.' },
+          { title: 'And so on', text: 'Q(4, right) goes 5, 7.5, 8.75, 9.375 and closes in on 10. Q(3, right) follows one step behind and closes in on 8.' },
+        ] },
+        { type: 'chart', kind: 'line', title: 'Two Q-values over the first six episodes', xLabel: 'Episode', yLabel: 'Q-value', series: [
+          { name: 'Q(cell 4, right)', points: [[0, 0], [1, 5], [2, 7.5], [3, 8.75], [4, 9.38], [5, 9.69], [6, 9.84]] },
+          { name: 'Q(cell 3, right)', points: [[0, 0], [1, -0.5], [2, 1.5], [3, 3.63], [4, 5.25], [5, 6.34], [6, 7.03]] },
+        ], caption: 'Computed by hand with α = 0.5 and γ = 0.9, one visit to each cell per episode. Cell 3 first dips below zero, then follows cell 4 upwards.' },
+        { type: 'p', text: 'Two lessons hide in these numbers. First, the reward reaches earlier cells **one cell per episode**. With a corridor of 100 cells, the start cell would hear about the dock only after about 100 successful trips. This is why delayed rewards make RL slow. Second, a cell can look *bad* before it looks good: Q(3, right) was −0.5 after episode 1. Early Q-values are guesses built on other guesses, so we should not trust them too soon.' },
+        { type: 'callout', tone: 'tip', title: 'How to debug a Q-table', text: 'Print the Q-values near the goal first. They should approach the real reward. Then check that values fall smoothly as we move away from the goal. If far-away states are still exactly zero, the agent has not explored enough or has not trained long enough.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will isolate the exploration vs exploitation dilemma in its simplest form: a **bandit**. There is only one state and no future to plan for. Three snack machines each pay out 1 with a hidden probability. The agent has 1,000 pulls and uses ε-greedy. We try four values of ε, from never exploring to always exploring.' },
+        { type: 'code', lang: 'python', title: 'practice_bandit.py', code: `import random
+
+# A 3-armed bandit: three snack machines, one state, no future to plan for.
+# Each pull pays 1 with a hidden probability, otherwise 0.
+TRUE_P = [0.3, 0.5, 0.8]           # machine 2 is the best, but the agent does not know
+
+def run(epsilon, pulls=1000, seed=0):
+    rng = random.Random(seed)
+    value = [0.0, 0.0, 0.0]        # the agent's estimate of each machine's payout
+    count = [0, 0, 0]              # how many times each machine was tried
+    total = 0
+    for _ in range(pulls):
+        if rng.random() < epsilon:
+            arm = rng.randrange(3)             # explore: pick any machine
+        else:
+            arm = value.index(max(value))      # exploit: best estimate so far
+        reward = 1 if rng.random() < TRUE_P[arm] else 0
+        count[arm] += 1
+        value[arm] += (reward - value[arm]) / count[arm]   # running average
+        total += reward
+    return total / pulls, count, value
+
+print("epsilon  avg reward  pulls per machine   estimated payouts")
+for epsilon in (0.0, 0.1, 0.5, 1.0):
+    avg, count, value = run(epsilon)
+    estimates = ", ".join(f"{v:.2f}" for v in value)
+    print(f"{epsilon:7.1f}  {avg:10.3f}  {str(count):18s}  [{estimates}]")`, output: `epsilon  avg reward  pulls per machine   estimated payouts
+    0.0       0.291  [1000, 0, 0]        [0.29, 0.00, 0.00]
+    0.1       0.755  [74, 29, 897]       [0.28, 0.38, 0.81]
+    0.5       0.642  [185, 175, 640]     [0.23, 0.48, 0.80]
+    1.0       0.557  [350, 315, 335]     [0.31, 0.53, 0.84]`, walkthrough: [
+          { lines: [5, 5], note: 'The hidden payout rates. The third machine is clearly the best, but the agent can only find that out by trying.' },
+          { lines: [13, 16], note: 'ε-greedy: with probability ε pick any machine at random, otherwise pick the one with the highest estimate so far.' },
+          { lines: [17, 20], note: 'Pull the machine, then update that machine\'s estimate as a running average of the rewards seen from it.' },
+          { lines: [24, 27], note: 'Run the same 1,000 pulls with four exploration rates and print the average reward, how often each machine was used, and the learned estimates.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Start optimistic: change the starting `value` to `[1.0, 1.0, 1.0]`. Predict what the ε = 0.0 row looks like now, and why a hopeful first guess makes a greedy agent explore.',
+          'Make the machines harder to tell apart: set `TRUE_P = [0.3, 0.5, 0.55]`. Predict whether ε = 0.1 still puts most of its pulls on the best machine within 1,000 pulls.',
+          'Give the agent more time: change `pulls=1000` to `pulls=100000`. First work out by hand what average reward ε = 0.1 should approach (90% of pulls on the best machine, 10% spread evenly), then check.',
+        ] },
+        { type: 'check', question: 'The ε = 0.0 agent always picks the machine it believes is best, yet it earns the least (0.291), even less than pulling at random (0.557). How is that possible?', answer: 'It never tried machines 1 and 2, so their estimates stayed at the starting value of 0.00. The first machine paid out now and then, so its estimate rose to 0.29 and looked "best" forever. Greedy picks the best *known* option, and without exploration the agent\'s knowledge never grows. This is the lock-in that exploration exists to prevent.' },
+        { type: 'check', question: 'The ε = 1.0 agent ends with good estimates for all three machines, but earns less than ε = 0.1. What does that tell us about exploration?', answer: 'Exploration has a price. The fully random agent learns the payouts well but never uses what it learned: about two thirds of its pulls go to the worse machines, so it earns about the average of the three rates. ε = 0.1 explores just enough to find the best machine and then spends about 90% of its pulls there. Knowing the best action only pays off if we also take it.' },
       ],
     },
     {

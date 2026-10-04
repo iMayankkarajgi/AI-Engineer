@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-knowledge-distillation-work',
-  minutes: 19,
+  minutes: 24,
   hook: 'How can a small model learn more from a big model’s “wrong” answers than from the right answer alone?',
   summary: 'Knowledge distillation trains a small student model to imitate a large teacher model. Instead of learning only from hard labels (the one correct class), the student also matches the teacher’s full probability distribution, softened with a temperature, which carries “dark knowledge” about how classes relate. The result is a smaller, faster model that keeps much of the teacher’s quality.',
   sections: [
@@ -140,6 +140,88 @@ total = 0.7*soft + 0.3*hard = 0.991`, walkthrough: [
           '**Self-distillation:** a model teaches a new copy of itself, or deeper layers teach shallower ones.',
           '**Sequence-level distillation for LLMs:** the teacher generates whole answers, and the student is fine-tuned on them as ordinary text. This needs only the teacher’s text, not its logits, which is why it works even through an API.',
         ] },
+      ],
+    },
+    {
+      id: 'worked-example-by-hand',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The combined loss can feel abstract, so let us compute the soft part by hand for the smallest possible case: two classes, `refund` and `damage`. The numbers are illustrative.' },
+        { type: 'steps', title: 'The soft loss for one message, by hand', items: [
+          { title: 'Teacher at T = 1', text: 'Teacher logits are `[2, 0]`. Softmax gives `e² / (e² + 1) ≈ 0.88` and `0.12`. Quite confident.' },
+          { title: 'Soften the teacher with T = 2', text: 'Divide the logits by 2: `[1, 0]`. Softmax gives `≈ 0.73` and `0.27`. The second class is now much more visible.' },
+          { title: 'Soften the student the same way', text: 'Student logits are `[1, 0]`. Divided by 2: `[0.5, 0]`. Softmax gives `≈ 0.62` and `0.38`.' },
+          { title: 'Compare the two distributions', text: '`KL = 0.73 · ln(0.73 / 0.62) + 0.27 · ln(0.27 / 0.38) ≈ 0.118 − 0.092 ≈ 0.027`. Small, because the student already leans the right way.' },
+          { title: 'Rescale by T²', text: '`T² · KL = 4 · 0.027 ≈ 0.11`. This is the soft loss that enters the total.' },
+          { title: 'Which way does the student move?', text: 'The teacher gives `refund` 0.73, the student only 0.62. The update raises the student’s `refund` logit and lowers `damage`, until the softened outputs match.' },
+        ] },
+        { type: 'p', text: 'Now three failure cases, and what each looks like in practice:' },
+        { type: 'table', caption: 'When distillation disappoints', head: ['What we see', 'Likely cause', 'What to try'], rows: [
+          ['Student matches the teacher on training data, much worse on new data', 'Too little transfer data; the student memorised it', 'Run the teacher on more unlabelled messages and train on those too'],
+          ['Student copies the teacher’s wrong answers confidently', 'α close to 1, so true labels hardly count', 'Give the hard loss more weight; clean the examples where the teacher is wrong'],
+          ['Soft loss stops falling while still high', 'Student is too small to represent what the teacher knows', 'Use a larger student, or a mid-sized “assistant” model in between'],
+          ['Student is poorly calibrated at inference', 'Evaluated with the training temperature instead of T = 1', 'Check that T is reset to 1 after training'],
+        ] },
+        { type: 'p', text: 'A quick health check: compare **student accuracy** against the true labels with **student–teacher agreement**. High agreement with low accuracy means the teacher is the limit. Low agreement means the student or the training setup is.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will train two tiny students on a single support message. One sees only the hard label “refund”. The other sees the teacher’s softened probabilities. Each student is just four logits, so we can watch exactly what it ends up believing about the *wrong* classes.' },
+        { type: 'code', lang: 'python', title: 'practice_distillation.py', code: `import numpy as np
+
+def softmax(z, T=1.0):
+    e = np.exp((z - z.max()) / T)
+    return e / e.sum()
+
+classes = ["refund", "damage", "booking", "spam"]
+teacher_logits = np.array([5.0, 3.0, 1.0, -2.0])   # teacher scores, one message
+hard_label = np.array([1.0, 0.0, 0.0, 0.0])        # the true class: refund
+
+def train_student(use_teacher, T=3.0, steps=300, lr=0.5):
+    z = np.zeros(4)                                # student logits start flat
+    for _ in range(steps):
+        if use_teacher:   # gradient of T^2 * KL(teacher(T) || student(T))
+            grad = T * (softmax(z, T) - softmax(teacher_logits, T))
+        else:             # gradient of cross-entropy with the hard label
+            grad = softmax(z) - hard_label
+        z -= lr * grad
+    return softmax(z)                              # the student is used at T = 1
+
+t, h, s = softmax(teacher_logits), train_student(False), train_student(True)
+print("class      teacher  hard-only  distilled")
+for i, c in enumerate(classes):
+    print(f"{c:<10} {t[i]:7.3f}  {h[i]:9.3f}  {s[i]:9.3f}")
+
+# How does each student order the three wrong classes?
+gap = lambda p: p[1] / p[3]                        # damage vs spam
+print(f"damage is {gap(t):.0f}x more likely than spam for the teacher")
+print(f"damage is {gap(h):.0f}x more likely than spam for the hard-only student")
+print(f"damage is {gap(s):.0f}x more likely than spam for the distilled student")`, output: `class      teacher  hard-only  distilled
+refund       0.866      0.995      0.866
+damage       0.117      0.002      0.117
+booking      0.016      0.002      0.016
+spam         0.001      0.002      0.001
+damage is 148x more likely than spam for the teacher
+damage is 1x more likely than spam for the hard-only student
+damage is 148x more likely than spam for the distilled student`,
+          walkthrough: [
+            { lines: [7, 9], note: 'The teacher’s logits for one message, and the hard label that says only “refund”.' },
+            { lines: [11, 19], note: 'Gradient descent on four student logits. One branch uses the soft loss at temperature T, the other the usual cross-entropy.' },
+            { lines: [21, 24], note: 'Train both students and print their final probabilities next to the teacher’s.' },
+            { lines: [26, 30], note: 'One number that sums up dark knowledge: how much more likely “damage” is than “spam”.' },
+          ] },
+        { type: 'p', text: 'Both students pick “refund”. Only the distilled one learned that a broken-bike message is far closer to “damage” than to “spam”. The hard-only student treats all wrong classes the same.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'On line 11, change the default `steps=300` to `steps=5`. Predict: after only 5 updates, does either student already rank “damage” well above “spam”? Which one, and why?',
+          'Change `T=3.0` on line 11 to `T=1.0`. Predict: will the distilled student still match the teacher in the end? What changes is the speed, not the target. Check with `steps=20`.',
+          'Make the teacher wrong: set `teacher_logits` on line 8 to `[3.0, 5.0, 1.0, -2.0]`. Predict the distilled student’s top class. What does this say about trusting the teacher blindly?',
+        ] },
+        { type: 'check', question: 'The hard-only student ends at 0.995 for “refund”, higher than the teacher’s 0.866. Is that student “better” than the teacher?', answer: 'No. It is only more *confident*, because a one-hot target keeps pushing the correct class toward 1.0 for as long as we train. It has thrown away everything about how the other classes relate. On messages that sit between two classes, that overconfidence makes it less useful, not more.' },
+        { type: 'check', question: 'The student trained at T = 3 but its printed probabilities match the teacher’s T = 1 probabilities to three decimals. How can that be?', answer: 'Matching the softened distributions at T = 3 means the student’s logits divided by 3 match the teacher’s logits divided by 3, up to a constant. So the logits themselves match up to a constant, and softmax ignores constants. If the student matches at one temperature and has enough capacity, it matches at every temperature, including T = 1.' },
       ],
     },
     {

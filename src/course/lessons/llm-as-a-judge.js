@@ -1,6 +1,6 @@
 export default {
   id: "llm-as-a-judge",
-  minutes: 18,
+  minutes: 23,
   hook: "If we need to grade 10,000 chatbot answers by tomorrow, could another LLM do the grading, and could we trust it?",
   summary: "LLM as a judge means using a capable language model, given a clear rubric, to evaluate the outputs of another model or system. It scales open-ended evaluation that string metrics cannot handle and that humans cannot afford to do at volume. Judges come in pointwise, pairwise and reference-guided forms; they work best with explicit criteria and step-by-step reasoning, and they must be checked for biases such as position and length preference and validated against human labels.",
   sections: [
@@ -183,7 +183,72 @@ Cohen's kappa (one order): 0.48`,
         { type: "callout", tone: "example", title: "Real-world use cases", text: "Regression testing of prompts and models in CI (“did groundedness drop?”); scoring RAG answers for faithfulness to retrieved documents (evaluation libraries such as Ragas and DeepEval provide judge-based metrics for this); A/B comparisons between two model versions; online monitoring that samples live conversations and flags low-scoring ones for human review; filtering or ranking synthetic training data; and producing preference labels for training reward models (often called RL from AI feedback)." },
         { type: "callout", tone: "warn", title: "The common mistake", text: "Writing “Rate this answer from 1 to 10” with no rubric, using the numbers immediately, and never checking them against people. Such scores look precise but often measure length and confidence, not correctness." }
       ]
-    }
+    },
+    {
+      id: 'worked-example-agreement',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: '“Our judge agrees with humans 91% of the time” sounds like a pass. Let us check that claim by hand. We have **100 support answers**. A human reviewer marked 90 as pass and 10 as fail. Our judge graded the same 100. The table of counts is below; the numbers are illustrative.' },
+        { type: 'matrix', title: 'Human labels (rows) vs judge verdicts (columns), 100 answers', rows: ['Human: pass', 'Human: fail'], cols: ['Judge: pass', 'Judge: fail'],
+          values: [[88, 2], [7, 3]], format: 'int',
+          caption: 'Illustrative counts. The diagonal (88 and 3) is where they agree.' },
+        { type: 'steps', title: 'Is 91% agreement good?', items: [
+          { title: 'Raw agreement', text: '`(88 + 3) / 100 = 0.91`. This is the number that sounded good.' },
+          { title: 'How often each says “pass”', text: 'The human passes 90 of 100 answers (0.90). The judge passes `88 + 7 = 95` (0.95). The judge is more generous.' },
+          { title: 'Agreement by chance', text: 'Two graders who pass that often would agree a lot even if they ignored the answers: `0.90 × 0.95 + 0.10 × 0.05 = 0.855 + 0.005 = 0.86`.' },
+          { title: 'Cohen’s kappa', text: '`κ = (observed − chance) / (1 − chance) = (0.91 − 0.86) / (1 − 0.86) ≈ 0.36`. On a scale where 0 is chance and 1 is perfect, this judge is only a third of the way.' },
+          { title: 'Look at the row that matters', text: 'Of the 10 answers the human failed, the judge failed only 3. If the judge is meant to *catch bad answers*, it misses 7 of every 10.' },
+        ] },
+        { type: 'p', text: 'The lesson of the arithmetic: when most answers are good, raw agreement is dominated by the easy passes. A judge that says “pass” to everything would score 90% here.' },
+        { type: 'p', text: 'The off-diagonal cells also tell us what to fix. Seven answers in “human fail, judge pass” and only two the other way means the judge is **too lenient**. We read those seven, find what the human saw that the rubric does not mention (perhaps an invented policy), and add it to the rubric as an explicit fail condition. Then we measure again, on answers the judge prompt was not tuned on.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will write a small function that takes the four counts from a human-vs-judge table and returns raw agreement, chance agreement and kappa. Then we compare three judges on the same 100 answers, including one that passes everything.' },
+        { type: 'code', lang: 'python', title: 'practice_judge_agreement.py', code: `def kappa(both_pass, human_only, judge_only, both_fail):
+    # Confusion counts between human labels and judge verdicts (pass / fail)
+    n = both_pass + human_only + judge_only + both_fail
+    observed = (both_pass + both_fail) / n            # raw agreement
+    human_pass = (both_pass + human_only) / n         # how often the human passes
+    judge_pass = (both_pass + judge_only) / n         # how often the judge passes
+    # Agreement we would expect if the two graded independently, by chance
+    chance = human_pass * judge_pass + (1 - human_pass) * (1 - judge_pass)
+    return observed, chance, (observed - chance) / (1 - chance)
+
+judges = {
+    # name: (both pass, human pass / judge fail, human fail / judge pass, both fail)
+    "always-pass judge": (90, 0, 10, 0),
+    "lenient judge":     (88, 2, 7, 3),
+    "careful judge":     (85, 5, 2, 8),
+}
+
+print("judge              agreement  by chance  kappa  bad answers caught")
+for name, counts in judges.items():
+    observed, chance, k = kappa(*counts)
+    caught = counts[3] / (counts[2] + counts[3])      # of the 10 human fails
+    print(f"{name:<18} {observed:9.2f}  {chance:9.2f}  {k:5.2f}  {caught:18.0%}")`, output: `judge              agreement  by chance  kappa  bad answers caught
+always-pass judge       0.90       0.90   0.00                  0%
+lenient judge           0.91       0.86   0.36                 30%
+careful judge           0.93       0.80   0.66                 80%`,
+          walkthrough: [
+            { lines: [1, 9], note: 'From four counts: raw agreement, each grader’s pass rate, the agreement expected by chance, and kappa.' },
+            { lines: [11, 16], note: 'Three judges on the same data (90 human passes, 10 human fails). Each tuple is the four cells of the table.' },
+            { lines: [18, 22], note: 'Print the three agreement numbers, and how many of the 10 human-failed answers each judge also failed.' },
+          ] },
+        { type: 'p', text: 'Raw agreement barely separates the three judges: 0.90, 0.91, 0.93. Kappa and the last column separate them clearly: 0.00, 0.36, 0.66, and 0%, 30%, 80% of bad answers caught.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add a strict judge: `"strict judge": (70, 20, 0, 10)`. It fails every bad answer but also 20 good ones. Predict: is its raw agreement above or below the lenient judge’s? And its kappa?',
+          'Rebalance the data: change the careful judge to `(45, 5, 2, 48)`, a test set that is half fails. Predict how the gap between agreement and kappa changes.',
+          'Change the always-pass judge to an always-fail judge, `(0, 90, 0, 10)`. Predict its agreement and its kappa before running.',
+        ] },
+        { type: 'check', question: 'We want to use the judge as a release gate that blocks bad answers. The lenient judge has 91% agreement. Why is that number the wrong one to look at, and what is the right one?', answer: 'Agreement is dominated by the 90 easy passes. A gate is only useful if it catches failures, and the lenient judge catches 3 of 10. The number to watch is the share of human-failed answers the judge also fails (its recall on failures), with kappa as a summary. We should also check the opposite error: how many good answers it blocks.' },
+        { type: 'check', question: 'A teammate validates a new judge on 20 hand-picked answers that are all obvious passes or obvious fails, and reports perfect agreement. What is wrong with this check?', answer: 'It tests the judge only where judging is easy. Real traffic contains borderline answers: mostly right with one invented detail, or correct but incomplete. That is where judges and humans disagree. The sample should be drawn from real outputs with a realistic mix, include hard cases on purpose, and be large enough that a few disagreements do not swing the result.' },
+      ],
+    },
   ],
   quiz: [
     { q: "What is LLM as a judge?", options: ["Fine-tuning a model on a large set of human quality ratings", "Using an LLM with a rubric to grade an LLM system's outputs", "Letting real users vote on answers inside the live product", "Computing BLEU and ROUGE scores with a neural network model"], answer: 1, explain: "A judge model reads the input, the output and a rubric, and returns a score or preference. The other options describe training, human feedback or a metric." },

@@ -1,6 +1,6 @@
 export default {
   id: "how-do-cuda-kernels-work",
-  minutes: 23,
+  minutes: 28,
   hook: "When PyTorch multiplies two matrices on a GPU, a million tiny threads each run the same short function — so how does each one know which numbers are its job?",
   summary: "A CUDA kernel is a function written once and executed in parallel by thousands or millions of GPU threads. Threads are grouped into blocks, and blocks into a grid; each thread computes its own global index from built-in variables and works on the matching piece of data. The CPU (host) copies data to GPU memory and launches kernels; the GPU (device) schedules blocks onto its streaming multiprocessors in groups of 32 threads called warps. Fast kernels depend as much on smart memory use as on raw arithmetic.",
   sections: [
@@ -233,6 +233,92 @@ bad   (a[i*32])  byte offsets: [0, 128, 256, 384, 512, 640, 768, 896]`,
           ],
           verdict: "A kernel shines when there is lots of identical, independent work and the data stays on the GPU; otherwise the overheads can make it slower than the CPU." },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Forgetting the bounds check `if (i < n)` (out-of-bounds writes corrupt memory); launching too few threads to fill the GPU; ignoring that kernel launches are asynchronous (timing them without synchronising measures nothing); many threads updating the same location without atomics (race conditions); and assuming a custom kernel beats cuBLAS — it rarely does for plain matmul." },
+      ],
+    },
+    {
+      id: "worked-parallel-sum",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Vector addition is the easy case: every thread writes to its *own* output slot, c[i]. Many useful operations are not like that. Take the simplest one: adding up all the elements of an array. Now every thread wants to write to the **same** place. Let us walk through why the obvious kernel breaks and how a correct one is built." },
+        { type: "steps", title: "Summing an array on a GPU", items: [
+          { title: "The obvious kernel", text: "Each thread runs `total = total + a[i]`. That one line is really three actions: read total, add, write total." },
+          { title: "The race, with numbers", text: "Say total = 0, a[0] = 1 and a[1] = 2. Thread 0 reads 0. Thread 1 also reads 0, before thread 0 has written. Thread 0 writes 1. Thread 1 writes 2. The final total is 2, not 3. One update is lost. This is a **race condition**." },
+          { title: "Fix A: atomic add", text: "An atomic operation does read, add and write as one unbreakable action. The answer is now correct, but the threads must take turns at one memory location. We have built a queue: the work is serial again." },
+          { title: "Fix B: a tree", text: "Pair the elements up. In round 1, each pair is added by a different thread, and no two threads touch the same slot. That halves the list. Round 2 pairs up the partial sums, and so on." },
+          { title: "Count the rounds", text: "Each round halves the list, so n elements need about log₂ n rounds. Eight elements take 3 rounds. About a million (2²⁰) take only 20." },
+          { title: "How real kernels arrange it", text: "A common layout: each block reduces its own slice in shared memory, calling `__syncthreads()` between rounds, and writes one partial sum. A second, much smaller pass adds the partial sums." },
+        ] },
+        { type: "table", caption: "Does each thread own its output?", head: ["Operation", "Output per thread", "Safe pattern"], rows: [
+          ["Vector add, activation function", "Its own element", "Plain kernel with a bounds check"],
+          ["Matrix multiply", "Its own output cell", "Plain or tiled kernel"],
+          ["Sum, max, mean", "One shared result", "Tree reduction"],
+          ["Histogram, scatter-add", "A slot chosen by the data", "Atomic updates, or sort first"],
+        ] },
+        { type: "p", text: "The habit to build: before writing a kernel, ask 'can two threads ever write to the same address?'. If the answer is no, the kernel is safe by construction. If it is yes, we need a tree, atomics, or a different way to split the work. In practice we call a library reduction rather than write our own, but knowing the pattern explains why a `sum` is not one simple kernel." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will simulate three things in plain Python: a grid-stride loop that covers 10 elements with only 4 threads, the broken 'everyone adds to total' sum, and a tree reduction that gets the right answer in a few rounds." },
+        { type: "code", lang: "python", title: "practice_reduction.py", code: `import numpy as np
+
+a = np.arange(1, 11)                             # 1..10, true sum = 55
+n = len(a)
+
+# 1) Grid-stride loop: only 4 threads, but 10 elements to cover.
+total_threads = 4                                # blockDim.x * gridDim.x
+for tid in range(total_threads):
+    mine = list(range(tid, n, total_threads))    # i = tid, tid+4, tid+8, ...
+    print(f"thread {tid} handles indices {mine}")
+
+# 2) A broken sum: every thread does  total = total + a[i]  at the same time.
+total = 0
+seen = [total for _ in range(n)]                 # all threads read total first
+for i in range(n):
+    total = seen[i] + a[i]                       # then each writes its own answer
+print(f"racy sum: {total} (should be {a.sum()})")
+
+# 3) A tree reduction: in each round, thread i adds its partner's value.
+vals = a.copy()
+stride, rounds = 1, 0
+while stride < n:
+    for i in range(0, n - stride, 2 * stride):   # these pairs are independent
+        vals[i] += vals[i + stride]
+    stride *= 2; rounds += 1
+    print(f"round {rounds}: {vals[::stride].tolist()}")
+print("tree sum:", vals[0], "in", rounds, "rounds")
+
+# 4) How the number of rounds grows with the data size
+for size in (10, 1024, 1 << 20):
+    print(f"{size:>9,} elements -> {int(np.ceil(np.log2(size)))} rounds")`, output: `thread 0 handles indices [0, 4, 8]
+thread 1 handles indices [1, 5, 9]
+thread 2 handles indices [2, 6]
+thread 3 handles indices [3, 7]
+racy sum: 10 (should be 55)
+round 1: [3, 7, 11, 15, 19]
+round 2: [10, 26, 19]
+round 3: [36, 19]
+round 4: [55]
+tree sum: 55 in 4 rounds
+       10 elements -> 4 rounds
+    1,024 elements -> 10 rounds
+1,048,576 elements -> 20 rounds`,
+          walkthrough: [
+            { lines: [7, 10], note: "A grid-stride loop. Thread tid starts at index tid and jumps ahead by the total thread count. Together the 4 threads cover all 10 indices exactly once." },
+            { lines: [13, 17], note: "The race. We imitate 'at the same time' by letting every thread read `total` before anyone writes. Each then writes 0 + a[i]; the last write wins, so the 'sum' is 10 instead of 55." },
+            { lines: [20, 27], note: "The tree. In each round, slot i absorbs its partner `stride` slots away, and the pairs never overlap. The printed lists shrink 5 → 3 → 2 → 1." },
+            { lines: [30, 31], note: "Rounds grow with log₂ of the size: 10 elements need 4 rounds, about a million need 20." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `total_threads = 3`. Predict the indices thread 0 handles before running. Is every index still covered exactly once?",
+          "Change `a` to `np.arange(1, 17)` (16 elements). Predict the number of rounds and the list printed in round 1.",
+          "In the tree, replace `vals[i] += vals[i + stride]` with `vals[i] = max(vals[i], vals[i + stride])`. Predict the final value. Which property must an operation have for the tree to work?",
+        ] },
+        { type: "check", question: "Our simulated racy sum printed exactly 10 every time. Would a real GPU also give 10 every time?", answer: "No. In the simulation we fixed the order: everyone reads 0, and the last thread (holding a[9] = 10) writes last. On a real GPU, which threads read stale values and whose write lands last depends on timing, so the result can change from run to run and from GPU to GPU. That is what makes race conditions hard to debug: the code can even look correct on a small test." },
+        { type: "check", question: "We launch a grid-stride kernel with 1,048,576 threads, but today the array has only 1,000 elements. Do we need an extra `if (i < n)` guard to protect the surplus threads?", answer: "The loop condition already does that job. A thread starts at i = its own index and only runs while i < n. Threads with an index of 1,000 or more fail the test at once and do nothing, and the first 1,000 threads each handle one element. The launch is wasteful, since most threads are idle, but it is safe." },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: 'chunking-strategies-for-rag',
-  minutes: 26,
+  minutes: 31,
   hook: 'Your RAG bot has the right document, yet it answers "I don\'t know". Very often the culprit is not the model or the search, but where we cut the text.',
   summary: 'RAG retrieves pieces of documents, called chunks, and hands them to an LLM. How we cut those chunks decides what can be found and whether the retrieved text makes sense on its own. Strategies range from simple fixed-size windows and sentence packing to recursive, structure-aware, semantic, contextual, small-to-big and LLM-driven (agentic) chunking; the right choice depends on the documents, the questions and the budget.',
   sections: [
@@ -167,6 +167,93 @@ for name, fn in [("fixed", fixed), ("sentence", by_sentence), ("recursive", recu
             { name: 'Small-to-big', summary: 'Embed small, return parent.', pros: ['Precise matching with full context'], cons: ['More tokens to the LLM'], bestFor: 'Precise questions over long documents' },
           ],
           verdict: 'Start with structure-based or recursive chunking at a few hundred tokens, measure, then add contextual headers or small-to-big where evaluation shows lost context.' },
+      ],
+    },
+    {
+      id: 'worked-example-budget-and-diagnosis',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us size chunks for the 80-page handbook with real arithmetic. Assume about 500 tokens per page, so 40,000 tokens in total (an illustrative figure). We compare a small setting and a large one, and we pass the top 5 chunks to the LLM.' },
+        { type: 'steps', title: 'Two settings, side by side', items: [
+          { title: 'Option A: size 400, overlap 60', text: 'Each chunk advances 340 tokens. Chunks = ⌈(40,000 − 60) / 340⌉ = ⌈117.5⌉ = 118.' },
+          { title: 'Option B: size 1,000, overlap 100', text: 'Each chunk advances 900 tokens. Chunks = ⌈(40,000 − 100) / 900⌉ = ⌈44.3⌉ = 45.' },
+          { title: 'Context cost per question', text: 'A sends 5 × 400 = 2,000 tokens to the LLM. B sends 5 × 1,000 = 5,000 tokens, 2.5 times as much, on every single question.' },
+          { title: 'How much of the handbook the LLM sees', text: 'A shows it at most 2,000 of 40,000 tokens, or 5%. B shows 12.5%. B forgives sloppier retrieval; A needs retrieval to be right.' },
+          { title: 'Decide by test', text: 'Run both on the evaluation questions. If A finds the right passage in the top 5 as often as B does, take A: same quality, fewer tokens.' },
+        ] },
+        { type: 'p', text: 'When a test question fails, the first move is always the same: open the retrieved chunks and read them. What we see usually matches one of these patterns.' },
+        { type: 'table', caption: 'Reading a chunking failure.', head: ['What we see', 'Likely cause', 'First thing to try'], rows: [
+          ['Right chunk retrieved, answer still incomplete', 'The fact is split across a boundary', 'Add overlap, or cut on sentences and paragraphs'],
+          ['Right chunk retrieved, LLM asks "which fee?"', 'The chunk lost its context', 'Prepend the heading path, or return the parent'],
+          ['Right chunk sits around rank 20', 'Chunk too big, topics mixed', 'Smaller or structure-based chunks'],
+          ['Top results are near-identical text', 'Too much overlap, or repeated boilerplate', 'Lower the overlap; remove duplicates'],
+          ['Chunk matches only on its first part', 'Longer than the embedding model limit, so cut off', 'Count tokens; lower the chunk size'],
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The lesson coded fixed-size, sentence and recursive chunking. Now we build **semantic chunking**: compare each sentence with the next one and cut where the similarity drops. Our "embedding" is a simple stand-in, a bag of crude word stems, so two sentences are similar when they share words. A real embedding model would compare meaning, but the cutting logic is identical.' },
+        { type: 'code', lang: 'python', title: 'practice_semantic_chunking.py', code: `import math
+import re
+from collections import Counter
+
+sentences = [
+    "Refunds are available within 30 days of purchase.",
+    "A refund goes back to the card used for the purchase.",
+    "Refunds for sale items are given as store credit.",
+    "Shipping takes 2 days for standard orders.",
+    "Express shipping costs 9 dollars and orders arrive next day.",
+    "Passwords must be at least 12 characters long.",
+    "Reset a forgotten password from the login page.",
+]
+STOP = {"a", "the", "are", "of", "to", "for", "as", "and", "be", "at", "must", "from"}
+
+def embed(sentence):                 # stand-in embedding: bag of crude word stems
+    words = re.findall(r"[a-z0-9]+", sentence.lower())
+    return Counter(w.rstrip("s") for w in words if w not in STOP)
+
+def cosine(a, b):
+    dot = sum(a[w] * b[w] for w in a)
+    return dot / math.sqrt(sum(v * v for v in a.values()) * sum(v * v for v in b.values()))
+
+THRESHOLD = 0.10                     # cut where neighbour similarity falls below this
+chunks, current = [], [sentences[0]]
+for prev, nxt in zip(sentences, sentences[1:]):
+    sim = cosine(embed(prev), embed(nxt))
+    cut = sim < THRESHOLD
+    print(f"sim = {sim:.2f}  {'CUT ' if cut else 'keep'} before: {nxt[:34]}")
+    if cut:
+        chunks.append(current)
+        current = []
+    current.append(nxt)
+chunks.append(current)
+for i, c in enumerate(chunks, 1):
+    print(f"chunk {i}: {len(c)} sentences, starts with {c[0][:28]!r}")`, output: `sim = 0.33  keep before: A refund goes back to the card use
+sim = 0.17  keep before: Refunds for sale items are given a
+sim = 0.00  CUT  before: Shipping takes 2 days for standard
+sim = 0.41  keep before: Express shipping costs 9 dollars a
+sim = 0.00  CUT  before: Passwords must be at least 12 char
+sim = 0.20  keep before: Reset a forgotten password from th
+chunk 1: 3 sentences, starts with 'Refunds are available within'
+chunk 2: 2 sentences, starts with 'Shipping takes 2 days for st'
+chunk 3: 2 sentences, starts with 'Passwords must be at least 1'`,
+          walkthrough: [
+            { lines: [5, 14], note: 'Seven sentences on three topics (refunds, shipping, passwords) and a small list of filler words to ignore.' },
+            { lines: [16, 22], note: 'The stand-in embedding counts word stems (a trailing "s" is removed so "Refunds" matches "refund"). Cosine similarity compares two such counts.' },
+            { lines: [24, 34], note: 'Walk through neighbouring pairs. If the similarity is below the threshold, close the current chunk and start a new one.' },
+            { lines: [35, 36], note: 'Print the chunks that came out: how many sentences each has and how it starts.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Set `THRESHOLD = 0.25`. Look at the six similarities in the output and predict how many chunks we get before you run it.',
+          'Remove `"for"` from the `STOP` set. Sentences 3 and 4 both contain "for". Predict whether the cut between refunds and shipping survives.',
+          'Move the "Express shipping…" sentence to second place, between the two refund sentences. Predict where the cuts fall now, and what that says about text that jumps between topics.',
+        ] },
+        { type: 'check', question: 'The similarity between the second and third refund sentences is 0.17, only just above the threshold of 0.10. What would a slightly higher threshold do, and is that better or worse?', answer: 'It would cut there, so the rule about sale items would become its own chunk, separated from the general refund rules. We would get more and smaller chunks. Whether that is better depends on the questions, which is why the threshold has to be tuned on real data and not picked by feel.' },
+        { type: 'check', question: 'Take "Refunds take 5 days." followed by "The money returns to your card." They share no words. What does our stand-in do with this pair, and what would a real embedding model do?', answer: 'Our stand-in gives a similarity of 0 and cuts between them, splitting one topic in two. A real embedding model would place the two sentences close together, because they mean related things, and would keep them in one chunk. Semantic chunking is only as good as the embeddings behind it.' },
       ],
     },
     {

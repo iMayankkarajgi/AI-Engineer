@@ -1,6 +1,6 @@
 export default {
   id: 'vectorless-rag',
-  minutes: 20,
+  minutes: 25,
   hook: 'When you look something up in a 300-page manual, you don\'t compute embeddings: you open the table of contents, pick a chapter, then a section. Can an LLM retrieve the same way?',
   summary: 'Vectorless RAG retrieves context for an LLM without embeddings or a vector database. The best-known form turns a document into a tree, like a table of contents with section summaries, and lets an LLM reason its way down the tree to the right section; other forms use keyword search, agentic file search, SQL or simply long context. It avoids chunking and similarity problems and gives explainable retrieval paths, but costs more LLM calls per query and does not scale to huge unstructured collections as easily as vector search.',
   sections: [
@@ -162,6 +162,79 @@ What is the meal allowance when I travel?
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Treating "vectorless" as automatically better: it trades cheap lookups for LLM reasoning, so measure accuracy, latency and cost on your own questions. Applying tree navigation to documents with no real structure (the tree becomes arbitrary). Writing vague node summaries, which give the LLM nothing to reason about. Forgetting a fallback (such as keyword search) when navigation reaches a dead end.' },
         { type: 'check', question: 'We have 2 million customer-support chat transcripts and need answers in under a second. Is tree-based vectorless RAG a good fit?', answer: 'No. Chat transcripts have little hierarchical structure, the collection is huge, and multiple LLM navigation calls would break the latency budget. Vector or hybrid search, perhaps with a reranker, fits much better.' },
+      ],
+    },
+    {
+      id: 'worked-example-navigation-cost',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'What does one tree-navigation query really cost, and how often does it reach the right section? Let us count for a manual with 1,000 sections arranged as a tree with 10 children per node, so 3 levels. All token counts and success rates are illustrative.' },
+        { type: 'steps', title: 'One query, counted', items: [
+          { title: 'One navigation call', text: 'The LLM reads the question (about 30 tokens) and 10 child entries of about 40 tokens each (title plus summary): roughly 430 input tokens.' },
+          { title: 'Three levels', text: '3 calls × 430 ≈ 1,290 tokens spent on reading summaries.' },
+          { title: 'The answer call', text: 'The chosen section, say 1,500 tokens, goes into the final prompt. Total: about 2,800 input tokens and 4 LLM calls.' },
+          { title: 'Vector RAG for comparison', text: '5 chunks × 400 tokens = 2,000 tokens and 1 LLM call. The token totals are close. The real difference is 4 calls in a row instead of 1, which shows up as latency.' },
+          { title: 'Risk of a wrong turn', text: 'If each choice is right 95% of the time, all three are right 0.95³ ≈ 0.86 of the time. One wrong turn at the top loses the answer.' },
+          { title: 'Widen the search', text: 'Keeping the best 2 children at every level opens 1 + 2 + 4 = 7 nodes instead of 3. More calls, but a wrong first choice is no longer fatal.' },
+        ] },
+        { type: 'table', caption: 'Three ways to walk a 3-level tree.', head: ['Strategy', 'Nodes opened (LLM calls)', 'Survives one wrong turn?'], rows: [
+          ['Greedy: best child only', '3', 'No'],
+          ['Keep the best 2 at each level', '7', 'Yes, if the right branch was the second choice'],
+          ['Greedy, then backtrack on a bad leaf', '3, more only when needed', 'Yes, but it needs a check that the leaf answers the question'],
+        ] },
+        { type: 'p', text: 'To find wrong turns in a running system, log the path for every question. Take the questions that were answered badly and see where their paths left the correct route. If most of them go wrong at level 1, the chapter summaries are too vague. The fix is then to rewrite those summaries so each one lists what its children cover, not to change the model.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The earlier code always followed the single best child. Now we add a **beam**: at each level we keep the best `beam` children instead of one, then pick the best leaf at the end. We ask a question that sends the greedy walk into the wrong chapter and watch a beam of 2 recover. As before, word overlap stands in for the judgement of the LLM.' },
+        { type: 'code', lang: 'python', title: 'practice_beam_navigation.py', code: `import re
+
+tree = {"title": "Handbook", "summary": "all policies", "children": [
+    {"title": "1 Leave", "summary": "vacation days sick days parental leave", "children": [
+        {"title": "1.1 Vacation", "summary": "vacation days per year and carry over"},
+        {"title": "1.2 Sick leave", "summary": "sick days and doctor notes"}]},
+    {"title": "2 Expenses", "summary": "claims receipts travel meals", "children": [
+        {"title": "2.1 Travel", "summary": "flights hotels booking"},
+        {"title": "2.2 Training", "summary": "paid training days and conference fees"}]}]}
+
+def score(question, node):                 # stand-in for the LLM judging one node
+    words = lambda t: set(re.findall(r"[a-z]+", t.lower()))
+    return len(words(question) & words(node["title"] + " " + node["summary"]))
+
+def navigate(question, beam):
+    frontier, calls = [(tree, ("Handbook",))], 0
+    while "children" in frontier[0][0]:
+        nxt = []
+        for node, path in frontier:        # one LLM call per opened node
+            calls += 1
+            ranked = sorted(node["children"], key=lambda c: -score(question, c))
+            nxt += [(c, path + (c["title"],)) for c in ranked[:beam]]
+        frontier = nxt
+    leaf, path = max(frontier, key=lambda f: score(question, f[0]))
+    return " > ".join(path), score(question, leaf), calls
+
+question = "How many paid training days do I get?"
+for beam in [1, 2]:
+    path, s, calls = navigate(question, beam)
+    print(f"beam={beam}: {path}  (leaf score {s}, {calls} LLM calls)")`, output: `beam=1: Handbook > 1 Leave > 1.1 Vacation  (leaf score 1, 2 LLM calls)
+beam=2: Handbook > 2 Expenses > 2.2 Training  (leaf score 3, 3 LLM calls)`,
+          walkthrough: [
+            { lines: [3, 9], note: 'A handbook tree with two chapters and four sections. Training days are filed under Expenses, and the Expenses summary does not mention them.' },
+            { lines: [11, 13], note: 'The stand-in for one LLM judgement: how many words the question shares with a node title and summary.' },
+            { lines: [15, 25], note: 'Navigate level by level. Every opened node costs one call and passes on its best `beam` children. At the bottom, the leaf with the best score wins.' },
+            { lines: [27, 30], note: 'Ask the same question with a beam of 1 (greedy) and a beam of 2, and print the path, the leaf score and the calls used.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add the words `paid training` to the summary of "2 Expenses". Predict the path that beam=1 takes now, and how many calls it needs.',
+          'Change the question to `"How many sick days do I get?"`. Predict whether beam=1 and beam=2 end on the same leaf, and what the extra call of beam=2 bought us.',
+          'Add `3` to the list of beams. Every node has only two children. Predict the number of LLM calls for beam=3.',
+        ] },
+        { type: 'check', question: 'With beam=1 the walk went into "1 Leave" because the question shares the word "days" with its summary. A real LLM does not count words. Could it still take this wrong turn, and what in the index would cause it?', answer: 'Yes. At the top level the LLM only sees the two chapter summaries, and the Expenses summary says "claims receipts travel meals" with no hint of training. Nothing tells it that training days are filed there, while "Leave" sounds like the natural home for a question about days off. The cause is an incomplete summary, and the fix is to make each summary cover what its children contain.' },
+        { type: 'check', question: 'Here beam=2 cost 3 calls instead of 2. In a tree with 3 levels and 10 children per node, would a beam of 2 also cost just 1.5 times as much as greedy?', answer: 'No. Greedy opens 3 nodes. A beam of 2 opens 1, then 2, then 4 nodes: 7 calls. The number of open nodes doubles at each level, so the extra cost grows with depth. Real systems keep the beam small, or keep only the best 2 nodes overall at each level (1 + 2 + 2 = 5 calls).' },
       ],
     },
     {

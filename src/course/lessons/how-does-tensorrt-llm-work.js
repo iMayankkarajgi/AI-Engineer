@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-tensorrt-llm-work',
-  minutes: 26,
+  minutes: 31,
   hook: 'If a GPU can do trillions of operations per second, why does it often sit idle while serving an LLM, and how does NVIDIA\'s TensorRT-LLM get that time back?',
   summary: 'TensorRT-LLM is NVIDIA\'s open-source library for running LLMs as fast as possible on NVIDIA GPUs. It prepares the model ahead of time (fusing operations into fewer kernels, picking the fastest kernel for each operation, and using low-precision formats like FP8), then serves it with a paged KV cache, in-flight batching, CUDA graphs, speculative decoding and multi-GPU parallelism. Newer versions add a PyTorch backend that keeps most of the speed without a separate build step.',
   sections: [
@@ -194,6 +194,78 @@ for out in llm.generate(["How do I reset my password?"], params):
         { type: 'p', text: '**Where it struggles:** non-NVIDIA hardware (not supported); very new or custom architectures without an optimized implementation; fast-changing experiments where rebuilding engines slows the team down; small teams for whom setup and tuning effort outweighs a modest speed gain.' },
         { type: 'callout', tone: 'tip', title: 'Further learning', text: 'Deep-dive: revisit the KV Cache, Paged Attention, and Continuous Batching lessons in this module to see how TensorRT-LLM combines all three for maximum GPU utilization.' },
       ],
+    },
+    {
+      id: "when-launch-overhead-matters",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "`fusion_and_graphs.py` looked at one case: 2.5 ms of GPU work and 480 launches per token. Launch overhead is a **fixed cost per pass**, so how much it hurts depends on how long the pass is. Let us vary the case by hand. Every number here is illustrative, and we assume, as the code did, that launches are not hidden behind GPU work." },
+        { type: "steps", title: "The same launches, five situations", items: [
+          { title: "Decode, small batch", text: "480 launches × 5 µs = 2.4 ms on top of 2.5 ms of GPU work. Overhead share: 2.4 ÷ 4.9 ≈ 49%. Nearly half of every step is waiting." },
+          { title: "Add fusion", text: "Suppose fusion cuts 15 kernels per layer to 6. Then 32 × 6 = 192 launches cost 0.96 ms. Share: 0.96 ÷ 3.46 ≈ 28%. (Fusion also cuts memory traffic; we hold the GPU work fixed to look at launches alone.)" },
+          { title: "Replay a CUDA graph", text: "The whole sequence costs about one launch, 0.005 ms. Share: about 0.2%." },
+          { title: "Decode, large batch", text: "With many users in the batch the GPU work per step grows, say to 10 ms, while the launches stay at 2.4 ms. Share: 2.4 ÷ 12.4 ≈ 19%." },
+          { title: "Prefill of a long prompt", text: "Say the pass needs 60 ms of GPU work. The same 2.4 ms of launches is now 2.4 ÷ 62.4 ≈ 4%." }
+        ] },
+        { type: "table", caption: "Share of a pass lost to launch overhead (illustrative numbers)", head: ["Situation", "GPU work", "Launch overhead", "Overhead share"], rows: [
+          ["Decode, small batch, eager launches", "2.5 ms", "2.4 ms", "≈ 49%"],
+          ["Decode, small batch, after fusion", "2.5 ms", "0.96 ms", "≈ 28%"],
+          ["Decode, small batch, CUDA graph", "2.5 ms", "0.005 ms", "≈ 0.2%"],
+          ["Decode, large batch, eager launches", "10 ms", "2.4 ms", "≈ 19%"],
+          ["Long prefill, eager launches", "60 ms", "2.4 ms", "≈ 4%"]
+        ] },
+        { type: "p", text: "The pattern: the shorter the pass, the more a fixed cost hurts. Small-batch decode has the shortest passes and repeats them for every token, so that is where fusion and CUDA graphs pay off most. A long prefill barely notices the launches; there the fused attention kernels and lower precision matter more, because they cut the GPU work itself." },
+        { type: "p", text: "This gives us a habit for reading any speedup claim. Ask which part of the time it removes, and how big that part is in our own workload. A trick that doubles the token rate at batch size 1 may add only a few percent on a server that always runs large batches." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson described tensor parallelism in words: each weight matrix is split across GPUs, every GPU computes part of every layer, and the parts are combined. We will do exactly that with a tiny matrix in numpy and check that the answer does not change. Then we use plain arithmetic to see how the weights of our 70B model spread over 80 GB GPUs at different precisions and TP sizes." },
+        { type: "code", lang: "python", title: "practice_tensor_parallel.py", code: `import numpy as np
+rng = np.random.default_rng(0)
+d_in, d_out, TP = 8, 16, 4
+W = rng.normal(size=(d_out, d_in))           # one layer's weight matrix
+x = rng.normal(size=d_in)                    # one token's activation vector
+
+# Tensor parallelism: each "GPU" holds a slice of the rows of W.
+shards = np.array_split(W, TP, axis=0)
+parts = [s @ x for s in shards]              # every GPU computes its part of the layer
+y_tp = np.concatenate(parts)                 # the parts are gathered after the layer
+print("rows of W on each GPU:", [s.shape[0] for s in shards])
+print("same result as one GPU:", np.allclose(y_tp, W @ x))
+
+# Weights per GPU for a 70B model on 80 GB GPUs: does it fit, and what is left?
+GPU_GB, PARAMS = 80, 70e9
+for name, bytes_per_weight in [("FP16", 2), ("FP8", 1)]:
+    for tp in (1, 2, 4, 8):
+        per_gpu = PARAMS * bytes_per_weight / 1e9 / tp
+        left = GPU_GB - per_gpu
+        status = f"{left:5.2f} GB left on each GPU" if left > 0 else "does not fit"
+        print(f"{name:4s} TP={tp}: {per_gpu:6.2f} GB of weights per GPU -> {status}")`, output: `rows of W on each GPU: [4, 4, 4, 4]
+same result as one GPU: True
+FP16 TP=1: 140.00 GB of weights per GPU -> does not fit
+FP16 TP=2:  70.00 GB of weights per GPU -> 10.00 GB left on each GPU
+FP16 TP=4:  35.00 GB of weights per GPU -> 45.00 GB left on each GPU
+FP16 TP=8:  17.50 GB of weights per GPU -> 62.50 GB left on each GPU
+FP8  TP=1:  70.00 GB of weights per GPU -> 10.00 GB left on each GPU
+FP8  TP=2:  35.00 GB of weights per GPU -> 45.00 GB left on each GPU
+FP8  TP=4:  17.50 GB of weights per GPU -> 62.50 GB left on each GPU
+FP8  TP=8:   8.75 GB of weights per GPU -> 71.25 GB left on each GPU`, walkthrough: [
+          { lines: [1, 5], note: "One small layer: a 16 × 8 weight matrix and one input vector. TP = 4 means four pretend GPUs." },
+          { lines: [7, 12], note: "Split the rows of W into four shards. Each shard multiplies the same input, and the four partial outputs are joined. The result equals the single-GPU product." },
+          { lines: [14, 21], note: "Weights per GPU for 70 billion parameters at 2 bytes (FP16) or 1 byte (FP8), split 1, 2, 4 or 8 ways, and what is left of 80 GB." }
+        ] },
+        { type: "p", text: "The last line matches the lesson's example: FP8 with TP 8 puts about 9 GB of weights on each GPU. The line for FP8 with TP 4 is the two-copies option: 17.5 GB of weights per GPU. Now change it:" },
+        { type: "list", items: [
+          "Set `TP = 3`. The 16 rows no longer divide evenly. Predict the rows per GPU and whether the result still matches.",
+          "Add a 4-bit option, `(\"INT4\", 0.5)`, to the list of precisions. Predict the weights per GPU at TP 1 and how much memory is left.",
+          "Split the columns instead: use `axis=1`, and give each shard its own slice of `x` with `np.array_split(x, TP)`. Predict how the parts must now be combined. Is it still `np.concatenate`?"
+        ] },
+        { type: "check", question: "In the practice output, the FP8 model fits on a single GPU (70 GB, with 10 GB left). Why would the team still spread it over 8 GPUs with tensor parallelism?", answer: "Two reasons from the lesson. With only 10 GB left there is very little room for the KV cache, so few users fit at once, while TP 8 leaves about 71 GB free on each GPU. And with tensor parallelism every GPU computes part of every layer, which lowers latency. Fitting the weights is the minimum, not the goal." },
+        { type: "check", question: "In our simplified model, CUDA graphs roughly doubled the token rate for small-batch decode. Would they also double the speed of a long prefill?", answer: "No. Launch overhead is a fixed cost per pass. In small-batch decode it is about as large as the GPU work, so removing it nearly halves the step. In a long prefill the GPU work is many times larger than the launches, so removing them saves only a few percent." }
+      ]
     },
   ],
   quiz: [

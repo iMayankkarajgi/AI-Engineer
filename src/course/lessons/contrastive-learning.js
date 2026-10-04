@@ -1,6 +1,6 @@
 export default {
   id: 'contrastive-learning',
-  minutes: 22,
+  minutes: 27,
   hook: 'How can a model learn that two photos show the same dog, or that a caption describes an image, when nobody has labelled a single example?',
   summary: 'Contrastive learning trains an encoder to map inputs to embeddings so that related pairs (positives) end up close together and unrelated pairs (negatives) end up far apart. Positive pairs usually come for free, from two augmented views of the same image or from an image and its caption, so huge unlabelled datasets can be used. Losses such as InfoNCE turn this into a "pick the true partner out of the batch" task, and methods like SimCLR, MoCo and CLIP use it to build the embeddings behind semantic search, RAG and multimodal AI.',
   sections: [
@@ -210,6 +210,80 @@ random-guess loss with 8 candidates = ln(8) = 2.079`, walkthrough: [
         ] },
         { type: 'callout', tone: 'warn', title: 'Common pitfalls', text: 'Weak or wrong augmentations teach the wrong invariances (if colour matters for your task, do not use colour jitter as an augmentation). Too few or too easy negatives give weak embeddings. False negatives in small or repetitive datasets push related items apart. Temperature is a sensitive setting. And contrastive embeddings reflect the data they were trained on, including its biases.' },
         { type: 'p', text: '**When not to use it:** if you have plenty of labelled data for one narrow task, plain supervised training is simpler. If an off-the-shelf embedding model already works for your domain, use it rather than training your own; fine-tune it contrastively on your own (query, passage) pairs only when retrieval quality on your data is not good enough.' },
+      ],
+    },
+    {
+      id: 'common-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'A contrastive training run can fail quietly. The loss goes down, nothing crashes, and the embeddings are still poor. The good news is that a few cheap numbers reveal most problems. After each evaluation we print three things: the **mean positive similarity**, the **mean negative similarity**, and the loss compared with **ln(N)**, the loss of a blind guess among N candidates.' },
+        { type: 'table', caption: 'Reading the three numbers', head: ['What we see', 'Likely cause', 'What to try'], rows: [
+          ['Positive and negative similarity are both near 1; loss sits at ln(N)', 'Collapse: every input maps to almost the same vector', 'Check that negatives are really in the loss; check the normalisation step; lower the learning rate'],
+          ['Loss falls fast, but search quality on real queries stays poor', 'Negatives are too easy, so the task is solved without learning fine detail', 'Add hard negatives; use a larger batch'],
+          ['Loss stalls well above zero; some true pairs never match', 'False negatives: related items are being pushed apart', 'Remove duplicates from each batch; skip negatives that score suspiciously high'],
+          ['Good on training pairs, poor on a new kind of input', 'The positives taught the wrong invariances', 'Rethink the augmentations or the way pairs are built'],
+          ['Training is unstable, or a few pairs dominate every update', 'Temperature too low', 'Raise τ a little and compare'],
+          ['Positives and negatives stay close together for a long time', 'Temperature too high, so the push is weak and spread thin', 'Lower τ a little and compare'],
+        ] },
+        { type: 'p', text: 'Why does temperature matter so much? In InfoNCE, each negative is pushed away in proportion to the probability the softmax gives it. A low τ puts almost all of that probability on the negatives closest to the anchor. That is useful when those are true hard negatives. It is harmful when one of them is a false negative, because nearly the whole push then lands on an item that should have stayed close. The practice code below shows this with four numbers.' },
+        { type: 'steps', title: 'A five-minute sanity check before a long run', items: [
+          { title: 'Look at ten pairs by eye', text: 'Print ten positives and a few negatives for each. If we cannot tell why a pair is positive, the model cannot either.' },
+          { title: 'Check the starting loss', text: 'With a fresh encoder it should be near ln(N), or above it at a low temperature. A value far below means the pairs leak an easy shortcut.' },
+          { title: 'Overfit one small batch', text: 'Train on a single fixed batch. The loss should drop close to zero. If it cannot, there is a bug in the loss or the gradient.' },
+          { title: 'Track the two similarities', text: 'Positive similarity should rise while negative similarity stays low. If both rise together, collapse has begun.' },
+          { title: 'Test on the real task', text: 'Measure retrieval on held-out queries, not just the loss. The loss depends on batch size and τ, so it is not comparable across runs.' },
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will compute InfoNCE by hand for one anchor with four candidates: its positive, one hard negative and two easy negatives. No training, just the loss. We try two temperatures and also print how the push on the negatives is shared out. Then we feed in a collapsed encoder, where every similarity is 1.' },
+        { type: 'code', lang: 'python', title: 'practice_infonce_temperature.py', code: `import numpy as np
+
+def info_nce(sims, tau):
+    """sims[0] is the positive; the rest are negatives. Returns the loss
+    and the softmax probability given to every candidate."""
+    logits = np.array(sims) / tau
+    p = np.exp(logits - logits.max())
+    p /= p.sum()
+    return -np.log(p[0]), p
+
+cases = {
+    "trained encoder": [0.8, 0.7, 0.1, 0.0],   # one negative is almost as close
+    "collapsed encoder": [1.0, 1.0, 1.0, 1.0], # every input maps to one vector
+}
+
+for label, sims in cases.items():
+    print(f"{label}: similarities {sims}")
+    for tau in (1.0, 0.1):
+        loss, p = info_nce(sims, tau)
+        # The gradient pushes each negative away in proportion to its probability
+        push = p[1:] / p[1:].sum()
+        print(f"  tau={tau:<4} loss={loss:.3f}  P(positive)={p[0]:.3f}"
+              f"  share of push on negatives: {np.round(push, 3).tolist()}")
+
+print(f"ln(4) = {np.log(4):.3f}  (loss when all 4 candidates look the same)")`, output: `trained encoder: similarities [0.8, 0.7, 0.1, 0.0]
+  tau=1.0  loss=1.048  P(positive)=0.351  share of push on negatives: [0.489, 0.268, 0.243]
+  tau=0.1  loss=0.314  P(positive)=0.730  share of push on negatives: [0.997, 0.002, 0.001]
+collapsed encoder: similarities [1.0, 1.0, 1.0, 1.0]
+  tau=1.0  loss=1.386  P(positive)=0.250  share of push on negatives: [0.333, 0.333, 0.333]
+  tau=0.1  loss=1.386  P(positive)=0.250  share of push on negatives: [0.333, 0.333, 0.333]
+ln(4) = 1.386  (loss when all 4 candidates look the same)`, walkthrough: [
+          { lines: [3, 9], note: 'InfoNCE for one anchor: divide similarities by τ, take a softmax, and the loss is −log of the probability on the positive (index 0).' },
+          { lines: [11, 13], note: 'Two situations. A trained encoder with one hard negative at 0.7, close to the positive at 0.8. And a collapsed encoder where everything looks identical.' },
+          { lines: [18, 23], note: 'For each temperature, print the loss, the probability of the positive, and each negative\'s share of the total push (its probability divided by the sum over negatives).' },
+          { lines: [25, 25], note: 'The blind-guess loss with four candidates, for comparison with the collapsed case.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Make the hard negative even harder: change `0.7` to `0.79`. Predict whether the loss at τ = 0.1 goes up or down, and roughly what P(positive) becomes when two candidates are almost tied.',
+          'Add `0.05` to the temperatures. Predict what happens to the hard negative\'s share of the push, and to the loss of the collapsed encoder.',
+          'Add ten more easy negatives with similarity `0.0` to the trained case. Predict which temperature\'s loss changes more, and what the collapsed loss would be with the same 14 candidates.',
+        ] },
+        { type: 'check', question: 'At τ = 0.1 the hard negative receives 99.7% of the push, compared with 48.9% at τ = 1.0. Why is this a strength and also a risk?', answer: 'A strength, because the two easy negatives are already far away and teach nothing, so focusing the update on the one confusing candidate is efficient. A risk, because if that "hard negative" is actually a related item (a false negative), almost the entire update goes into pushing apart two things that belong together. Low temperatures need clean negatives.' },
+        { type: 'check', question: 'For the collapsed encoder, the loss is 1.386 at both temperatures and the push is shared equally. Why can temperature not help here?', answer: 'All four similarities are equal, so dividing them by any τ still gives four equal logits, and the softmax gives each candidate 0.25. The loss is −ln(0.25) = ln(4) ≈ 1.386 whatever τ is. A loss stuck at ln(N) with similarities near 1 is the fingerprint of collapse; the fix lies in the encoder and training setup, not in the temperature.' },
       ],
     },
   ],

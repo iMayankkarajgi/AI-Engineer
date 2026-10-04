@@ -1,6 +1,6 @@
 export default {
   id: 'math-behind-gradient-descent',
-  minutes: 20,
+  minutes: 25,
   hook: 'A model with billions of numbers has no map of the best settings, so how does it find them by only ever looking at the ground under its feet?',
   summary: 'Gradient descent is the algorithm that trains almost every neural network. It measures how wrong the model is with a loss function, computes the gradient (the direction in which the loss rises fastest), and nudges every parameter a small step the opposite way: `w ← w − η · ∂L/∂w`. Repeating this many times walks the parameters downhill to a low loss.',
   sections: [
@@ -167,6 +167,82 @@ lr=1.1   w after 10 steps = -15.575`, walkthrough: [
         ] },
         { type: 'p', text: 'Look at the second block of output. With the same number of epochs, full-batch gradient descent is still far off (b = 1.57) because it took only 50 steps. Mini-batch reaches almost the noise floor with 350 steps. SGD gets there too, but with 10,000 tiny noisy steps that would be slow on real hardware. That trade-off is why mini-batch is the standard.' },
         { type: 'check', question: 'For L(w) = (w − 3)², each step multiplies the gap (w − 3) by (1 − 2η). Using that, why does η = 1.1 diverge?', answer: '1 − 2 × 1.1 = −1.2. The gap flips sign and grows by 20% every step, so w jumps back and forth across 3 with ever bigger swings. Any η above 1.0 makes |1 − 2η| > 1 on this loss, which means divergence.' },
+      ],
+    },
+    {
+      id: 'steep-and-gentle',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'Our one-parameter loss had a single slope. Real landscapes are steep in some directions and gentle in others. Let us see what that does with a two-parameter bowl: `L(a, b) = a² + 10·b²`. The gradients are `∂L/∂a = 2a` and `∂L/∂b = 20b`. Direction `b` is ten times steeper than direction `a`.' },
+        { type: 'p', text: 'Each update multiplies `a` by `(1 − 2η)` and `b` by `(1 − 20η)`. Both factors must stay between −1 and 1, or that parameter grows. For `a` any `η` below 1.0 is safe. For `b` the limit is `η < 0.1`. **The steepest direction sets the speed limit for everyone.** Here is `η = 0.09`, starting from `a = 5`, `b = 1`:' },
+        { type: 'table', caption: 'L(a, b) = a² + 10·b² with η = 0.09 (computed exactly, rounded)', head: ['Step', 'a (× 0.82 each step)', 'b (× −0.8 each step)', 'Loss'], rows: [
+          ['0', '5.000', '1.000', '35.00'],
+          ['1', '4.100', '−0.800', '23.21'],
+          ['2', '3.362', '0.640', '15.40'],
+          ['3', '2.757', '−0.512', '10.22'],
+          ['4', '2.261', '0.410', '6.79'],
+        ] },
+        { type: 'p', text: 'Read the two columns. `b` jumps from one side of the valley to the other on every step: that is the **zig-zag**. `a` moves in a steady line, but slowly, because we cannot raise `η` without breaking `b`.' },
+        { type: 'p', text: '**Momentum** is the standard fix. We keep a **velocity** `v` for each parameter: `v ← β·v + gradient`, then `θ ← θ − η·v`, with `β` around 0.8 to 0.9. In the zig-zag direction, gradients keep changing sign, so they partly cancel inside `v`. In the steady direction they all point the same way, so they add up and the step grows.' },
+        { type: 'compare', title: 'Plain gradient descent vs momentum', options: [
+          { name: 'Plain', summary: 'Each step uses only the current gradient.', pros: ['One setting to tune', 'Easy to reason about'], cons: ['Slow in gentle directions', 'Zig-zags in steep ones'], bestFor: 'Simple, well-scaled problems' },
+          { name: 'With momentum', summary: 'Each step uses a running sum of past gradients.', pros: ['Builds speed where gradients agree', 'Damps directions that flip sign'], cons: ['One more setting (β)', 'Can overshoot if β is too high'], bestFor: 'Landscapes with very different slopes' },
+        ], rows: [
+          ['Update', 'θ ← θ − η·g', 'v ← β·v + g, then θ ← θ − η·v'],
+          ['Memory per parameter', 'None', 'One extra number (v)'],
+        ], verdict: 'Momentum does not remove the speed limit, but it makes a safe, small learning rate go much further.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We now run gradient descent on the steep-and-gentle bowl ourselves. We count how many steps it needs for three learning rates, then switch on momentum and compare.' },
+        { type: 'code', lang: 'python', title: 'practice_momentum_bowl.py', code: `# A bowl with one gentle and one steep direction: L(a, b) = a*a + 10*b*b
+def loss(a, b):
+    return a * a + 10 * b * b
+
+def run(lr, beta, max_steps=500):
+    a, b = 5.0, 1.0            # starting point
+    va, vb = 0.0, 0.0          # velocity: running sum of past gradients
+    for step in range(1, max_steps + 1):
+        ga, gb = 2 * a, 20 * b             # the two partial derivatives
+        va = beta * va + ga                # beta = 0 gives plain descent
+        vb = beta * vb + gb
+        a -= lr * va
+        b -= lr * vb
+        if loss(a, b) > 1e6:
+            return f"diverged at step {step}"
+        if loss(a, b) < 1e-4:
+            return f"reached loss < 0.0001 in {step} steps"
+    return f"still at loss {loss(a, b):.4f} after {max_steps} steps"
+
+for lr, beta in [(0.02, 0.0), (0.09, 0.0), (0.11, 0.0), (0.02, 0.8)]:
+    print(f"lr={lr:<5} momentum={beta:<4} -> {run(lr, beta)}")
+
+# Watch the steep direction b zig-zag when lr is close to its limit
+b, trail = 1.0, []
+for _ in range(5):
+    b -= 0.09 * 20 * b
+    trail.append(round(b, 3))
+print("b with lr=0.09:", trail)`, output: `lr=0.02  momentum=0.0  -> reached loss < 0.0001 in 153 steps
+lr=0.09  momentum=0.0  -> reached loss < 0.0001 in 32 steps
+lr=0.11  momentum=0.0  -> diverged at step 32
+lr=0.02  momentum=0.8  -> reached loss < 0.0001 in 57 steps
+b with lr=0.09: [-0.8, 0.64, -0.512, 0.41, -0.328]`, walkthrough: [
+          { lines: [1, 3], note: 'The loss. The factor 10 makes direction b ten times steeper than direction a.' },
+          { lines: [5, 18], note: 'One loop for both methods. With `beta = 0` the velocity is just the current gradient, which is plain gradient descent. We stop when the loss is tiny or has clearly blown up.' },
+          { lines: [20, 21], note: 'Four runs. A safe rate of 0.02 needs 153 steps. 0.09 is close to the limit and fast. 0.11 is past the limit of 0.1 and diverges. Keeping the safe 0.02 but adding momentum 0.8 cuts 153 steps to 57.' },
+          { lines: [23, 28], note: 'The steep parameter alone at lr = 0.09. The sign flips on every step and the size shrinks by 0.8: the zig-zag from the table.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add the pair `(0.1, 0.0)` to the list of runs. The factor for `b` becomes exactly −1. Before running, predict which of the three messages it prints and what loss it reports.',
+          'Make the bowl steeper: change `10 * b * b` to `100 * b * b` and `20 * b` to `200 * b`. Work out the new speed limit for `η` first, then predict which of the four runs still converge.',
+          'Raise momentum in the last run from 0.8 to 0.99. Predict whether it needs fewer or more than 57 steps, then explain the result.',
+        ] },
+        { type: 'check', question: 'With lr = 0.11, direction a is perfectly stable (its factor is 1 − 0.22 = 0.78). Why does the whole run still diverge?', answer: 'Because the loss adds both directions. The factor for `b` is `1 − 20·0.11 = −1.2`, so `b` grows by 20% per step while flipping sign. However well `a` behaves, `10·b²` grows without limit. One unstable direction is enough to blow up the loss, so the steepest direction decides the largest safe learning rate.' },
+        { type: 'check', question: 'Suppose we rescale the problem so the loss is a² + b² instead of a² + 10·b². What learning rate reaches the minimum in one step, and what does that tell us about feature scaling?', answer: 'Both gradients are now `2a` and `2b`, so both factors are `(1 − 2η)`. With `η = 0.5` both become 0 and we land on the minimum in a single step. When all directions have the same steepness, one learning rate is ideal for all of them. That is why we scale features: it makes the bowl rounder, so we no longer have to pick a rate that is too slow for most directions just to keep one of them stable.' },
       ],
     },
     {

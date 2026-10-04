@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-a-vector-database-work',
-  minutes: 22,
+  minutes: 27,
   hook: 'How does a database find "I forgot my password" when the help article is titled "Reset your login credentials" and the two share no words at all?',
   summary: 'A vector database stores embeddings (lists of numbers that capture meaning) next to the original data and answers one question very fast: which stored vectors are closest to this query vector? It measures closeness with cosine similarity, dot product or Euclidean distance, and uses approximate indexes such as HNSW, IVF and PQ so it does not have to compare the query with every vector.',
   sections: [
@@ -177,6 +177,82 @@ en only   [('d1', 'How to reset your password', 0.991), ('d2', 'Change your logi
         { type: 'callout', tone: 'example', title: 'Where vector databases are used', text: '**RAG chatbots** fetch the most relevant document chunks for an LLM. **Semantic search** on sites and in apps finds results by meaning. **Recommendations** find products, songs or articles similar to what a user liked. **Image and audio search** find similar photos or sounds from embeddings of the media. **Deduplication and clustering** find near-duplicate tickets or records. **Anomaly detection** flags items far from all their neighbours.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Mixing vectors from **different embedding models** (or versions) in one index. Using a **metric** the model was not trained for. Forgetting that ANN results are **approximate** and never measuring recall. Relying only on vector search for **exact terms** like order numbers or error codes, where keyword search is better. Ignoring **metadata filters and access rights**, so users can retrieve documents they should not see.' },
         { type: 'p', text: 'When might we *not* need a vector database? If the data is small (a few thousand items), a numpy array or a flat index is enough. If users search for exact identifiers, a keyword index is better. If we already run PostgreSQL and the scale is moderate, an extension like pgvector may save us running a separate system. Choose the simplest tool that meets recall and latency targets.' },
+      ],
+    },
+    {
+      id: 'worked-example-sizing',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Before we pick an index, it helps to do the memory sums on paper. Say our shop splits its 200,000 articles and tickets into **2,000,000 chunks**, and each chunk becomes 768 float32 numbers. The link and payload sizes below are illustrative; real engines differ in the details.' },
+        { type: 'steps', title: 'Sizing the collection', items: [
+          { title: 'Raw vectors', text: '2,000,000 × 768 × 4 bytes = 6,144,000,000 bytes, about 6.1 GB. A flat (brute-force) index needs exactly this.' },
+          { title: 'Add an HNSW graph', text: 'Links are stored as IDs. If each node keeps about 32 links on the bottom layer and an ID takes 4 bytes, that is about 128 bytes per vector, or roughly 0.26 GB more. The vectors, not the links, dominate.' },
+          { title: 'Try PQ instead', text: '96 one-byte codes per vector: 2,000,000 × 96 bytes = 192 MB. That is 32× smaller than the raw vectors, paid for with less exact distances.' },
+          { title: 'Do not forget the payload', text: 'If each chunk carries about 1 KB of text and metadata, that is another 2 GB. Many systems keep the payload on disk and only the index in memory.' },
+          { title: 'Decide', text: 'About 6.4 GB for HNSW fits in the memory of one modest server. If the collection grows 10×, 64 GB may not, and PQ, smaller vectors or several machines (shards) come into play.' },
+        ] },
+        { type: 'table', caption: 'Memory for 2,000,000 vectors of 768 dimensions (arithmetic from the steps; HNSW link size is illustrative).', head: ['Layout', 'Bytes per vector', 'Total'], rows: [
+          ['Flat, float32', '3,072', '6.1 GB'],
+          ['Flat, float16', '1,536', '3.1 GB'],
+          ['HNSW, float32 + links', 'about 3,200', 'about 6.4 GB'],
+          ['PQ codes only (96 bytes)', '96', '0.19 GB'],
+        ] },
+        { type: 'p', text: 'Two lessons from the sums. First, the **dimension** is the big lever: an embedding model with 384 numbers instead of 768 halves every row of the table. Second, memory grows in a straight line with the number of vectors, so we can size next year from a guess of how much data we will have.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will build a tiny store with a language filter and compare the two simple ways to apply it: **post-filtering** (search, then throw away records that fail the filter) and **pre-filtering** (throw away first, then search). The vectors are normalised once at insert time, so a plain dot product is the cosine similarity.' },
+        { type: 'code', lang: 'python', title: 'practice_filtered_search.py', code: `import numpy as np
+
+# Records: id -> (language, embedding). Hand-made, illustrative vectors.
+records = {
+    "en-reset":  ("en", [0.90, 0.10, 0.10]),
+    "es-reset":  ("es", [0.90, 0.20, 0.00]),
+    "de-reset":  ("de", [0.80, 0.10, 0.20]),
+    "fr-reset":  ("fr", [0.85, 0.15, 0.10]),
+    "en-login":  ("en", [0.70, 0.40, 0.10]),
+    "en-refund": ("en", [0.10, 0.90, 0.20]),
+    "en-ship":   ("en", [0.00, 0.50, 0.90]),
+}
+ids = list(records)
+V = np.array([records[i][1] for i in ids], dtype=float)
+V /= np.linalg.norm(V, axis=1, keepdims=True)   # normalise once, at insert time
+
+def ranked(q):
+    q = np.array(q, dtype=float)
+    q /= np.linalg.norm(q)
+    scores = V @ q                               # dot product = cosine now
+    return [(ids[i], round(float(scores[i]), 3)) for i in np.argsort(-scores)]
+
+def post_filter(q, lang, k):                     # search first, filter after
+    return [(i, s) for i, s in ranked(q)[:k] if records[i][0] == lang]
+
+def pre_filter(q, lang, k):                      # filter first, then keep k
+    return [(i, s) for i, s in ranked(q) if records[i][0] == lang][:k]
+
+query = [0.88, 0.15, 0.05]                       # "I forgot my password"
+print("no filter  :", ranked(query)[:3])
+print("post-filter:", post_filter(query, "en", 3))
+print("pre-filter :", pre_filter(query, "en", 3))`, output: `no filter  : [('fr-reset', 0.998), ('es-reset', 0.997), ('en-reset', 0.997)]
+post-filter: [('en-reset', 0.997)]
+pre-filter : [('en-reset', 0.997), ('en-login', 0.938), ('en-refund', 0.281)]`,
+          walkthrough: [
+            { lines: [3, 15], note: 'Seven records with a language tag. All vectors are stacked into a matrix and scaled to length 1 once, when they are inserted.' },
+            { lines: [17, 21], note: 'Rank every record by dot product with the normalised query. Because all vectors have length 1, this is the cosine similarity.' },
+            { lines: [23, 27], note: 'Post-filter keeps the top k first and then drops records in the wrong language. Pre-filter drops them first and then keeps k.' },
+            { lines: [29, 32], note: 'Ask for 3 English results both ways and compare with the unfiltered top 3.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'In the `post-filter` print line, change `3` to `5` so the search fetches more candidates before filtering. Predict how many English results survive, then run it.',
+          'Change the filter language to `"es"` in both calls. Predict whether pre-filtering can still return 3 results, and why not.',
+          'Delete the normalising line (line 15) and change the `en-ship` vector to `[0.0, 5.0, 9.0]`. Predict which record jumps to the top of the unfiltered list, and what that says about the dot product on vectors of different lengths.',
+        ] },
+        { type: 'check', question: 'We asked the post-filter for 3 results and got 1. Nothing crashed. Why did this happen, and what would a real engine do about it?', answer: 'The 3 nearest records overall were French, Spanish and English. Filtering after the search removed two of them, and nothing refilled the list. Real engines fix this by fetching more candidates than k before filtering, or by applying the filter before or during the index walk so that every candidate already passes it.' },
+        { type: 'check', question: 'Only 1% of our records are in Spanish, and a query filters on `lang = es`. Which is likely to work better: an ANN search followed by a post-filter, or a pre-filter followed by brute force on what is left?', answer: 'Pre-filter then brute force. The filter leaves a small set, so scoring all of it is cheap and exact. A post-filter would have to pull about 100 candidates for every Spanish result it keeps, and could still return fewer than k.' },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: "llm-evaluation",
-  minutes: 20,
+  minutes: 25,
   hook: "How do we know a new prompt or a new model is actually better, and not just better on the three examples we happened to try?",
   summary: "LLM evaluation is the practice of measuring how well a language model or LLM application performs, using test sets, metrics, benchmarks, human reviewers and other models as judges. Because LLM outputs are open-ended and non-deterministic, no single number is enough. We combine cheap automatic checks, task-specific tests, human judgment and safety testing, and we treat our own evaluation set as a core asset.",
   sections: [
@@ -189,7 +189,78 @@ accuracy=0.710  95% CI=[0.645, 0.775]`,
           ],
           verdict: "Shortlist with benchmarks, gate every change with automatic checks on our own test set, scale open-ended grading with a validated LLM judge, and anchor everything with periodic human review." }
       ]
-    }
+    },
+    {
+      id: 'one-level-deeper',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'A question every team meets sooner or later: **how many test items do we need?** There is a formula that answers it well enough to plan with. If the true accuracy is `p` and we test on `n` items, the measured accuracy wobbles by about one **standard error**, `SE = √(p · (1 − p) / n)`. A 95% interval is roughly `± 2 · SE`.' },
+        { type: 'steps', title: 'Sizing a test set for our support bot', items: [
+          { title: 'Start with 50 items', text: 'Say accuracy is around 0.70. `SE = √(0.7 × 0.3 / 50) ≈ 0.065`. The interval is about **±13 points**. A score of 70% could really be anywhere from 57% to 83%.' },
+          { title: 'Grow to 200 items', text: '`SE = √(0.21 / 200) ≈ 0.032`, so about **±6 points**. This matches the bootstrap interval we computed earlier, [0.645, 0.775].' },
+          { title: 'Notice the square root', text: 'Four times the data only halved the interval. To halve it again, to ±3 points, we need about 800 items.' },
+          { title: 'Ask what change we need to see', text: 'If prompt edits usually move accuracy by 2 to 3 points, a 200-item set cannot confirm them with separate measurements. We either need a much larger set, or a smarter comparison.' },
+          { title: 'The smarter comparison', text: 'Run both versions on the **same items** and look only at the items where they differ. Most of the noise comes from item difficulty, which is shared, so it cancels. The practice below shows this.' },
+        ] },
+        { type: 'chart', kind: 'line', title: 'Width of the 95% interval vs test-set size (accuracy 0.70)', xLabel: 'Test items', yLabel: '± percentage points',
+          series: [ { name: '± margin', points: [[50, 12.7], [100, 9.0], [200, 6.4], [400, 4.5], [800, 3.2], [1600, 2.2]] } ],
+          caption: 'Computed from 1.96 · √(0.7 · 0.3 / n). The curve flattens: each extra item helps less than the one before.' },
+        { type: 'p', text: 'One more trap hides here. If we try twenty prompt variants on the same 200 items and keep the best, the winner’s score is flattering: with that many tries, one will look good by luck alone. This is **overfitting to the test set**. The usual defence is two sets: a *development* set we look at freely while iterating, and a *held-out* set we run only on the final candidates.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will compare two prompts, A and B, on the same 200 simulated test items, and compute the uncertainty of “B minus A” in two ways: as if the two prompts were tested on separate item sets (unpaired), and using the fact that they share items (paired).' },
+        { type: 'code', lang: 'python', title: 'practice_paired_eval.py', code: `import numpy as np
+rng = np.random.default_rng(7)
+
+n = 200                                   # test items, the same for both prompts
+difficulty = rng.random(n)                # hidden: how hard each item is
+# 1 = correct, 0 = wrong. Prompt A fails more often on hard items.
+a = (rng.random(n) > difficulty * 0.60).astype(int)
+# Prompt B fixes some of A's failures and breaks a few of A's successes.
+flip = rng.random(n)
+b = np.where(a == 0, (flip < 0.25).astype(int), (flip > 0.03).astype(int))
+
+print(f"accuracy A = {a.mean():.3f}   accuracy B = {b.mean():.3f}")
+print("B right, A wrong:", int(((b == 1) & (a == 0)).sum()),
+      "| A right, B wrong:", int(((a == 1) & (b == 0)).sum()))
+
+def interval(values):
+    lo, hi = np.percentile(values, [2.5, 97.5])
+    return f"[{lo:+.3f}, {hi:+.3f}]"
+
+unpaired, paired = [], []
+for _ in range(2000):
+    i = rng.integers(0, n, n)             # resample items for A
+    j = rng.integers(0, n, n)             # a different resample for B
+    unpaired.append(b[j].mean() - a[i].mean())   # as if on different test sets
+    paired.append((b[i] - a[i]).mean())          # same items for both prompts
+
+print("95% interval for B - A, unpaired:", interval(unpaired))
+print("95% interval for B - A, paired:  ", interval(paired))`, output: `accuracy A = 0.700   accuracy B = 0.750
+B right, A wrong: 13 | A right, B wrong: 3
+95% interval for B - A, unpaired: [-0.035, +0.135]
+95% interval for B - A, paired:   [+0.015, +0.090]`,
+          walkthrough: [
+            { lines: [4, 10], note: 'Simulate per-item results. A fails more on hard items. B copies A, fixes about a quarter of A’s failures and breaks about 3% of A’s successes.' },
+            { lines: [12, 14], note: 'The headline accuracies, and the only items that matter for the comparison: those where A and B differ.' },
+            { lines: [20, 25], note: 'Bootstrap 2,000 times. Unpaired resamples items separately for A and B. Paired resamples items once and compares A and B on the same ones.' },
+            { lines: [27, 28], note: 'The two 95% intervals for the difference.' },
+          ] },
+        { type: 'p', text: 'Same data, two conclusions. The unpaired interval includes 0, so we could not claim B is better. The paired interval is entirely above 0. The paired view is the right one here, because both prompts really did see the same items.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Shrink the test set: set `n = 50` on line 4. Predict: will the paired interval still exclude 0?',
+          'Make B break more: on line 10 change `flip > 0.03` to `flip > 0.10`. Predict the two accuracies and the “B right, A wrong / A right, B wrong” counts. Would the headline numbers alone reveal what changed?',
+          'Make B’s gain smaller: on line 10 change `flip < 0.25` to `flip < 0.10`. Predict whether 200 items are still enough to see it in the paired interval.',
+        ] },
+        { type: 'check', question: 'Only 16 of the 200 items differ between A and B (13 fixed, 3 broken). Why is the paired interval so much narrower than the unpaired one?', answer: 'On the other 184 items A and B give the same result, so those items add nothing to the difference. In the unpaired view, the luck of drawing easier or harder items shifts A and B independently, and that noise lands in the difference. Pairing removes it. All that remains is the uncertainty in the 16 items that changed.' },
+        { type: 'check', question: 'B is better overall, but it broke 3 items that A got right. What should we do before shipping B?', answer: 'Read those 3 items. An average hides *which* cases moved. If the 3 are, say, refund-policy questions, B may have a real regression in an area that matters more than the 13 it fixed. If they look unrelated, they may just be sampling noise, and re-running those items a few times will show it. Reading failures is part of the evaluation, not an optional extra.' },
+      ],
+    },
   ],
   quiz: [
     { q: "Why is evaluating an LLM application harder than testing ordinary code?", options: ["LLMs cannot be called from automated test scripts or CI", "Outputs are open-ended and vary, so exact asserts often fail", "LLM outputs never change, so tests cannot reveal anything", "Only trained human raters are allowed to evaluate LLMs"], answer: 1, explain: "Correct answers can be phrased many ways and sampling makes outputs vary. That is why we need metrics, rubrics and judges rather than only string equality." },

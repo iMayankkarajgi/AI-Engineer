@@ -1,6 +1,6 @@
 export default {
   id: 'continual-learning-in-llms',
-  minutes: 18,
+  minutes: 23,
   hook: 'If we teach a trained model one new thing, why might it suddenly get worse at the things it already knew?',
   summary: 'Continual learning is training a model on a stream of new data or tasks over time without losing what it learned before. Neural networks tend to suffer catastrophic forgetting: new training overwrites shared weights that old skills depended on. Practical fixes include replaying old data, penalising changes to important weights, giving new tasks their own parameters, and keeping fast-changing facts outside the model.',
   sections: [
@@ -151,6 +151,76 @@ B + L2 anchor:         A err 0.408  B err 0.378`, walkthrough: [
         ] },
         { type: 'callout', tone: 'example', title: 'Where continual learning matters', text: 'Code assistants that must learn new library versions; domain models (law, medicine, finance) updated as rules change; enterprise assistants adapting to a company’s new products; model providers releasing updated versions with later knowledge cutoffs; and personal assistants that adapt to a user over time. In practice most teams combine retrieval for facts with periodic, carefully evaluated fine-tunes for skills.' },
         { type: 'p', text: '**When not to bother:** if a task can be solved with retrieval or a better prompt, or if we can afford to retrain on the full combined dataset each time, a dedicated continual learning method may not be needed. Continual learning techniques earn their place when data arrives over time and full retraining is too costly.' },
+      ],
+    },
+    {
+      id: 'measuring-forgetting',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'We keep saying “check the old tasks”. Here is how to turn that into numbers. Suppose our support model learns three tasks in order: **bikes**, then **scooters**, then **helmets**. After each stage we test it on all three. That gives an **accuracy matrix**: each row is a moment in time, each column is a test set. The numbers below are illustrative.' },
+        { type: 'matrix', title: 'Accuracy after each training stage (illustrative)', rows: ['After bikes', 'After scooters', 'After helmets'], cols: ['Bikes test', 'Scooters test', 'Helmets test'],
+          values: [[0.90, 0.40, 0.35], [0.72, 0.88, 0.38], [0.65, 0.80, 0.91]], format: 'pct',
+          caption: 'Read down a column to see what happens to one skill over time. The diagonal is each task right after it was learned.' },
+        { type: 'steps', title: 'Three numbers from one matrix', items: [
+          { title: 'Final average accuracy', text: 'Average the last row: `(0.65 + 0.80 + 0.91) / 3 ≈ 0.79`. This is how good the model is now, across everything it was taught.' },
+          { title: 'Forgetting per task', text: 'For each old task, take its best earlier score minus its final score. Bikes: `0.90 − 0.65 = 0.25`. Scooters: `0.88 − 0.80 = 0.08`. Average forgetting: `(0.25 + 0.08) / 2 ≈ 0.17`.' },
+          { title: 'Forward transfer', text: 'Look above the diagonal. Before any scooter training the model scored 0.40 on scooters. If a model with no bike training scored, say, 0.30, then bikes helped scooters by 0.10. Earlier learning can help later tasks.' },
+          { title: 'Find the worst step', text: 'Bikes fell 0.18 when we added scooters and only 0.07 when we added helmets. The scooter update did most of the damage, so that is the one to redo with replay or an adapter.' },
+        ] },
+        { type: 'p', text: 'Two models can share the same final average and still be very different. One may be steady on every task. The other may be excellent on the newest task and poor on the oldest. That is why we report **average accuracy and forgetting together**.' },
+        { type: 'p', text: 'There is also a trap in the other direction. A model with *zero* forgetting and a low score on the new task has not solved the problem either. It was simply too stable to learn. The matrix shows both failures: look at the first column for forgetting and at the diagonal for learning.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will shrink the whole stability–plasticity trade-off to **two weights**. Task A depends heavily on the first weight and hardly at all on the second. Task B wants to move both. We compare three ways of learning B: no protection, the same spring on every weight, and a spring that is stiff only where task A needs it.' },
+        { type: 'code', lang: 'python', title: 'practice_weight_importance.py', code: `import numpy as np
+
+# Two weights. Task A needs w1 badly and barely cares about w2.
+imp_A = np.array([10.0, 0.1])      # importance of each weight for task A
+w_A = np.array([1.0, 1.0])         # weights after learning task A
+w_B = np.array([3.0, 3.0])         # the weights task B would like
+
+def loss_A(w):
+    return float(np.sum(imp_A * (w - w_A) ** 2))
+
+def loss_B(w):
+    return float(np.sum((w - w_B) ** 2))
+
+def train_on_B(penalty, lam, steps=2000, lr=0.01):
+    w = w_A.copy()                 # start from the task-A solution
+    for _ in range(steps):
+        grad_B = 2 * (w - w_B)                      # pull toward task B
+        grad_pen = 2 * lam * penalty * (w - w_A)    # spring back to old weights
+        w -= lr * (grad_B + grad_pen)
+    return w
+
+methods = [("naive fine-tune", np.zeros(2), 0.0),
+           ("uniform L2", np.ones(2), 1.0),
+           ("importance-weighted", imp_A, 1.0)]
+print("method                  w1     w2  loss A  loss B")
+for name, penalty, lam in methods:
+    w = train_on_B(penalty, lam)
+    print(f"{name:<20} {w[0]:5.2f}  {w[1]:5.2f}  {loss_A(w):6.2f}  {loss_B(w):6.2f}")`, output: `method                  w1     w2  loss A  loss B
+naive fine-tune       3.00   3.00   40.40    0.00
+uniform L2            2.00   2.00   10.10    2.00
+importance-weighted   1.18   2.82    0.66    3.34`,
+          walkthrough: [
+            { lines: [3, 6], note: 'Importance of each weight for task A, the weights after learning A, and where task B would like them to be.' },
+            { lines: [14, 20], note: 'Train on B by gradient descent. A penalty pulls each weight back toward its old value; `penalty` sets how hard, per weight.' },
+            { lines: [22, 28], note: 'Run the three methods and print where the weights end up and what each task loses.' },
+          ] },
+        { type: 'p', text: 'The importance-weighted run keeps `w1` near 1 (task A needs it) and lets `w2` travel almost all the way to 3 (task A does not care). It gives up a little on B and saves almost all of A.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Raise `lam` for the importance-weighted method on line 24 from `1.0` to `10.0`. Predict: which loss goes up and which goes down?',
+          'Make task A care about both weights: set `imp_A` on line 4 to `[10.0, 10.0]`. Predict: can any method now keep both losses low? What does that say about tasks that truly conflict?',
+          'Set `w_B` on line 6 to `[1.0, 3.0]`, so task B only wants to move the weight A does not need. Predict the loss A of naive fine-tuning before you run it.',
+        ] },
+        { type: 'check', question: 'Uniform L2 ends with total loss 10.10 + 2.00 = 12.10. The importance-weighted run ends with 0.66 + 3.34 = 4.00. Both use the same strength λ = 1. Where does the difference come from?', answer: 'Uniform L2 holds both weights back equally, so it stops `w2` from moving even though task A barely uses it, and still lets `w1` drift to 2.0 where task A is badly hurt. The importance-weighted penalty spends its “stiffness” only on `w1`. Same budget, placed where it matters. This is the idea behind EWC.' },
+        { type: 'check', question: 'In a real model we cannot hand-write `imp_A`. If our importance estimates were wrong and swapped the two weights, what would we expect?', answer: 'The penalty would protect `w2` and free `w1`, the opposite of what task A needs. We would get strong forgetting of A *and* a worse fit on B than naive fine-tuning. Regularisation methods are only as good as their importance estimates, which is one reason replay is often used alongside them.' },
       ],
     },
   ],

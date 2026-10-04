@@ -1,6 +1,6 @@
 export default {
   id: 'small-language-models-slms',
-  minutes: 20,
+  minutes: 25,
   hook: 'When would a 3-billion-parameter model on a phone beat a frontier model in a data centre?',
   summary: 'Small Language Models (SLMs) are language models with roughly a few hundred million to around ten billion parameters, small enough to run cheaply, quickly and often on a single device. They stay capable thanks to high-quality and synthetic training data, distillation from larger models, long training, pruning and quantization. They shine for focused, high-volume, private or offline tasks; large models remain better for broad knowledge and hard multi-step reasoning.',
   sections: [
@@ -166,6 +166,77 @@ for name in ["1.5B", "8B", "70B"]:
           'Your evaluation shows the SLM meets the quality bar. If not, try fine-tuning, then a bigger SLM, then routing hard cases to an LLM.',
         ] },
         { type: 'check', question: 'A startup wants a creative writing partner that discusses any topic in depth and keeps a long novel consistent. Is an SLM the right first choice?', answer: 'Probably not. The task is broad, open-ended and needs wide knowledge and long, coherent reasoning, which are LLM strengths. An SLM might still help with sub-tasks such as fixing grammar or autocomplete.' },
+      ],
+    },
+    {
+      id: 'worked-example-escalation-cost',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "The advice “use an SLM and escalate hard cases” only pays off if few cases escalate. Let us put numbers on the bank example. All figures here are illustrative: 1,000,000 messages a day, an SLM call costs 1 unit, an LLM call costs 20 units." },
+        { type: 'steps', title: "Costing a cascade", items: [
+          { title: "Baseline", text: "Send everything to the LLM: 1,000,000 × 20 = 20,000,000 units a day." },
+          { title: "SLM first", text: "Every message goes through the SLM once: 1,000,000 × 1 = 1,000,000 units. This part is paid whatever happens next." },
+          { title: "Escalate the unsure ones", text: "Say the SLM is unsure about 10% of messages. Those 100,000 go to the LLM: 100,000 × 20 = 2,000,000 units." },
+          { title: "Add up", text: "1,000,000 + 2,000,000 = 3,000,000 units, which is 15% of the baseline." },
+          { title: "Find the break-even", text: "The cascade costs 1 + 20 × e units per message, where e is the escalation rate. It equals the baseline of 20 when e = 0.95. Above 95% escalation the SLM is pure overhead." },
+        ] },
+        { type: 'table', caption: "Daily cost of the cascade at different escalation rates (illustrative units)", head: ['Escalation rate', 'SLM cost', 'LLM cost', 'Total', 'Share of all-LLM cost'], rows: [
+          ['0%', '1,000,000', '0', '1,000,000', '5%'],
+          ['10%', '1,000,000', '2,000,000', '3,000,000', '15%'],
+          ['30%', '1,000,000', '6,000,000', '7,000,000', '35%'],
+          ['100%', '1,000,000', '20,000,000', '21,000,000', '105%'],
+        ] },
+        { type: 'p', text: "Two things to watch in practice. First, the escalation rate is set by our confidence threshold, so a stricter threshold raises cost. Second, cost is only half of the picture: we also need the accuracy of the cases the SLM keeps. If the SLM is confidently wrong on many of them, a low escalation rate is a warning sign, not a success." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will try knowledge distillation at the smallest possible scale. A “student” with four logits learns the answer to “The capital of France is ___” twice: once from a hard one-hot label, once from a teacher's soft probabilities. Then we compare what each student knows about the wrong answers." },
+        { type: 'code', lang: 'python', title: 'practice_distillation.py', code: `import math
+
+def softmax(z):
+    e = [math.exp(x - max(z)) for x in z]
+    return [x / sum(e) for x in e]
+
+def kl(p, q):
+    # KL(p || q): how far the student q is from the teacher p (0 = identical)
+    return sum(pi * math.log(pi / qi) for pi, qi in zip(p, q) if pi > 0)
+
+tokens = ["Paris", "Lyon", "London", "banana"]
+teacher = softmax([5.0, 2.0, 1.5, -3.0])      # illustrative teacher logits
+hard = [1.0, 0.0, 0.0, 0.0]                   # one-hot label: only "Paris" counts
+
+def train(target, steps=200, lr=0.5):
+    z = [0.0] * 4                             # the student starts knowing nothing
+    for _ in range(steps):
+        q = softmax(z)
+        # gradient of cross-entropy with respect to the logits is (q - target)
+        z = [zi - lr * (qi - ti) for zi, qi, ti in zip(z, q, target)]
+    return softmax(z)
+
+print("teacher    ", " ".join(f"{t}={p:.3f}" for t, p in zip(tokens, teacher)))
+for name, target in [("hard label", hard), ("soft labels", teacher)]:
+    q = train(target)
+    print(f"{name:11s}", " ".join(f"{t}={p:.3f}" for t, p in zip(tokens, q)),
+          f"| KL to teacher={kl(teacher, q):.4f}")`, output: `teacher     Paris=0.926 Lyon=0.046 London=0.028 banana=0.000
+hard label  Paris=0.992 Lyon=0.003 London=0.003 banana=0.003 | KL to teacher=0.1350
+soft labels Paris=0.924 Lyon=0.044 London=0.026 banana=0.007 | KL to teacher=0.0055`,
+          walkthrough: [
+            { lines: [3, 9], note: "Two helpers: softmax turns logits into probabilities, and KL divergence measures how far the student's distribution is from the teacher's." },
+            { lines: [11, 13], note: "Four candidate tokens. The teacher prefers Paris but also knows that Lyon and London are far more plausible than banana. The hard label only says Paris." },
+            { lines: [15, 21], note: "A student with four logits, trained by gradient descent on cross-entropy. For this loss the gradient is simply the student's probabilities minus the target." },
+            { lines: [23, 27], note: "Train once per target and print. The hard-label student gives all three wrong answers the same 0.003. The soft-label student ranks them like the teacher and ends about 25 times closer in KL." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Cut `steps` from `200` to `20`. Predict which student is further from its target after so few updates, and check the KL values.",
+          "Change the teacher logits to `[5.0, 4.5, 1.5, -3.0]`, a teacher that is unsure between Paris and Lyon. Predict the soft-label student's top two probabilities.",
+          "Soften the teacher: divide every teacher logit by `2` before the softmax (a temperature of 2). Predict whether the probabilities of Lyon and London go up or down.",
+        ] },
+        { type: 'check', question: "The hard-label student gives Lyon, London and banana exactly the same probability. What knowledge is it missing, and why could the hard label never teach it?", answer: "It does not know that Lyon and London are “less wrong” than banana. A one-hot target carries no ranking among wrong answers: the gradient pushes every wrong logit down by the same rule, so they stay equal. The teacher's soft probabilities carry that ranking, which is the extra signal distillation gives." },
+        { type: 'check', question: "The soft-label student ends with KL = 0.0055, not 0, and gives banana 0.007 where the teacher gives almost 0. Why?", answer: "It started from equal logits and had only 200 updates. Matching a probability near zero needs a very negative logit, and the gradient for that token gets tiny as its probability shrinks, so the last bit of the gap closes slowly. More steps would push the KL closer to 0." },
       ],
     },
     {

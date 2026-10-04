@@ -93,7 +93,7 @@ function highlight(line, lang) {
 // Python the in-browser runtime can execute: the standard library plus the
 // scientific packages it ships. Code importing anything else (PyTorch, API
 // clients, agent frameworks) cannot run there, so it gets no Practice button.
-const RUNNABLE = new Set(['numpy', 'pandas', 'scipy', 'sklearn', 'matplotlib', 'math', 'random', 'collections', 're', 'json', 'itertools', 'functools', 'bisect', 'heapq', 'statistics', 'time', 'typing', 'dataclasses', 'string', 'textwrap', 'hashlib', 'ipaddress', 'datetime', 'enum', 'operator', 'copy', 'sys', 'os', 'abc', 'decimal', 'fractions']);
+const RUNNABLE = new Set(['numpy', 'pandas', 'scipy', 'sklearn', 'matplotlib', 'math', 'random', 'collections', 're', 'json', 'itertools', 'functools', 'bisect', 'heapq', 'statistics', 'time', 'typing', 'dataclasses', 'string', 'textwrap', 'hashlib', 'ipaddress', 'datetime', 'enum', 'operator', 'copy', 'sys', 'os', 'abc', 'decimal', 'fractions', 'struct', 'cmath', 'difflib', 'fnmatch', 'codecs', 'array', 'queue', 'uuid', 'base64', 'io', 'pprint', 'unicodedata', 'zlib', 'contextlib', 'types', 'numbers', 'csv', 'secrets']);
 export const canPractice = (lang, code) => lang === 'python' && [...code.matchAll(/^\s*(?:import|from)\s+([A-Za-z_][\w]*)/gm)].every(m => RUNNABLE.has(m[1]));
 export const PRACTICE_HANDOFF = 'atlas-practice-handoff';
 

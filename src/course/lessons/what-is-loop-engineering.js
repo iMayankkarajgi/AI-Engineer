@@ -1,6 +1,6 @@
 export default {
   id: "what-is-loop-engineering",
-  minutes: 21,
+  minutes: 26,
   hook: "Why does an agent that is clever on every single step still sometimes run in circles for fifty steps, or stop after two and proudly announce a job it never did?",
   summary: "An AI agent works by running a loop: look at the situation, pick an action, run it, look at the result, and repeat. Loop engineering is the practice of designing that repeating cycle on purpose: what the model sees each turn, how actions run, how progress is tracked, and above all when and how the loop stops. Most agent failures are loop failures, and a handful of techniques (budgets, verification, loop detection, context trimming, recovery) fix most of them.",
   sections: [
@@ -177,6 +177,71 @@ finished in 6 steps (tests pass)`, walkthrough: [
           { lines: [27, 27], note: "If the budget runs out, we stop with a clear message instead of looping forever." }
         ] },
         { type: "p", text: "In six steps the loop survived an early test run (it simply kept going), blocked a third identical edit, and stopped only when the checker confirmed success. Change `max_steps` to 4 and the same script ends with “step budget used up”, which is also a correct, safe outcome." }
+      ]
+    },
+    {
+      id: "worked-cost-of-long-loops",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Earlier we said that a loop running 3× longer costs far more than 3×. Let us check that with small numbers. Suppose the first turn sends 500 tokens (goal, instructions, tools), and each turn adds 300 tokens of action and result to the history. All numbers are illustrative." },
+        { type: "steps", title: "Adding up the tokens", items: [{ title: "Tokens per turn", text: "Turn 1 sends 500, turn 2 sends 800, turn 3 sends 1,100. Turn n sends 500 + 300 × (n − 1)." }, { title: "A 5-turn run", text: "500 + 800 + 1,100 + 1,400 + 1,700 = 5,500 tokens." }, { title: "A 15-turn run", text: "The turns grow from 500 up to 4,700. Their sum is 39,000 tokens." }, { title: "Compare", text: "3× the turns, but 39,000 ÷ 5,500 ≈ 7.1× the tokens. The cost of a run grows roughly with the square of its length." }, { title: "Now cap the history", text: "If we trim or summarize so that no turn sends more than 1,400 tokens, the 15-turn run costs 19,200 tokens: about half." }] },
+        { type: "chart", kind: "line", title: "Total tokens sent over one run", xLabel: "Turns", yLabel: "Cumulative tokens", series: [{ name: "History grows every turn", points: [[1, 500], [5, 5500], [10, 18500], [15, 39000], [20, 67000]] }, { name: "History capped at 1,400 tokens", points: [[1, 500], [5, 5200], [10, 12200], [15, 19200], [20, 26200]] }], caption: "Illustrative: 500 tokens on turn 1, plus 300 more on each later turn. Computed with the sums from the steps above." },
+        { type: "p", text: "Two lessons follow. A step budget alone is a weak cost limit, because late steps cost much more than early ones; a token budget measures what we really pay. And context management is not only about quality: it turns a curve that bends upward into a straight line." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a loop with all three stops: a success stop from a checker, a budget stop measured in tokens, and a stuck stop that fires when the number of failing tests has not improved for two turns. The model's results are scripted as failing-test counts." },
+        { type: "code", lang: "python", title: "practice_three_stops.py", code: `# Three stops in one loop: verified success, token budget and no progress.
+def run(failing_per_turn, token_budget=6000, patience=2):
+    history, spent, best, stale = 500, 0, None, 0
+    for turn, failing in enumerate(failing_per_turn, 1):
+        spent += history                   # each turn re-sends the whole history
+        history += 300                     # and the new result makes it longer
+        if best is None or failing < best:
+            best, stale = failing, 0       # progress: fewer failing tests
+        else:
+            stale += 1                     # no progress this turn
+        print(f"  turn {turn}: failing={failing} spent={spent} stale={stale}")
+        if failing == 0:
+            return "success stop: the checker reports 0 failing tests"
+        if stale >= patience:
+            return f"stuck stop: no progress for {patience} turns (best={best})"
+        if spent + history > token_budget:
+            return f"budget stop: the next turn would pass {token_budget} tokens"
+    return "script ended"
+
+# Failing-test counts that a model's edits might produce, turn by turn
+for name, script in [("steady", [5, 3, 3, 1, 0]),
+                     ("stuck", [5, 4, 4, 4, 2, 0]),
+                     ("slow", [5, 4, 3, 2, 2, 1, 1, 0])]:
+    print(name)
+    print(" ", run(script))`, output: `steady
+  turn 1: failing=5 spent=500 stale=0
+  turn 2: failing=3 spent=1300 stale=0
+  turn 3: failing=3 spent=2400 stale=1
+  turn 4: failing=1 spent=3800 stale=0
+  turn 5: failing=0 spent=5500 stale=0
+  success stop: the checker reports 0 failing tests
+stuck
+  turn 1: failing=5 spent=500 stale=0
+  turn 2: failing=4 spent=1300 stale=0
+  turn 3: failing=4 spent=2400 stale=1
+  turn 4: failing=4 spent=3800 stale=2
+  stuck stop: no progress for 2 turns (best=4)
+slow
+  turn 1: failing=5 spent=500 stale=0
+  turn 2: failing=4 spent=1300 stale=0
+  turn 3: failing=3 spent=2400 stale=0
+  turn 4: failing=2 spent=3800 stale=0
+  turn 5: failing=2 spent=5500 stale=1
+  budget stop: the next turn would pass 6000 tokens`, walkthrough: [{ lines: [3, 6], note: "The cost model: every turn re-sends the whole history, and the history grows by 300 tokens per turn." }, { lines: [7, 10], note: "Progress tracking: fewer failing tests than ever before resets the `stale` counter; anything else raises it." }, { lines: [12, 17], note: "The three stops, in order: verified success, stuck, and a budget check that looks one turn ahead." }, { lines: [20, 25], note: "Three scripted runs: one that improves steadily, one that gets stuck, and one that is too slow for the budget." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Set `patience=1`. Predict which of the three runs end differently, and at which turn.", "Set `token_budget=20000`. Predict how the `slow` run ends and its final `spent`.", "Change `history += 300` to `history += 0`, as if we held the context at a fixed size. Predict `spent` at turn 5, and how the `slow` run ends now."] },
+        { type: "check", question: "In the `stuck` script the counts are 5, 4, 4, 4, 2, 0, so the tests would have passed at turn 6. The loop stopped at turn 4. Was that a mistake?", answer: "It is a trade-off, not a bug. At turn 4 the loop knows only that two turns in a row brought no progress; it cannot see the future. With `patience=2` we accept that some slow but working runs get cut, in return for never paying for runs that are truly stuck. If two-turn plateaus are normal for our task, we raise the patience. A good stuck stop also hands over the best state so far, so the work is not lost." },
+        { type: "check", question: "The budget stop fires when `spent + history > token_budget`, before the next turn runs, and not after `spent` has passed the budget. Why check ahead?", answer: "Because the cost of the next turn is already known: it will re-send the whole history. Checking ahead means we never overshoot, and we stop while there is still a clean state to report. Checking afterwards would let the most expensive turn of the run, the last one, go over the limit." }
       ]
     },
     {

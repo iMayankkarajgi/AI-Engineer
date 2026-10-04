@@ -1,6 +1,6 @@
 export default {
   id: 'ai-orchestration',
-  minutes: 18,
+  minutes: 23,
   hook: 'A real AI product is rarely one model call. Who decides which call happens first, which ones run together, and what happens when one of them fails?',
   summary: 'AI orchestration is the coordination layer that connects models, tools, data, memory and agents into one reliable workflow. It decides the order of steps, passes data between them, handles branching, retries and errors, and keeps state. Five patterns cover most systems: sequential, parallel, conditional, loop and orchestrator-worker.',
   sections: [
@@ -208,6 +208,99 @@ orch-worker: ('merge(2 results)', 8)`, walkthrough: [
         { type: 'callout', tone: 'example', title: 'Orchestration in the wild', text: 'Retrieval-augmented chatbots chain retrieve → rerank → generate → check. Coding agents loop write → run tests → fix. Document pipelines fan out pages to parallel extractors and merge the fields. Support systems route by intent to specialist agents with different tools.' },
       ],
     },
+    {
+      id: "deeper-retries-fallbacks",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "The components table lists “retries, timeouts, fallbacks” in a single row. They deserve a closer look, because they decide whether a chain of steps is dependable. Let us work it out with small numbers. These are simple probability sums, not measurements." },
+        { type: "p", text: "Take a sequential chain of 3 steps. Each step works 90% of the time, and failures are passing glitches such as a timeout, so one attempt failing says nothing about the next. The chain needs all three steps, so it succeeds 0.9 × 0.9 × 0.9 ≈ 73% of the time." },
+        { type: "p", text: "Now let each step try again once when it fails. A step fails only if both attempts fail: 0.1 × 0.1 = 0.01. So each step now works 99% of the time, and the chain works 0.99³ ≈ 97% of the time." },
+        { type: "chart", kind: "bar", title: "Chance a 3-step chain succeeds (each attempt 90% reliable)", yLabel: "Chain success", unit: "%",
+          labels: ["No retry", "1 retry per step", "2 retries per step"],
+          series: [ { name: "Chain success", values: [72.9, 97.0, 99.7] } ],
+          caption: "Computed as (1 − 0.1ᵏ)³ for k = 1, 2, 3 attempts per step, assuming failures are independent. Not measured data." },
+        { type: "p", text: "That is a large gain for a few lines of code. But the sum hides three conditions, and each one is a common source of bugs." },
+        { type: "steps", title: "What retries cannot do",
+          items: [
+            { title: "They only fix passing failures", text: "If a step fails because its input is wrong, such as an order number that does not exist, it will fail the same way every time. Retrying wastes time and money. This needs a different path: a fallback or a human." },
+            { title: "They are only safe for repeatable steps", text: "Looking up an order twice is harmless. Sending an email or issuing a refund twice is not. Before retrying a step that changes something, check whether the first attempt went through." },
+            { title: "They cost time", text: "If one attempt may take 5 s before timing out, a step with 2 retries may take 15 s in the worst case. Three such steps in a row could take 45 s. Set a time budget for the whole request, not only per step." },
+            { title: "They need a last resort", text: "When the retries run out, the orchestrator must still do something sensible: use a simpler method, return a partial answer, or hand off to a person. That last branch is the fallback." }
+          ] },
+        { type: "compare", title: "Retry vs fallback",
+          options: [
+            { name: "Retry", summary: "Run the same step again.", pros: ["Very cheap to add", "Fixes timeouts and brief outages"], cons: ["Useless for failures that repeat", "Dangerous for steps with side effects"], bestFor: "Read-only lookups and model calls that timed out" },
+            { name: "Fallback", summary: "Take a different path when a step cannot succeed.", pros: ["Handles failures that repeat", "Gives a defined outcome every time"], cons: ["The other path must be built and tested", "Often a lower-quality or slower result"], bestFor: "After retries run out, or when the input itself is the problem" }
+          ],
+          verdict: "Use both: retry a small, fixed number of times, then fall back." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code compared patterns by their timing. Here we build a tiny workflow engine for the email assistant, with the parts that timing sums leave out: a state object every step reads and writes, a router, a retry around a flaky tool, a fallback to a human, and a trace of what happened. The model steps are scripted functions." },
+        { type: "code", lang: "python", title: "practice_email_workflow.py", code: `# A small workflow engine: explicit state, routing, retries, a fallback and a trace.
+ORDERS = {"1042": 250, "2001": 80}
+attempts = {"n": 0}
+
+def classify(state):
+    return {"intent": "refund" if "refund" in state["email"] else "other"}
+def lookup_order(state):                       # a flaky tool: calls 1, 3, 5... time out
+    attempts["n"] += 1
+    if attempts["n"] % 2 == 1:
+        raise TimeoutError("order DB timeout")
+    order_id = next(w for w in state["email"].split() if w in ORDERS)
+    return {"amount": ORDERS[order_id]}
+def draft_refund(state): return {"reply": f"Your refund of {state['amount']} is on its way."}
+def faq(state): return {"reply": "We are open 9 to 5, Monday to Friday."}
+def escalate(state): return {"reply": "HANDED TO A HUMAN"}
+
+def run_step(fn, state, trace, retries=1):
+    """Run one step, write its result into the state, retry on failure."""
+    for attempt in range(1, retries + 2):
+        try:
+            state.update(fn(state))
+            trace.append(f"{fn.__name__} ok" + (f" (try {attempt})" if attempt > 1 else ""))
+            return True
+        except Exception as error:
+            trace.append(f"{fn.__name__} failed: {error}")
+    return False
+
+def handle(email, retries=1):
+    state, trace = {"email": email}, []
+    run_step(classify, state, trace)
+    if state["intent"] != "refund":                              # conditional
+        run_step(faq, state, trace)
+    elif run_step(lookup_order, state, trace, retries) and state["amount"] <= 200:
+        run_step(draft_refund, state, trace)
+    else:                                                        # fallback: a person
+        run_step(escalate, state, trace)
+    return state["reply"], trace
+for email in ["refund for order 2001 please", "refund order 1042", "what are your hours?"]:
+    reply, trace = handle(email)
+    print(f"{reply}\\n   trace: {' -> '.join(trace)}")`, output: `Your refund of 80 is on its way.
+   trace: classify ok -> lookup_order failed: order DB timeout -> lookup_order ok (try 2) -> draft_refund ok
+HANDED TO A HUMAN
+   trace: classify ok -> lookup_order failed: order DB timeout -> lookup_order ok (try 2) -> escalate ok
+We are open 9 to 5, Monday to Friday.
+   trace: classify ok -> faq ok`,
+          walkthrough: [
+            { lines: [5, 15], note: "The steps. Each takes the state and returns only the new fields. `lookup_order` is deliberately flaky: its 1st, 3rd, 5th… calls time out." },
+            { lines: [17, 26], note: "`run_step` is the engine's core: run a step, merge its result into the state, record what happened, and try again if it raised an error. It returns False when every attempt failed." },
+            { lines: [28, 37], note: "The workflow itself, in plain code: classify, then branch. A refund needs a successful lookup *and* an amount of at most 200; otherwise the request goes to a person." },
+            { lines: [38, 40], note: "Three emails. Read each trace from left to right to see the path taken." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Call `handle(email, retries=0)` in the final loop. Predict the reply and trace for each of the three emails. (Keep in mind that the flaky tool counts calls across emails.)",
+          "Raise the approval limit from `200` to `300`. Predict which reply changes. Who in a real company should own that number: the prompt, the code, or a config file?",
+          "Send the email `\"refund order 9999\"`. Predict what happens before you run it. Then decide which kind of failure this is (passing or repeating) and whether more retries would help."
+        ] },
+        { type: "check", question: "In the second email the lookup succeeded on its second try, yet the request still went to a human. Which line made that choice, and why is it right that code makes it rather than the drafting model?", answer: "The `elif` line: the lookup worked, but the amount (250) is over the limit of 200, so the condition is false and the `else` branch escalates. A spending limit is a business rule that must hold every time. In code it is checked the same way on every request and can be tested; a model asked to “be careful with large refunds” would follow it most of the time, which is not good enough for money." },
+        { type: "check", question: "The trace for the first email shows a failure and then a success. If we kept only the final reply and threw the trace away, what would we lose?", answer: "We would never learn that the order database times out on every other call. The customer got a correct answer, so nothing looks wrong from outside, but each request is slower and the system is one more failure away from escalating. Traces are how we see problems that retries are quietly hiding, and how we find the slow or flaky step in a long workflow." }
+      ]
+    }
   ],
   quiz: [
     { q: 'What is the main job of an AI orchestration layer?', options: ['Training the model\'s weights on fresh company data', 'Coordinating steps, state, branches and errors', 'Compressing every prompt to save on token costs', 'Replacing all LLM calls with hand-written rules'], answer: 1, explain: 'Orchestration coordinates models, tools, data and agents into a reliable workflow: ordering steps, passing state, branching and handling errors. It does not train models, and it uses LLM calls rather than replacing them.' },

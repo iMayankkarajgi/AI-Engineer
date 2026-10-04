@@ -1,6 +1,6 @@
 export default {
   id: 'lost-in-the-middle-problem-in-llms',
-  minutes: 18,
+  minutes: 23,
   hook: 'You give a model 20 documents and the answer is right there in document 10. Why might it do worse than if you had given it no documents at all?',
   summary: 'LLMs tend to use information at the beginning and end of a long context much better than information in the middle. Plotting accuracy against the position of the key fact gives a U-shaped curve. This "lost in the middle" effect, documented in a 2023 study, matters for RAG, long chats and document analysis. We can test for it by moving a known fact through the context, and reduce it by sending fewer, better-ranked chunks, placing the most relevant ones at the edges, and putting the question after the documents.',
   sections: [
@@ -142,6 +142,81 @@ edges-first    : ['R1', 'R3', 'R5', 'R7', 'R6', 'R4', 'R2']`,
         ], verdict: 'Start by sending fewer, better-ranked chunks and putting the question last; add edge reordering; use map-reduce when the input is truly huge. Then re-run your position test to confirm.' },
         { type: 'p', text: 'Two more techniques help: ask the model to first **quote the relevant passages** and then answer from those quotes (this forces it to search the context explicitly), and keep long chats healthy by periodically **summarizing** older turns and pinning key facts (like user preferences) near the end of the prompt.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Assuming "it fits in the window" means "the model will use it". Raising top-k retrieval to 20 or 50 chunks without testing. Putting the question at the very top followed by 30,000 tokens of documents. Trusting a vendor\'s single-needle score for a task that needs combining several facts. And reordering chunks by relevance score from a weak retriever, which just puts the wrong chunks at the edges.' },
+      ],
+    },
+    {
+      id: 'reading-a-sweep',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The test recipe said "score many runs". How many is "many"? Let us work through one result to see why this matters. Suppose (illustrative numbers) we ran our refund question 20 times at each depth and got 18 correct with the fact first (90%), 14 correct in the middle (70%) and 17 correct at the end (85%). It looks like a clear dip. Is it?' },
+        { type: 'formula', expr: 'standard error = √( p · (1 − p) / n )', where: [['p', 'the measured accuracy as a fraction, e.g. 0.70'], ['n', 'the number of runs behind that accuracy'], ['standard error', 'how far the measured value typically lands from the true one, by chance alone']], caption: 'A rough rule: the true accuracy is very likely within about 2 standard errors of what we measured.' },
+        { type: 'steps', title: 'Is a 70% middle really worse than a 90% edge?', items: [
+          { title: 'Error of the middle cell', text: '`√(0.7 · 0.3 / 20) = √0.0105 ≈ 0.10`, so about 10 points.' },
+          { title: 'Plausible range', text: 'Two standard errors each way: the true middle accuracy could be anywhere from about 50% to 90%.' },
+          { title: 'Compare', text: 'That range reaches the 90% we measured at the edge. With 20 runs we **cannot** say the middle is worse. The dip may be chance.' },
+          { title: 'Repeat with 100 runs', text: 'Suppose we again measure 70%. Now the error is `√(0.7 · 0.3 / 100) ≈ 0.046`, so the range is about 61% to 79%.' },
+          { title: 'Compare again', text: 'The edge at 90% with 100 runs has an error of 3 points, so a range of about 84% to 96%. The two ranges no longer overlap. Now the dip is real.' },
+        ] },
+        { type: 'table', caption: 'Standard error of a measured accuracy near 60%, from the formula', head: ['Runs per cell', 'Standard error', 'Rough range around 60%'], rows: [
+          ['10', '15.5 points', '29% to 91%'],
+          ['20', '11.0 points', '38% to 82%'],
+          ['50', '6.9 points', '46% to 74%'],
+          ['100', '4.9 points', '50% to 70%'],
+          ['400', '2.4 points', '55% to 65%'],
+        ] },
+        { type: 'p', text: 'To halve the error we need **four times** as many runs. That is expensive, so spend runs where they matter: fewer depths (start, middle, end) with more runs each tells us more than many depths with a handful of runs. And use several different facts and questions, not one question repeated, so that a single lucky or unlucky wording does not decide the result.' },
+        { type: 'callout', tone: 'warn', title: 'The mistake this prevents', text: 'Teams often change the prompt, re-run a small sweep, see the middle go from 60% to 70% and ship the change. With 20 runs per cell, a 10-point move is well inside the noise. The "improvement" may vanish on the next run.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We cannot call a real model here, so we build a stand-in: a **simulated** model whose chance of using the fact follows a made-up U-shape. Because we know its true accuracy at every depth, we can see how well a position sweep recovers it, with 20 runs and with 1,000 runs per depth.' },
+        { type: 'code', lang: 'python', title: 'practice_position_sweep.py', code: `import random
+
+# A SIMULATED model, not a real one: its chance of using the fact follows a
+# made-up U-shape. 0.95 at the edges of the context, 0.60 in the middle.
+def simulated_model(depth, rng):
+    p_correct = 0.60 + 0.35 * (2 * depth - 1) ** 2
+    if rng.random() < p_correct:
+        return "You have 45 days from delivery to request a refund."
+    return "Refunds are usually possible within 30 days."      # the wrong default
+
+def is_correct(answer):
+    return "45 days" in answer                # simple string check for the needle
+
+def sweep(runs, seed):
+    rng = random.Random(seed)
+    row = []
+    for depth in (0.0, 0.25, 0.5, 0.75, 1.0):
+        hits = sum(is_correct(simulated_model(depth, rng)) for _ in range(runs))
+        row.append(100 * hits / runs)
+    return row
+
+print("depth of the fact       0%    25%    50%    75%   100%")
+print("true chance (made up) " + "".join(
+    f"{100 * (0.60 + 0.35 * (2 * d - 1) ** 2):7.1f}" for d in (0, 0.25, 0.5, 0.75, 1)))
+for runs, seed in [(20, 1), (20, 2), (20, 3), (1000, 4)]:
+    print(f"{runs:5d} runs per depth  " + "".join(f"{v:7.1f}" for v in sweep(runs, seed)))`, output: `depth of the fact       0%    25%    50%    75%   100%
+true chance (made up)    95.0   68.8   60.0   68.8   95.0
+   20 runs per depth    100.0   90.0   50.0   75.0   90.0
+   20 runs per depth     90.0   70.0   45.0   65.0  100.0
+   20 runs per depth     95.0   55.0   45.0   60.0   85.0
+ 1000 runs per depth     94.1   69.0   61.6   69.5   95.5`, walkthrough: [
+          { lines: [3, 9], note: 'The stand-in for a model. `depth` runs from 0 (fact first) to 1 (fact last). It answers correctly with a probability that is 0.95 at both edges and 0.60 in the middle; otherwise it falls back to a wrong "30 days".' },
+          { lines: [11, 12], note: 'The scorer: an answer counts as correct if it contains the needle text "45 days".' },
+          { lines: [14, 20], note: 'The sweep: for each of five depths, ask `runs` times and record the percentage of correct answers.' },
+          { lines: [22, 26], note: 'Three small sweeps of 20 runs disagree with each other: at 25% depth they report 90, 70 and 55 for a true value of 68.8. The 1,000-run sweep lands within about 2 points of the truth everywhere.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Remove the U-shape: set `p_correct = 0.8` for every depth. Run the three 20-run sweeps again. Before running, predict whether any row will still *look* like it has a dip in the middle.',
+          'Change the wrong answer to `"Refunds are possible within 30 days, not 45 days."` Predict the measured accuracy at every depth. What does this say about scoring by substring?',
+          'Change the 20-run sweeps to 100 runs. Using the table from the previous section, predict how far the measured values will typically be from the true ones.',
+        ] },
+        { type: 'check', question: 'In the first 20-run sweep, the 25% depth scored 90%. A teammate concludes that this model has no problem at 25% depth. What do we tell them?', answer: 'That 20 runs cannot support the claim. The true value in our simulation is 68.8%. With 20 runs the standard error is about 10 points, so a result of 90% is an unlucky draw about two standard errors high, and such draws do happen: the other two sweeps gave 70% and 55% for the same depth. We need more runs, or at least several repeated sweeps, before we read anything into one cell.' },
+        { type: 'check', question: 'Our scorer checks whether the answer contains "45 days". Name one answer it would wrongly count as correct and one it would wrongly count as wrong.', answer: 'Wrongly correct: "The policy is 30 days, not 45 days", which contains the text but gives the wrong answer. Wrongly wrong: "You have forty-five days" or "a 45-day window", which are right but do not contain the exact text. A substring check is quick, but we should read a sample of scored answers by hand, and tighten the check or use a more careful grader when the two disagree.' },
       ],
     },
     {

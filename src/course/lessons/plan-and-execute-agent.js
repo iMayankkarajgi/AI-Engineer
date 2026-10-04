@@ -1,6 +1,6 @@
 export default {
   id: "plan-and-execute-agent",
-  minutes: 18,
+  minutes: 23,
   hook: "Should an agent decide each move as it goes, or think through the whole route before taking the first step?",
   summary: "A Plan-and-Execute agent splits the work in two: a planner (usually a strong LLM) writes the full list of steps up front, and an executor carries them out one by one, often with a cheaper model or plain code. When a step fails or reveals something new, a replanner revises the remaining plan. This gives structure, lower cost and easier oversight on long tasks, at the price of less flexibility than step-by-step agents like ReAct.",
   sections: [
@@ -167,6 +167,91 @@ total cost: 295 GBP | steps run: 3 | replans: 1`,
         { type: "callout", tone: "warn", title: "The most common mistake", text: "Treating the plan as fixed. Real environments are full of surprises (a missing file, an empty search result, an API error). Without a replanner, a Plan-and-Execute agent marches confidently through a plan that no longer makes sense." },
         { type: "callout", tone: "example", title: "Real-world use", text: "Deep-research features commonly start by drafting a research plan (sometimes shown to the user for approval) and then run many searches against it. Coding agents often write a task checklist before editing files and tick items off as they go. Data pipelines use a plan of queries whose independent parts run in parallel." },
         { type: "p", text: "**Quick summary.** A Plan-and-Execute agent separates thinking from doing: a planner writes the steps, an executor carries them out, and a replanner fixes the plan when reality disagrees. It saves strong-model calls, enables parallelism and human review, and keeps long tasks on track. It is less nimble than ReAct, so pair it with replanning and use ReAct-style execution inside steps when needed." }
+      ]
+    },
+    {
+      id: "worked-example-waves",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The dependency matrix told us *which* steps can run together. Let us now work out *when* each step runs and how much time that saves. We use the same five steps and pretend every step takes 2 seconds (an illustrative number, chosen to keep the sums easy)." },
+        { type: "p", text: "The rule is simple: a step may start as soon as every step it depends on has finished. Applying that rule again and again sorts the plan into **waves**. All steps in one wave run at the same time." },
+        { type: "steps", title: "Sorting the plan into waves",
+          items: [
+            { title: "Wave 1: steps with no dependencies", text: "Steps 1 (flights), 2 (trains) and 3 (hotels) need nothing. They all start at 0 s and finish at 2 s." },
+            { title: "Wave 2: what is unlocked now?", text: "Step 4 (compare routes) needs 1 and 2, which are done. Step 5 needs 3 and 4, and 4 is not done yet. So wave 2 is only step 4, from 2 s to 4 s." },
+            { title: "Wave 3: the last step", text: "Step 5 (book) now has both of its inputs. It runs from 4 s to 6 s." },
+            { title: "Nothing left", text: "Every step has a result, so the executor stops and hands the results to the final answer." }
+          ] },
+        { type: "table", caption: "Run one by one vs run in waves (illustrative: 2 s per step)",
+          head: ["Way of running", "Order", "Total time"],
+          rows: [
+            ["One by one", "1, 2, 3, 4, 5", "5 × 2 s = 10 s"],
+            ["In waves", "{1, 2, 3} then {4} then {5}", "3 × 2 s = 6 s"]
+          ] },
+        { type: "p", text: "Notice what sets the total: not the number of steps, but the longest chain of steps that must wait for each other. Here that chain is 1 → 4 → 5 (or 2 → 4 → 5), three steps long, so three waves is the best we can do. Adding ten more independent searches to wave 1 would not add any time; adding one more step *after* step 5 would." },
+        { type: "p", text: "Two cautions. If two steps wait on each other (4 needs 5 and 5 needs 4), no step ever becomes ready and the executor must detect that and stop. And running steps together is safe for lookups; steps that change things, such as the booking, should stay in their own wave and usually behind an approval." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier example showed replanning. Here we build the other half: an executor that reads the dependencies in a plan, runs every ready step in a wave, and passes earlier results into later steps. The planner is scripted and is called exactly once." },
+        { type: "code", lang: "python", title: "practice_plan_waves.py", code: `# Run a plan as a dependency graph: steps whose inputs are ready run in one wave.
+def planner(goal):
+    """Scripted planner: ONE call returns every step, its tool and what it needs."""
+    return {
+        "s1": {"tool": "flight",   "arg": "LHR->NCE", "needs": []},
+        "s2": {"tool": "train",    "arg": "LHR->NCE", "needs": []},
+        "s3": {"tool": "hotel",    "arg": "NCE",      "needs": []},
+        "s4": {"tool": "cheapest", "arg": None,       "needs": ["s1", "s2"]},
+        "s5": {"tool": "total",    "arg": None,       "needs": ["s3", "s4"]},
+    }
+
+# Each tool gets its own argument plus the results of the steps it depends on.
+TOOLS = {
+    "flight":   lambda arg, inputs: 140,          # made-up prices
+    "train":    lambda arg, inputs: 110,
+    "hotel":    lambda arg, inputs: 95,
+    "cheapest": lambda arg, inputs: min(inputs),
+    "total":    lambda arg, inputs: sum(inputs),
+}
+
+plan = planner("One night in Nice from London, as cheap as possible")
+results, wave = {}, 0
+while len(results) < len(plan):
+    # A step is ready when it has not run yet and all its needs have results.
+    ready = [s for s, step in plan.items()
+             if s not in results and all(n in results for n in step["needs"])]
+    if not ready:
+        print("stuck: the remaining steps wait on each other")
+        break
+    wave += 1
+    outputs = {}
+    for s in ready:                               # these could run concurrently
+        step = plan[s]
+        inputs = [results[n] for n in step["needs"]]   # fill in earlier results
+        outputs[s] = TOOLS[step["tool"]](step["arg"], inputs)
+    results.update(outputs)
+    print(f"wave {wave}: {outputs}")
+print(f"planner calls: 1 | steps: {len(results)} | waves: {wave} | answer: {results.get('s5')}")`, output: `wave 1: {'s1': 140, 's2': 110, 's3': 95}
+wave 2: {'s4': 110}
+wave 3: {'s5': 205}
+planner calls: 1 | steps: 5 | waves: 3 | answer: 205`,
+          walkthrough: [
+            { lines: [2, 10], note: "The plan is data: each step names a tool, an argument, and the steps it `needs`. Steps `s4` and `s5` have no argument of their own; they work on earlier results." },
+            { lines: [13, 19], note: "Toy tools. Each one receives its argument and a list of inputs. `cheapest` and `total` use only the inputs." },
+            { lines: [23, 29], note: "Find the ready steps: not yet run, and every need has a result. If nothing is ready while steps remain, the plan is stuck, so we stop." },
+            { lines: [30, 38], note: "Run the wave. Results are collected in `outputs` and added only after the whole wave ends, so steps in the same wave cannot read each other. The last line reports the counts." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Make the hotel depend on the route: set `s3` to `\"needs\": [\"s4\"]`. Predict the new waves and the number of waves before running. Does the answer change? (Careful: `hotel` ignores its inputs.)",
+          "Create a cycle: set `s4` to `\"needs\": [\"s1\", \"s2\", \"s5\"]`. Predict exactly which steps run and which line is printed after them.",
+          "Change the `train` price to `150`. Predict which wave outputs change and what the final answer becomes."
+        ] },
+        { type: "check", question: "The output says there were 5 steps but only 1 planner call. In a step-by-step agent, roughly how many strong-model calls would the same task take, and what did we give up to save them?", answer: "A step-by-step agent would call the model about once per step plus once for the answer, so about 6 calls. We saved them by fixing all five steps up front. What we gave up is the chance to react between steps: if the train search had failed, this executor would have no way to change course. That is the job of the replanner from the earlier example." },
+        { type: "check", question: "Why does the code store a wave's results in `outputs` and only then copy them into `results`, instead of writing to `results` straight away?", answer: "Steps in one wave are meant to be independent and could run at the same time. If each step wrote to `results` immediately, a later step in the same loop could see an earlier one's result, and the behaviour would depend on the order of the loop. Collecting first and updating after the wave keeps every step's inputs limited to finished waves, which is what makes true parallel execution safe." }
       ]
     }
   ],

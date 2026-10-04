@@ -1,6 +1,6 @@
 export default {
   id: 'math-behind-backpropagation',
-  minutes: 22,
+  minutes: 27,
   hook: 'Gradient descent needs the slope of the loss for every single weight, so how does a network with millions of weights get all of them from one backward sweep?',
   summary: 'Backpropagation is the algorithm that computes the gradient of the loss with respect to every weight in a neural network. It runs a forward pass to get the prediction and loss, then walks backwards layer by layer, using the chain rule to pass an error signal from the output towards the input. Gradient descent then uses those gradients to update the weights.',
   sections: [
@@ -173,6 +173,82 @@ predictions: [0.005 0.988 0.99  0.013]`, walkthrough: [
         ], verdict: 'Autograd is backpropagation, automated. Knowing the manual version helps you debug it.' },
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'Every model you will meet in this course, from image classifiers to large language models, was trained with backpropagation. In PyTorch, `loss.backward()` runs exactly the backward pass we did by hand, over every operation in the network, and stores each parameter\'s gradient in its `.grad` attribute.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Initialising all weights to the same value (every hidden neuron then gets identical gradients and they never become different). Forgetting that sigmoid/tanh derivatives shrink the signal, causing vanishing gradients in deep stacks. Letting gradients explode in very deep or recurrent networks (fixed with gradient clipping, normalisation and careful initialisation). And confusing backprop (computing gradients) with the optimiser (using them).' },
+      ],
+    },
+    {
+      id: 'two-paths-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Our tiny network was a single chain: each value fed exactly one later value. We said that when a value feeds **several** later values we add the contributions. Let us work one such case by hand, because this is where hand-written backprop most often goes wrong.' },
+        { type: 'p', text: 'Take one weight `w = 3` and one input `x = 2`. The weight is used twice: `u = w·x` and `v = w²`. The loss is their product, `L = u·v`. So `w` reaches the loss along two paths, one through `u` and one through `v`.' },
+        { type: 'steps', title: 'Backprop when a weight is used twice', items: [
+          { title: 'Forward pass', text: '`u = 3·2 = 6`, `v = 3² = 9`, `L = 6·9 = 54`. We store `u` and `v`.' },
+          { title: 'Start at the loss', text: 'For a product, each factor\'s gradient is the *other* factor: `∂L/∂u = v = 9` and `∂L/∂v = u = 6`.' },
+          { title: 'Path through u', text: '`∂u/∂w = x = 2`, so this path gives `9 · 2 = 18`.' },
+          { title: 'Path through v', text: '`∂v/∂w = 2w = 6`, so this path gives `6 · 6 = 36`.' },
+          { title: 'Add the paths', text: '`∂L/∂w = 18 + 36 = 54`. Check with plain calculus: `L = w³·x`, so `dL/dw = 3w²·x = 3·9·2 = 54`. They agree.' },
+        ] },
+        { type: 'table', caption: 'What each choice would give for ∂L/∂w', head: ['What we do with the two paths', 'Result', 'Correct?'], rows: [
+          ['Add them', '18 + 36 = 54', 'Yes'],
+          ['Keep only the last one computed', '36', 'No: the path through u is lost'],
+          ['Multiply them', '18 × 36 = 648', 'No: we multiply *along* a path, never across paths'],
+        ] },
+        { type: 'p', text: 'The rule to remember: **multiply along a path, add across paths**. This matters far beyond toy examples. A recurrent network uses the same weights at every time step, so each weight\'s gradient is a sum over all the steps. A residual connection sends a value down two routes that meet again. In all these cases the gradients must be **accumulated** with `+=`, not overwritten with `=`. A bug of this kind is silent: the code runs, the loss may even fall a little, and only a gradient check reveals it.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will measure the vanishing gradient ourselves. We build a chain of one-neuron layers, run backprop by hand, and print the gradient that reaches the **first** weight as the chain gets deeper. We do it once with sigmoid and once with ReLU.' },
+        { type: 'code', lang: 'python', title: 'practice_gradient_depth.py', code: `import math
+
+def sigmoid(z):
+    return 1 / (1 + math.exp(-z))
+
+ACTS = {
+    "sigmoid": (sigmoid, lambda z: sigmoid(z) * (1 - sigmoid(z))),
+    "relu": (lambda z: max(0.0, z), lambda z: 1.0 if z > 0 else 0.0),
+}
+
+def first_weight_gradient(depth, name, x=1.0, w=1.0):
+    act, d_act = ACTS[name]
+    # Forward pass: h_k = act(w * h_(k-1)), and the loss is the last h.
+    zs, hs = [], [x]
+    for _ in range(depth):
+        zs.append(w * hs[-1])
+        hs.append(act(zs[-1]))
+    # Backward pass: start with dL/dh_last = 1 and walk towards the input.
+    delta = 1.0
+    for k in reversed(range(depth)):
+        delta *= d_act(zs[k])          # through the activation
+        if k == 0:
+            return delta * hs[0]       # dL/dw of the first layer
+        delta *= w                     # through the weight to the layer below
+
+print("depth   sigmoid chain   relu chain")
+for depth in (1, 2, 4, 8, 16):
+    gs = first_weight_gradient(depth, "sigmoid")
+    gr = first_weight_gradient(depth, "relu")
+    print(f"{depth:5d}   {gs:13.2e}   {gr:10.2f}")`, output: `depth   sigmoid chain   relu chain
+    1        1.97e-01         1.00
+    2        4.31e-02         1.00
+    4        2.16e-03         1.00
+    8        5.52e-06         1.00
+   16        3.58e-11         1.00`, walkthrough: [
+          { lines: [6, 9], note: 'Each activation comes as a pair: the function and its derivative. Sigmoid uses σ(z)(1 − σ(z)); ReLU uses 1 for positive z and 0 otherwise.' },
+          { lines: [13, 17], note: 'Forward pass through `depth` layers. Every layer uses the weight `w`. We store each pre-activation `z` and each output `h`, because the backward pass needs them.' },
+          { lines: [18, 24], note: 'Backward pass. At each layer the error signal is multiplied by the activation derivative, then by the weight. At the first layer we multiply by its input to get the weight gradient.' },
+          { lines: [26, 30], note: 'With sigmoid the gradient shrinks from 0.197 at depth 1 to about 0.00000000004 at depth 16. With ReLU (and positive values) it stays at exactly 1.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Call the function with `w=4.0` for both chains. Larger weights multiply the signal on the way back. Predict whether that rescues the sigmoid chain, and what it does to the ReLU chain at depth 16.',
+          'Call it with `x=-1.0`. Predict the ReLU gradient at every depth before you run it, and name the problem this shows.',
+          'Add a third activation, tanh, whose derivative is `1 - math.tanh(z) ** 2`. Predict whether its gradients at depth 16 land closer to the sigmoid column or to the ReLU column.',
+        ] },
+        { type: 'check', question: 'At depth 2 the sigmoid gradient is 0.0431, yet the lesson said each sigmoid layer can pass on up to 0.25 of the signal, which would allow 0.25 × 0.25 = 0.0625. Why is the real number smaller?', answer: 'The derivative σ\'(z) equals 0.25 only at z = 0. Here the pre-activations are 1.0 and about 0.73, where the derivative is about 0.197 and 0.219. Their product is 0.0431. So 0.25 is a best case; real layers usually pass on less, and the further z is from zero, the less gets through.' },
+        { type: 'check', question: 'The ReLU column is exactly 1.00 at every depth. Does that mean ReLU networks can never have gradient problems?', answer: 'No. It is 1.00 here because every pre-activation is positive (derivative 1) and every weight is 1. If any layer\'s pre-activation is negative, its derivative is 0 and the whole product becomes 0: a dead path. And if the weights are larger than 1, the product grows with depth instead: an exploding gradient. ReLU removes the shrinking caused by the activation, not the effect of the weights.' },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-colbert',
-  minutes: 24,
+  minutes: 29,
   hook: 'What if, instead of squeezing a whole passage into one vector, we kept a vector for every word and let each query word find its best match?',
   summary: 'ColBERT (Khattab and Zaharia, 2020) is a retrieval model that encodes the query and each document separately into one vector per token, then scores a pair with MaxSim: every query token takes its highest similarity to any document token, and these maxima are summed. This "late interaction" keeps most of the precision of a cross-encoder while letting document vectors be computed ahead of time, at the cost of a much bigger index.',
   sections: [
@@ -152,6 +152,78 @@ p(positive) = 0.696   loss = 0.362`,
         ] },
         { type: 'callout', tone: 'example', title: 'Using it today', text: 'Libraries such as the Stanford ColBERT repository and RAGatouille make it easy to index and search with ColBERT models, and several vector databases now support multi-vector (late interaction) search. It is popular for RAG when a single-vector bi-encoder misses fine-grained matches but a cross-encoder over a big shortlist is too slow. Check current tooling, as support is evolving quickly.' },
         { type: 'callout', tone: 'warn', title: 'Limits and pitfalls', text: 'Index size and memory are the big costs; plan storage before indexing millions of documents. Long documents produce many vectors; chunk them. Query length is fixed (padding/truncation), so very long queries get cut. And like any learned retriever, it can underperform out of domain; compare against BM25 + a reranker on your own data.' },
+      ],
+    },
+    {
+      id: 'scoring-cost-in-numbers',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'The speed claim becomes easy to believe once we count the work for one query that reranks 1,000 candidate passages. The sizes follow the lesson (32 query vectors, about 70 document tokens, 128 dimensions); the arithmetic is rough and illustrative.' },
+        { type: 'steps', title: 'Counting the work for one query', items: [
+          { title: 'Encode the query once', text: 'One BERT pass over 32 tokens. This is the only neural network pass ColBERT needs at query time.' },
+          { title: 'One similarity grid', text: '32 query vectors × 70 document vectors = 2,240 dot products for one passage.' },
+          { title: 'Cost of one grid', text: 'Each dot product is 128 multiply-adds, so 2,240 × 128 = 286,720, about 0.29 million multiply-adds per passage.' },
+          { title: 'All 1,000 candidates', text: '2.24 million dot products, about 287 million multiply-adds. For a GPU that is one modest matrix multiplication.' },
+          { title: 'The cross-encoder instead', text: '1,000 full BERT passes over the query and passage joined together. Every pass runs all 12 layers of BERT-base over roughly 100 tokens, and costs billions of operations on its own.' },
+        ] },
+        { type: 'table', caption: 'Reranking 1,000 candidates for one query.', head: ['', 'Cross-encoder', 'ColBERT'], rows: [
+          ['BERT passes at query time', '1,000', '1'],
+          ['Document work at query time', 'Full encoding of every candidate', 'Load stored token vectors'],
+          ['Scoring per passage', 'Inside the model', '2,240 dot products'],
+          ['Stored per passage', 'Nothing', 'About 70 × 128 numbers'],
+        ] },
+        { type: 'p', text: 'The work did not vanish. It moved to indexing time, where every document went through BERT once, and to storage. It also created a new bottleneck: the 1,000 candidates have 70,000 token vectors between them, about 18 MB at 2 bytes per number (70,000 × 128 × 2), and all of it has to be fetched for every query. If those vectors live on a slow disk, fetching them can take longer than scoring them. That is why later systems put so much effort into compressing the vectors and into pruning candidates before the exact MaxSim step.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will put three ways of scoring side by side on the same token vectors: ColBERT\'s **MaxSim**, the "fairer" **average** over all document tokens, and a **single pooled vector** per text, as a bi-encoder would use. Three small documents are built to pull the methods apart: a focused one, a long one with the same two matches buried in filler, and one that covers only half of the query.' },
+        { type: 'code', lang: 'python', title: 'practice_maxsim_vs_pooling.py', code: `import numpy as np
+
+def unit(rows):
+    m = np.array(rows, dtype=float)
+    return m / np.linalg.norm(m, axis=1, keepdims=True)
+
+# Toy 3-d token vectors. Axes: [warranty, battery, filler]. Illustrative.
+Q = unit([[1, 0, 0], [0, 1, 0]])                 # query: "warranty battery"
+docs = {
+    "focused (2 tokens)": unit([[.9, .1, 0], [.1, .9, 0]]),
+    "long (8 tokens)":    unit([[.9, .1, 0], [.1, .9, 0]] + [[0, .1, 1]] * 6),
+    "half (3 tokens)":    unit([[1, 0, 0], [.9, 0, .1], [1, .1, 0]]),
+}
+
+def maxsim(Q, D):                                # ColBERT: best match per query token
+    return (Q @ D.T).max(axis=1).sum()
+
+def avgsim(Q, D):                                # the tempting alternative: average
+    return (Q @ D.T).mean(axis=1).sum()
+
+def pooled(Q, D):                                # single-vector model: one vector each
+    q, d = Q.mean(axis=0), D.mean(axis=0)
+    return float(q @ d / (np.linalg.norm(q) * np.linalg.norm(d)))
+
+print(f"{'document':20} {'MaxSim':>7} {'AvgSim':>7} {'pooled':>7}")
+for name, D in docs.items():
+    print(f"{name:20} {maxsim(Q, D):7.2f} {avgsim(Q, D):7.2f} {pooled(Q, D):7.2f}")`, output: `document              MaxSim  AvgSim  pooled
+focused (2 tokens)      1.99    1.10    1.00
+long (8 tokens)         1.99    0.35    0.31
+half (3 tokens)         1.10    1.03    0.73`,
+          walkthrough: [
+            { lines: [7, 13], note: 'A two-token query and three documents. "long" holds the same two matching tokens as "focused" plus six filler tokens. "half" only talks about the warranty.' },
+            { lines: [15, 19], note: 'MaxSim takes the best match per query token and sums. AvgSim replaces the max with the mean over all document tokens.' },
+            { lines: [21, 23], note: 'The single-vector model: average all token vectors of each text into one vector, then take one cosine.' },
+            { lines: [25, 27], note: 'Print the three scores for each document.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change `* 6` to `* 60` so the long document has 60 filler tokens. Predict which of its three scores stays the same and which fall further.',
+          'In the "half" document, change the last token to `[0, 1, 0]` (a battery token). Predict its new MaxSim score before you run it.',
+          'Add a third query token `[0, 0, 1]`, as if the query contained a common filler word. Predict which document gains the most MaxSim, and why that is not a good reason to rank it higher.',
+        ] },
+        { type: 'check', question: 'The long document contains exactly the same two matching tokens as the focused one. MaxSim gives both 1.99, but the pooled score drops from 1.00 to 0.31. What does this tell us about single-vector models and long passages?', answer: 'Mean pooling lets every token vote on the final vector. Six filler tokens outvote two useful ones, so the vector points mostly at "filler" and the match is diluted. MaxSim only uses the best-matching token for each query term, so extra unrelated text does not lower the score.' },
+        { type: 'check', question: 'The "half" document covers only the warranty, yet under AvgSim it almost ties with the focused document (1.03 against 1.10). Why is that a ranking problem, and how does MaxSim avoid it?', answer: 'AvgSim rewards "half" for being all about one term: its three tokens all match "warranty", so that row has a high average, and the missing "battery" barely shows. MaxSim sums the best match for each query token, so the "battery" row adds only 0.10 and the total falls to 1.10 against 1.99. A document must cover every query term to score well.' },
       ],
     },
     {

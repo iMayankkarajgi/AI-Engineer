@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-fine-tuning-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'A model that has read half the internet still does not know how your support team answers a refund question, so how do we teach it that without starting from scratch?',
   summary: 'Fine-tuning takes a model that is already trained (pretrained) and continues training it on a small, focused dataset so it behaves the way our task needs. We reuse everything the model already knows and only nudge its weights. We can nudge all weights (full fine-tuning) or train a tiny add-on such as LoRA, which is far cheaper.',
   sections: [
@@ -156,6 +156,83 @@ weights moved by 0.459 on average`, walkthrough: [
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistake: catastrophic forgetting', text: 'Training too long or with a high learning rate can make the model great at our task and noticeably worse at everything else. This is called catastrophic forgetting. Remedies: fewer epochs, lower learning rate, LoRA instead of full updates, and mixing in some general data.' },
         { type: 'check', question: 'Training loss keeps falling, but validation loss started rising after epoch 2. What is happening and what should we do?', answer: 'The model is overfitting: memorising the training examples instead of learning the general pattern. Stop at the epoch with the best validation loss (early stopping), add more varied data, or lower the learning rate.' },
+      ],
+    },
+    {
+      id: 'spotting-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'A fine-tuning run rarely fails with an error message. It fails quietly, and the loss curves and a few sample outputs are our only clues. Before we read the curves, it helps to know how long the run really is. Take our bike-rental bot with **1,000 training examples**, a **batch size of 8** and **3 epochs** (illustrative numbers).' },
+        { type: 'steps', title: 'Sizing the run with small numbers', items: [
+          { title: 'Steps per epoch', text: 'One epoch shows every example once. 1,000 examples ÷ 8 per batch = **125 update steps** per epoch.' },
+          { title: 'Total steps', text: '3 epochs × 125 = **375 updates**. That is all the “learning” there is. If the learning rate is too small, 375 tiny nudges may change almost nothing.' },
+          { title: 'Hold some data back', text: 'We keep 100 of the 1,000 examples as a validation set and never train on them. Now an epoch is 900 ÷ 8 ≈ 113 steps, and we have an honest number to watch.' },
+          { title: 'Decide when to look', text: 'We measure validation loss every 50 steps. That gives about 7 checkpoints, enough to see a trend and to pick the best one.' },
+        ] },
+        { type: 'p', text: 'With that picture in mind, each failure has a recognisable shape:' },
+        { type: 'table', caption: 'Reading a fine-tuning run', head: ['What we see', 'Likely cause', 'What to try'], rows: [
+          ['Training loss barely moves from step 1', 'Learning rate too small, or the weights we meant to train are frozen', 'Count the trainable parameters; raise the learning rate in small jumps'],
+          ['Loss jumps up or becomes `nan`', 'Learning rate too large, so updates overshoot', 'Lower the learning rate; add a short warm-up'],
+          ['Training loss near zero after a few steps', 'The same examples repeat, or the answer leaks into the input', 'Remove duplicates; print one formatted example and read it'],
+          ['Validation looks great, real users see poor answers', 'Validation data is too similar to training data and unlike real traffic', 'Build the validation set from real, recent user messages'],
+          ['Task answers improve, everyday answers get worse', 'Too many steps or too large a learning rate', 'Use an earlier checkpoint; keep a small general test set'],
+        ] },
+        { type: 'p', text: 'One habit catches most of these early: before the full run, train on just **10 examples** for a few dozen steps. The loss should fall close to zero. If it does not, something in the data format or the training setup is broken, and no amount of extra data will fix it.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will fine-tune the smallest possible “model”: two weights. It starts out perfect at a general skill, and we fine-tune it on 20 examples of a slightly different task. We watch two numbers at once: the loss on our task, and the loss on the old general skill.' },
+        { type: 'code', lang: 'python', title: 'practice_fine_tuning.py', code: `import numpy as np
+rng = np.random.default_rng(0)
+
+# General skill: y = 2*x1 + 1*x2. The "pretrained" weights already solve it.
+X_gen = rng.normal(size=(200, 2))
+y_gen = X_gen @ np.array([2.0, 1.0])
+w_pre = np.array([2.0, 1.0])
+
+# Our small task: only 20 examples, and its rule is a bit different.
+X_task = rng.normal(size=(20, 2))
+y_task = X_task @ np.array([2.0, 3.0])
+
+def mse(w, X, y):
+    return float(np.mean((X @ w - y) ** 2))
+
+def fine_tune(lr, steps):
+    w = w_pre.copy()                      # start from the pretrained weights
+    for _ in range(steps):
+        grad = 2 * X_task.T @ (X_task @ w - y_task) / len(y_task)
+        w -= lr * grad                    # one small nudge toward the task
+    return w
+
+print("setting              task loss  general loss")
+print(f"no fine-tuning       {mse(w_pre, X_task, y_task):9.3g}  {mse(w_pre, X_gen, y_gen):12.3g}")
+for lr, steps in [(0.01, 20), (0.1, 5), (0.1, 100), (1.2, 20)]:
+    w = fine_tune(lr, steps)
+    name = f"lr={lr} steps={steps}"
+    print(f"{name:<20} {mse(w, X_task, y_task):9.3g}  {mse(w, X_gen, y_gen):12.3g}")`, output: `setting              task loss  general loss
+no fine-tuning            5.02             0
+lr=0.01 steps=20          1.55         0.658
+lr=0.1 steps=5           0.361          2.08
+lr=0.1 steps=100      8.34e-12          4.06
+lr=1.2 steps=20       2.84e+22      1.42e+22`,
+          walkthrough: [
+            { lines: [4, 7], note: 'The general skill and the “pretrained” weights that already solve it, so the general loss starts at 0.' },
+            { lines: [9, 11], note: 'Our small task: 20 examples whose rule differs in the second weight (3 instead of 1).' },
+            { lines: [16, 21], note: 'Fine-tuning: start from the pretrained weights and take small gradient steps on the task data only.' },
+            { lines: [23, 28], note: 'Try four settings. The last one uses a learning rate that is far too large, and the loss explodes.' },
+          ] },
+        { type: 'p', text: 'Read the table top to bottom. The more we fit the task, the more the general loss grows. That is forgetting, in two weights.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change the task rule on line 11 from `[2.0, 3.0]` to `[2.0, 1.2]`, much closer to the pretrained weights. Predict first: will the general loss after 100 steps be higher or lower than 4.06?',
+          'Add the setting `(0.5, 20)` to the list on line 25. Predict: does it converge like `lr=0.1`, or blow up like `lr=1.2`?',
+          'Freeze the first weight by adding `grad[0] = 0` after line 19. Predict: can the task loss still reach zero, and why does this particular task allow it?',
+        ] },
+        { type: 'check', question: 'In the output, `lr=0.1 steps=100` has the best task loss and the worst general loss among the runs that did not blow up. If our bot must also keep its general skills, which row would we ship, and what extra data would help us decide?', answer: 'Probably `lr=0.1 steps=5` or a point near it: it removes most of the task loss (5.02 → 0.361) while roughly halving the damage to the general skill (2.08 instead of 4.06). To decide properly we need a validation set for the task *and* a small general test set, and we pick the checkpoint with the best balance. Training loss alone would always tell us to train longer.' },
+        { type: 'check', question: 'The `lr=1.2` run ends with a huge loss on both tasks. A teammate suggests training for more steps to recover. Will that work?', answer: 'No. Each step overshoots the minimum by more than the previous one, so the weights move further away every time. More steps make it worse. The fix is a smaller learning rate, restarted from the pretrained weights, because the current weights are already ruined.' },
       ],
     },
     {

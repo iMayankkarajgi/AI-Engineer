@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-approximate-nearest-neighbor-ann-search-work',
-  minutes: 22,
+  minutes: 27,
   hook: 'How can a search engine find the 10 most similar items among a billion vectors in a few milliseconds, without looking at almost any of them?',
   summary: 'Nearest neighbour search finds the stored vectors closest to a query. Doing it exactly means comparing against every vector, which is too slow at scale, so Approximate Nearest Neighbor (ANN) search uses an index to look at only a small, promising part of the data. Four families do this: trees (KD-tree), hashing (LSH), clustering (IVF) and graphs (HNSW), each trading a little accuracy (recall) for a lot of speed.',
   sections: [
@@ -158,6 +158,94 @@ IVF nprobe=10:    2081 computations, recall@10 = 1.00`,
           verdict: 'Start with HNSW for most workloads; move to IVF-PQ when memory becomes the bottleneck; use brute force when data is small.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Never measuring recall: always compare ANN results against brute force on a sample of queries. Tuning on toy data: real embeddings cluster less neatly. Forgetting that **filters** (e.g. only in-stock items) can starve an ANN search of results. Rebuilding IVF centroids rarely: if the data drifts, clusters stop fitting.' },
         { type: 'check', question: 'Our app has 3,000 FAQ vectors and very low traffic. Should we tune an HNSW index?', answer: 'Probably not. 3,000 vectors × 768 dims is only about 2.3 million multiply-adds per query, which a laptop does in a millisecond or so. Brute force is exact, simpler and fast enough. ANN pays off when N or traffic is large.' },
+      ],
+    },
+    {
+      id: 'worked-example-graph-walk',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The HNSW section talked about a "greedy hop" and a "candidate list of size ef". Let us trace both by hand on one tiny layer of six songs, A to F. The number next to each song is its distance to the query (smaller is closer; illustrative numbers). The true nearest neighbour is **F**.' },
+        { type: 'table', caption: 'A six-node graph. Links go both ways.', head: ['Song', 'Distance to query', 'Linked to'], rows: [
+          ['A (entry point)', '9', 'B, D'],
+          ['B', '5', 'A, C'],
+          ['C', '4', 'B'],
+          ['D', '6', 'A, E'],
+          ['E', '2', 'D, F'],
+          ['F', '1', 'E'],
+        ] },
+        { type: 'steps', title: 'Search with ef = 1 (pure greedy)', items: [
+          { title: 'Start at A', text: 'A is at distance 9. Its neighbours are B (5) and D (6). B is closer, so we move to B.' },
+          { title: 'Move to C', text: 'From B we see C (4), which is closer than B. We move to C.' },
+          { title: 'Stuck', text: 'The only neighbour of C is B, which is farther away. Greedy search stops and returns C. It never saw F. C is a **local minimum**: a dead end that looks best from where we stand.' },
+        ] },
+        { type: 'steps', title: 'Search with ef = 3', items: [
+          { title: 'Visit A', text: 'We remember its neighbours. Best three seen so far: B (5), D (6), A (9).' },
+          { title: 'Expand B', text: 'B is the closest node not yet expanded. We see C (4). Best three: C (4), B (5), D (6).' },
+          { title: 'Expand C', text: 'Nothing new. With ef = 1 we stopped here.' },
+          { title: 'Expand D', text: 'D is still on the list of three, so it gets its turn. We see E (2). Best three: E (2), C (4), B (5).' },
+          { title: 'Expand E', text: 'We see F (1). Best three: F (1), E (2), C (4). Nothing closer is left to expand, so we return F.' },
+        ] },
+        { type: 'p', text: 'Count the work. With ef = 1 we computed 4 distances (A, B, D, C) and got the wrong answer. With ef = 3 we computed all 6 and got the right one. On six songs that is no saving at all, but in a graph of millions the same dial decides whether we look at a few hundred nodes or a few thousand. A wider list keeps second-best paths alive, and that is where the extra recall comes from.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The lesson coded IVF. Now we build the hashing family: a small **LSH** index with random hyperplanes. Each table turns a vector into an 8-bit bucket ID. We search only the buckets the query falls into, and we watch what adding more tables does to recall and to the work done.' },
+        { type: 'code', lang: 'python', title: 'practice_lsh.py', code: `import numpy as np
+
+rng = np.random.default_rng(1)
+# 2,000 vectors in 16-D that form 10 loose groups (illustrative data)
+centers = rng.normal(size=(10, 16))
+X = np.vstack([c + 0.5 * rng.normal(size=(200, 16)) for c in centers])
+Q = X[rng.choice(len(X), 40, replace=False)] + 0.2 * rng.normal(size=(40, 16))
+k = 5
+
+def cosine_top(q, rows):                      # exact search inside a set of rows
+    sims = (X[rows] @ q) / (np.linalg.norm(X[rows], axis=1) * np.linalg.norm(q))
+    return set(rows[np.argsort(-sims)[:k]])
+
+def build_table(n_bits):                      # one LSH table = n_bits random planes
+    planes = rng.normal(size=(n_bits, 16))
+    weights = 2 ** np.arange(n_bits)
+    codes = (X @ planes.T > 0) @ weights      # each vector's bucket id
+    return planes, weights, codes
+
+def lsh_search(q, tables):
+    cand = np.zeros(len(X), dtype=bool)
+    for planes, weights, codes in tables:     # union of the query's buckets
+        cand |= codes == (planes @ q > 0) @ weights
+    rows = np.where(cand)[0]
+    return cosine_top(q, rows), len(rows)
+
+all_rows = np.arange(len(X))
+for n_tables in [1, 2, 4, 8]:
+    tables = [build_table(8) for _ in range(n_tables)]
+    rec, work = [], []
+    for q in Q:
+        got, n = lsh_search(q, tables)
+        rec.append(len(got & cosine_top(q, all_rows)) / k)
+        work.append(n)
+    print(f"{n_tables} table(s): {np.mean(work):6.0f} vectors checked, recall@5 = {np.mean(rec):.2f}")`, output: `1 table(s):     31 vectors checked, recall@5 = 0.33
+2 table(s):     61 vectors checked, recall@5 = 0.56
+4 table(s):    132 vectors checked, recall@5 = 0.78
+8 table(s):    187 vectors checked, recall@5 = 0.92`,
+          walkthrough: [
+            { lines: [3, 8], note: '2,000 clustered vectors and 40 queries placed near real data points. The seed is fixed so the run repeats exactly.' },
+            { lines: [10, 12], note: 'Exact cosine top-5 inside a given set of rows. Called on all rows it is our ground truth; called on a bucket it is the LSH answer.' },
+            { lines: [14, 18], note: 'One table: 8 random planes. Each plane gives one bit (which side is the vector on?). The 8 bits are packed into a bucket ID from 0 to 255.' },
+            { lines: [20, 25], note: 'Search: hash the query in every table, collect all vectors that share a bucket with it in any table, and rank only those.' },
+            { lines: [27, 35], note: 'Try 1, 2, 4 and 8 tables. Report the average number of vectors checked and recall@5 against the exact answer.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change `build_table(8)` to `build_table(4)`. There are now only 16 buckets per table. Predict what happens to "vectors checked" and to recall with 1 table.',
+          'Change it to `build_table(12)` (4,096 buckets). Predict whether one table now finds more or fewer of the true neighbours, and why more bits make buckets "pickier".',
+          'Change the query noise from `0.2` to `1.0` on line 7, so queries sit farther from the stored points. Predict whether recall with 8 tables goes up or down before you run it.',
+        ] },
+        { type: 'check', question: 'One table has 256 buckets for 2,000 vectors, which is about 8 vectors per bucket if they were spread evenly. Yet one table checked 31 vectors per query on average. Why?', answer: 'The data is clustered, so the buckets are far from even. Vectors in the same group fall on the same side of most planes and pile into a few crowded buckets, while many buckets stay empty. Our queries sit near stored points, so they land in the crowded buckets.' },
+        { type: 'check', question: 'Going from 1 table to 8 tables raised recall@5 from 0.33 to 0.92. Besides checking more vectors, what did we pay for that?', answer: 'Memory and hashing work. Every table stores a bucket ID for every vector and its own set of planes, so 8 tables is about 8 times the index. Each query is also hashed 8 times. This is the reason LSH often needs a lot of memory to reach high recall.' },
       ],
     },
   ],

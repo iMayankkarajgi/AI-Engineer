@@ -1,6 +1,6 @@
 export default {
   id: "speculative-decoding",
-  minutes: 23,
+  minutes: 28,
   hook: "How can a big LLM write two or three tokens per forward pass without changing a single word of what it would have written anyway?",
   summary: "LLM generation is slow because each token needs a full forward pass of a big model that is limited by memory bandwidth, not math. Speculative decoding lets a small, fast draft model guess several tokens ahead; the big target model then checks all the guesses in one parallel pass and keeps the longest correct prefix. With the right acceptance rule the output distribution is exactly the target model's, and real systems typically see around 2–3× faster decoding.",
   sections: [
@@ -125,6 +125,78 @@ a=0.8 k=8: 4.33 tokens per target pass`, walkthrough: [
           { name: "Speculative decoding", summary: "Draft k tokens, verify in one target pass.", pros: ["Often 2–3× lower latency", "Output distribution unchanged", "Biggest gains on predictable text like code"], cons: ["Draft model needs memory and must share the tokenizer", "Wasted work on rejected drafts", "Gains shrink at large batch sizes, where the GPU is less idle"], bestFor: "Latency-sensitive serving at small to medium batch sizes" }
         ], rows: [["Output quality", "Target model", "Identical to target model"], ["Target passes per token", "1", "About 1 / E[tokens per pass]"]], verdict: "Use it when per-user latency matters and the GPU has spare compute; measure, because gains depend on acceptance rate and batch size." },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Picking a draft model that is too big (drafting eats the savings) or too different (low acceptance). Expecting the same gains at batch size 64 as at batch size 1: with big batches the target pass is already closer to compute-bound, so extra verified tokens are no longer nearly free. And assuming speculative decoding changes quality: if verification is implemented correctly, it does not." }
+      ]
+    },
+    {
+      id: "acceptance-rule-by-hand",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The simulation showed that the acceptance rule reproduces the target's distribution. Let us see why with numbers small enough to do by hand. The vocabulary has three tokens, A, B and C. The target says p = [0.5, 0.3, 0.2]. The draft is too fond of A: q = [0.7, 0.2, 0.1]." },
+        { type: "steps", title: "Following the probability mass", items: [
+          { title: "The draft proposes", text: "It proposes A 70% of the time, B 20% and C 10%." },
+          { title: "Accept or reject A", text: "A is over-rated, so we accept it with probability p/q = 0.5 ÷ 0.7 ≈ 0.714. A is proposed and accepted 0.7 × 0.714 = 0.5 of the time. It is proposed and rejected 0.7 − 0.5 = 0.2 of the time." },
+          { title: "Accept B and C", text: "Both are under-rated (q ≤ p), so they are always accepted. That gives 0.2 for B and 0.1 for C." },
+          { title: "Total acceptance", text: "0.5 + 0.2 + 0.1 = 0.8. This is exactly ∑ min(p, q)." },
+          { title: "Build the correction", text: "max(0, p − q) = [0, 0.1, 0.1]. Rescaled to sum to 1 it is [0, 0.5, 0.5]. A rejection never produces A, because the draft already proposes A too often." },
+          { title: "Spread the rejected mass", text: "The 0.2 of rejected mass is split evenly: 0.1 goes to B and 0.1 to C." }
+        ] },
+        { type: "table", caption: "Where each token's final probability comes from", head: ["Token", "Target p", "Draft q", "Accepted as a draft", "Added by corrections", "Final"], rows: [
+          ["A", "0.5", "0.7", "0.5", "0", "0.5"],
+          ["B", "0.3", "0.2", "0.2", "0.1", "0.3"],
+          ["C", "0.2", "0.1", "0.1", "0.1", "0.2"]
+        ] },
+        { type: "p", text: "The last column equals p in every row. The rule trims the tokens the draft likes too much down to the target's level, and hands the trimmed mass to the tokens the draft liked too little. Nothing is left over." },
+        { type: "p", text: "This also gives us a test for an implementation. If we sample many tokens and the output frequencies drift away from p, two usual causes are sampling the correction from p itself instead of from the leftover p − q, and comparing against a q that is not the one the draft actually sampled from." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the whole draft-and-verify loop for greedy decoding and count target passes. There is no real model. A list of true and false values says, for each position, whether the draft would guess the target's token. It is right about 80% of the time, and one draft pass costs 0.05 of a target pass. Both numbers are illustrative." },
+        { type: "code", lang: "python", title: "practice_draft_verify.py", code: `# A draft-and-verify loop with greedy decoding and a stand-in draft model.
+import random
+random.seed(0)
+N, ALPHA, C = 300, 0.8, 0.05     # tokens to write, draft accuracy, draft pass cost
+# Decide once, for every position, whether the draft would guess it right.
+draft_ok = [random.random() < ALPHA for _ in range(N)]
+
+def run(k):
+    pos, passes = 0, 0
+    while pos < N:
+        passes += 1                       # ONE target pass checks up to k drafts
+        accepted = 0
+        while accepted < k and pos < N and draft_ok[pos]:
+            pos += 1                      # draft token matches the target: keep it
+            accepted += 1
+        if pos < N:
+            pos += 1                      # the target's own token (fix or bonus)
+    cost = passes * (1 + k * C)           # in units of one target pass
+    return passes, N / passes, N / cost
+
+print(f"plain decoding: {N} target passes, speedup 1.00x")
+for k in (1, 2, 4, 8):
+    passes, per_pass, speedup = run(k)
+    theory = (1 - ALPHA ** (k + 1)) / (1 - ALPHA)
+    print(f"k={k}: {passes:3d} target passes, {per_pass:.2f} tokens/pass "
+          f"(formula {theory:.2f}), speedup {speedup:.2f}x")`, output: `plain decoding: 300 target passes, speedup 1.00x
+k=1: 170 target passes, 1.76 tokens/pass (formula 1.80), speedup 1.68x
+k=2: 126 target passes, 2.38 tokens/pass (formula 2.44), speedup 2.16x
+k=4:  94 target passes, 3.19 tokens/pass (formula 3.36), speedup 2.66x
+k=8:  75 target passes, 4.00 tokens/pass (formula 4.33), speedup 2.86x`, walkthrough: [
+          { lines: [1, 6], note: "The setup: 300 tokens to write, a draft that is right about 80% of the time, and a fixed seed so the run repeats exactly." },
+          { lines: [8, 17], note: "One round per loop: accept draft tokens until the first wrong one or until k are accepted, then add the target's own token." },
+          { lines: [18, 19], note: "Each round costs one target pass plus k cheap draft passes. Speedup is tokens divided by that total cost." },
+          { lines: [21, 26], note: "Try four draft lengths and compare tokens per pass with the formula from the lesson." }
+        ] },
+        { type: "p", text: "The simulated tokens per pass sit close to the formula, and the speedup grows more slowly than tokens per pass because every round also pays for k draft passes. Now change it:" },
+        { type: "list", items: [
+          "Set `C = 0.3`, a draft model that is too big. Predict which k now gives the best speedup, then check.",
+          "Set `ALPHA = 0.5`. Use the formula to predict tokens per pass for k = 4 before you run it. Is k = 8 still worth it?",
+          "Make the draft's mistakes come in clumps: replace the `draft_ok` line with `draft_ok = [(i // 10) % 5 != 0 for i in range(N)]`. It is still right 80% of the time. Predict whether tokens per pass goes up or down for k = 4, and explain what you see."
+        ] },
+        { type: "check", question: "In the worked example, p = [0.5, 0.3, 0.2] and q = [0.7, 0.2, 0.1]. A round ends in a rejection. Which token can the correction never be, and why?", answer: "A. The correction is sampled from max(0, p − q), and for A that is zero because the draft proposes A more often than the target wants. A rejection exists to add mass to tokens the draft under-proposed, which here are B and C." },
+        { type: "check", question: "Someone uses the target model as its own draft model, so q = p and every draft token is accepted. Why is this not a speedup?", answer: "Acceptance is perfect, but each draft pass now costs as much as a target pass, so c = 1. A round with k drafts costs k + 1 target passes and yields at most k + 1 tokens: one token per pass, the same as plain decoding. The gain comes from the draft being much cheaper than the target, not from acceptance alone." }
       ]
     },
     {

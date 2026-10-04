@@ -1,6 +1,6 @@
 export default {
   id: "how-does-prompt-chaining-work",
-  minutes: 17,
+  minutes: 22,
   hook: "What if, instead of asking one giant prompt to do five jobs at once, we let the model do one job at a time and check its work in between?",
   summary: "Prompt chaining splits a complex task into a sequence of smaller LLM calls, where the output of one call becomes the input of the next. Between calls, ordinary code can validate, route or transform the data. Chains are easier to debug, test and control than one big prompt, at the price of more calls, more latency and the risk that an early mistake flows downstream.",
   sections: [
@@ -196,6 +196,67 @@ Step 4 (check): 16 words, under 40? True`,
           ["Real-time chat where every 100 ms matters", "Carefully", "Keep the chain short or parallel"]
         ] },
         { type: "p", text: "A good workflow is to start with one prompt, measure where it fails, and split out exactly the failing part into its own step with its own check. That way every link in the chain earns its place." }
+      ]
+    },
+    {
+      id: "worked-gate-math",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The chart earlier showed how fast an unchecked chain decays. Let us put numbers on the cure. Take our 4-step review chain and suppose each step is right 90% of the time. The numbers are illustrative, and we assume that tries fail independently." },
+        { type: "steps", title: "What a gate with a retry buys us", items: [{ title: "No gates", text: "All four steps must be right: 0.9⁴ ≈ 0.66. About one review in three ends with a wrong reply." }, { title: "Add a gate with one retry", text: "A step now fails only if both tries fail: 0.1 × 0.1 = 0.01. Its effective success rate is 1 − 0.01 = 0.99." }, { title: "Chain the gated steps", text: "0.99⁴ ≈ 0.96. Same prompts, same model, far fewer bad replies." }, { title: "Count the cost", text: "Each step makes 1 call, plus a second call in the 10% of cases where the first try fails: 1.1 calls on average. Four steps cost about 4.4 calls instead of 4." }] },
+        { type: "table", caption: "Illustrative: 4 steps, 90% success per try, gates that catch every failure", head: ["Design", "Success per step", "Whole chain", "Average calls"], rows: [["No gates", "0.90", "0.9⁴ ≈ 0.66", "4.0"], ["Gate + 1 retry", "0.99", "0.99⁴ ≈ 0.96", "4.4"], ["Gate + 2 retries", "0.999", "0.999⁴ ≈ 0.996", "4.44"]] },
+        { type: "p", text: "Two honest limits. First, a gate catches only what it can check. Invalid JSON is easy to catch. Valid JSON with the wrong product name is not, so real gains are smaller than this table. Second, retries cure random slips. If a step fails the same way every time, a retry repeats the failure, and we must fix the prompt instead." },
+        { type: "p", text: "To tell the two apart, log the gate result for every attempt. Failures that pass on the second try are random slips. Failures that never pass point at the prompt or at the input." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the report chain from earlier: summarize three sections one by one (fan-out), check each summary with a gate that retries, then merge the summaries in one last call. The model is a scripted stand-in that misbehaves once, so we can watch the gate catch it." },
+        { type: "code", lang: "python", title: "practice_fanout_gate.py", code: `# A chain with fan-out, a retrying gate, a merge step and a call counter.
+calls = {"n": 0}
+
+def llm(task, text):
+    # Scripted stand-in for a model. Its 2nd call ignores the format once.
+    calls["n"] += 1
+    if task == "summarize":
+        if calls["n"] == 2:
+            return "Sure! Here is a long friendly answer that forgets the format we asked for"
+        return "SUMMARY: " + text.split(".")[0].lower()
+    if task == "merge":
+        return "REPORT: " + "; ".join(s.replace("SUMMARY: ", "") for s in text)
+
+def gate(out):
+    # Plain-code check: the right prefix and at most 12 words
+    return out.startswith("SUMMARY: ") and len(out.split()) <= 12
+
+def step_with_retry(task, text, tries=3):
+    for attempt in range(1, tries + 1):
+        out = llm(task, text)
+        ok = gate(out)
+        print(f"  {task} attempt {attempt}: {'pass' if ok else 'FAIL'}")
+        if ok:
+            return out
+    raise SystemExit("gate failed every time: stop the chain")
+
+sections = ["Sales rose in the third quarter. Most growth came from new shops.",
+            "Support tickets fell. The new help page worked.",
+            "Two engineers joined. Hiring is on plan."]
+
+summaries = [step_with_retry("summarize", s) for s in sections]   # fan-out
+report = llm("merge", summaries)                                  # merge
+print(report)
+print("model calls:", calls["n"])`, output: `  summarize attempt 1: pass
+  summarize attempt 1: FAIL
+  summarize attempt 2: pass
+  summarize attempt 1: pass
+REPORT: sales rose in the third quarter; support tickets fell; two engineers joined
+model calls: 5`, walkthrough: [{ lines: [4, 12], note: "The scripted model. It counts its calls, and on its second call it ignores the format, as a real model sometimes does." }, { lines: [14, 16], note: "The gate: plain code that checks the prefix and the length of a summary." }, { lines: [18, 25], note: "A step wrapped in a retry loop. It returns the first output that passes the gate and stops the whole chain if none does." }, { lines: [27, 34], note: "Fan-out over three sections, then one merge call. The call counter shows what the retry cost." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Change `tries=3` to `tries=1`. Predict what the program prints and where it stops.", "Tighten the gate from 12 words to 4 words. Predict which summaries fail now. What does that say about a gate that is too strict?", "Make the scripted model misbehave on every even-numbered call (`calls[\"n\"] % 2 == 0`) instead of only the second. Predict the total number of model calls."] },
+        { type: "check", question: "The output shows 5 model calls for 3 sections plus 1 merge. Where did the fifth call come from, and what would have happened without the gate?", answer: "From the retry. The second summarize call ignored the format, the gate rejected it, and the step ran again. Without the gate, that chatty text would have gone into the merge step and ended up inside the final report. The gate spent one extra call to stop an error at its source." },
+        { type: "check", question: "The gate checks the prefix and the word count. Suppose a summary says “sales fell” when the section says sales rose. Does the gate catch it? What kind of check could?", answer: "No. The gate checks form, not truth. The wrong summary has the right prefix and length, so it passes. Catching it needs a check on content: a second model call that compares the summary with its section, or a test set with known answers for this step. Format gates are cheap and worth having, but they do not replace measuring each step's accuracy." }
       ]
     }
   ],

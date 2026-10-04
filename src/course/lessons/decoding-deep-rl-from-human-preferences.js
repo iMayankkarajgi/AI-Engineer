@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-deep-rl-from-human-preferences',
-  minutes: 21,
+  minutes: 26,
   hook: 'How do you reward a robot for doing a graceful backflip when nobody can write down, in code, what “graceful backflip” means?',
   summary: 'The 2017 paper “Deep Reinforcement Learning from Human Preferences” showed that an agent can learn complex behaviour without a hand-written reward. Humans watch pairs of short clips and pick the better one; a reward model learns to predict those choices; and a reinforcement learning agent maximises the learned reward. With feedback on under 1% of the agent’s interactions it learned Atari games, robot locomotion and even a backflip. This loop is the foundation of RLHF.',
   sections: [
@@ -154,6 +154,83 @@ true direction:    [ 0.44  0.22 -0.87]`, walkthrough: [
           ['RL algorithm', 'A2C, TRPO', 'Typically PPO; also GRPO and others'],
           ['Preference model', 'Bradley–Terry', 'Bradley–Terry'],
         ], verdict: 'Same core recipe, different scale. Today the comparison data is also used without RL (DPO), and AI judges sometimes replace humans (RLAIF).' },
+      ],
+    },
+    {
+      id: 'worked-example-one-comparison',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us push **one human answer** through the reward model’s loss by hand. We reuse the two clips from earlier: the reward model currently gives clip 1 a total of `R₁ = 2.0` and clip 2 a total of `R₂ = 0.5`, so it predicts clip 1 wins with probability `σ(1.5) ≈ 0.82`.' },
+        { type: 'table', caption: 'The loss for each possible human answer (prediction fixed at 0.82 for clip 1)', head: ['Human says', 'Label μ', 'Loss', 'Meaning'], rows: [
+          ['Clip 1 is better', '(1, 0)', '−ln 0.82 ≈ 0.20', 'Model was right; small correction'],
+          ['Clip 2 is better', '(0, 1)', '−ln 0.18 ≈ 1.70', 'Model was wrong; large correction'],
+          ['Equally good', '(0.5, 0.5)', '0.5 · 0.20 + 0.5 · 1.70 ≈ 0.95', 'Model was too sure; pull the two totals together'],
+        ] },
+        { type: 'steps', title: 'What the update does when the human picks clip 2', items: [
+          { title: 'Compute the error', text: 'The model said 0.82 for clip 1, the label says 0. The error on clip 1 is `0.82 − 0 = +0.82`.' },
+          { title: 'Push the totals', text: 'The gradient of the loss is `+0.82` with respect to R₁ and `−0.82` with respect to R₂. Gradient descent therefore lowers R₁ and raises R₂ by the same amount.' },
+          { title: 'Spread over the steps', text: 'R₁ is a *sum* of per-step rewards. The push is shared by every step in clip 1. The model cannot tell which moment the human disliked, so many comparisons are needed to sort that out.' },
+          { title: 'Allow for human slips', text: 'The paper assumes a 10% chance that the human answers at random. The prediction becomes `0.9 · 0.82 + 0.05 ≈ 0.79`, and for clip 2 `0.9 · 0.18 + 0.05 ≈ 0.21`. The loss for “clip 2” drops from 1.70 to `−ln 0.21 ≈ 1.54`.' },
+          { title: 'Why that matters at the extreme', text: 'If the model were 99.9% sure of clip 1 and the human said clip 2, the plain loss would be `−ln 0.001 ≈ 6.9`. With the 10% rule the adjusted probability is never below 0.05, so the loss is at most `−ln 0.05 ≈ 3.0`. One careless click cannot wreck the reward model.' },
+        ] },
+        { type: 'p', text: 'Notice what the loss never uses: the absolute size of R₁ or R₂. Adding 100 to both totals changes nothing, because only `R₁ − R₂` enters the prediction. This is why the paper normalises the learned reward before the agent uses it.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'Human answers are the scarce resource, so we should spend them where they teach the most. We will build the paper’s query-selection idea in miniature: three reward models form an ensemble, each predicts who wins for several candidate pairs, and we ask the human about the pair where the models **disagree** most.' },
+        { type: 'code', lang: 'python', title: 'practice_query_selection.py', code: `import numpy as np
+rng = np.random.default_rng(5)
+
+# An ensemble of 3 reward models. Each is a weight vector over 2 clip features.
+# They agree about feature 1 and still disagree about feature 2.
+ensemble = np.array([[1.0, 0.8],
+                     [1.0, 0.0],
+                     [1.0, -0.8]])
+
+# 8 clips, each summarised by its features summed over all time steps.
+clips = rng.normal(0, 2, size=(8, 2)).round(1)
+pairs = [(0, 1), (2, 3), (4, 5), (6, 7), (0, 5), (3, 6)]
+
+print("pair  P(first clip wins), per model  variance")
+best, best_var = None, -1.0
+for i, j in pairs:
+    R_i = ensemble @ clips[i]             # each model's total reward for clip i
+    R_j = ensemble @ clips[j]
+    p = 1 / (1 + np.exp(-(R_i - R_j)))    # Bradley-Terry prediction per model
+    var = p.var()                         # how much the models disagree
+    cells = "  ".join(f"{v:.2f}" for v in p)
+    print(f"{i},{j}   {cells}                {var:.3f}")
+    if var > best_var:
+        best, best_var = (i, j), var
+
+print("ask the human about pair:", best)
+print("clip features:", clips[best[0]], "vs", clips[best[1]])`, output: `pair  P(first clip wins), per model  variance
+0,1   0.02  0.25  0.83                0.117
+2,3   0.99  0.97  0.88                0.002
+4,5   1.00  0.73  0.03                0.168
+6,7   0.96  0.09  0.00                0.185
+0,5   0.10  0.11  0.12                0.000
+3,6   0.05  0.69  0.99                0.155
+ask the human about pair: (6, 7)
+clip features: [-1.9  3.2] vs [ 0.4 -3.5]`,
+          walkthrough: [
+            { lines: [4, 8], note: 'Three reward models. All value feature 1 the same; they disagree about whether feature 2 is good, neutral or bad.' },
+            { lines: [10, 12], note: 'Eight clips (summed features) and six candidate pairs we could show a human.' },
+            { lines: [16, 24], note: 'For each pair, every model predicts the chance the first clip wins. The variance of those three predictions measures disagreement.' },
+            { lines: [26, 27], note: 'Pick the pair with the highest variance and show its features.' },
+          ] },
+        { type: 'p', text: 'Pair 6,7 wins: one model is 96% sure the first clip is better and another is nearly certain it is worse. The two clips differ most in feature 2 (3.2 against −3.5), which is exactly where the models disagree.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Make the ensemble nearly agree: on lines 6–8 change `0.8` and `-0.8` to `0.1` and `-0.1`. Predict: what happens to every number in the variance column?',
+          'Replace line 20 with `var = -abs(p.mean() - 0.5)`, which picks the pair whose *average* prediction is closest to 50/50. Predict: is it still pair 6,7? Think about what this rule ignores.',
+          'Add a fourth model `[1.0, 0.8]` (a copy of the first) to the ensemble. Predict: does the chosen pair change? What does a duplicated member add?',
+        ] },
+        { type: 'check', question: 'For pair 0,5 all three models predict about 0.10 and the variance is 0.000. Does that prove the models are *right* about this pair?', answer: 'No. It only shows they agree. All three could share the same blind spot, for example a feature none of them uses. Disagreement-based selection saves human time on pairs the ensemble is confident about, but it cannot find errors the whole ensemble shares. This is one reason the paper keeps collecting feedback as the agent reaches new situations.' },
+        { type: 'check', question: 'Suppose the human looks at pair 6,7 and prefers the first clip. Which ensemble member is supported, and what did we learn about feature 2?', answer: 'The first model (0.96) is supported; the third (0.00) is strongly contradicted. The first clip has high feature 2 and the second has low feature 2, so one answer tells us the human *likes* feature 2. That single comparison settles the question the ensemble was split on, which is why it was the most valuable pair to ask about.' },
       ],
     },
     {

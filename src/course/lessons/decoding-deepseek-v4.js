@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-deepseek-v4',
-  minutes: 26,
+  minutes: 31,
   hook: 'How does an open model read a million tokens while keeping only about a tenth of the memory its predecessor needed?',
   summary: 'DeepSeek-V4 (April 2026) is a pair of open Mixture-of-Experts models, V4-Pro (1.6T total, 49B active parameters) and V4-Flash (284B total, 13B active), both with a native 1M-token context. Its main ideas are a hybrid attention that compresses past tokens (CSA: compress 4× and pick the top-k blocks; HCA: compress 128× and attend to all), stronger residual connections called mHC, the Muon optimizer, FP4 quantization-aware training, and a post-training recipe that trains domain specialists and merges them by on-policy distillation. Users choose among three reasoning modes.',
   sections: [
@@ -159,6 +159,76 @@ HCA                         7,940                    7,940`,
       blocks: [
         { type: 'p', text: 'Each piece removes a specific bottleneck. Compressed hybrid attention cuts KV memory and FLOPs at 1M tokens. MoE keeps compute per token near 49B (Pro) or 13B (Flash) despite huge capacity. mHC and Muon keep a very large training run stable and efficient. FP4 QAT shrinks the memory for the experts. Specialist RL plus on-policy distillation gives one model strong skills in several domains, and reasoning modes let users trade cost for depth.' },
         { type: 'callout', tone: 'warn', title: 'What to be careful about', text: 'Compression is lossy: exact details from far back survive only if the indexer selects the right CSA blocks or the coarse HCA summary keeps them, so exact long-range recall should be tested on your task. Vendor efficiency numbers are relative to V3.2 at 1M tokens; at short contexts the gains are smaller. And a 1.6T-parameter model still needs a multi-GPU server; "efficient" does not mean "runs on a laptop".' },
+      ],
+    },
+    {
+      id: 'worked-example-entry-counts',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "The earlier script counted entries at 1M tokens. Let us repeat the same simple count at three context sizes, using only the settings already listed for V4-Pro: 4× compression with top-k 1,024 for CSA, 128× compression for HCA, and a 128-token local window in both. As before, this count ignores head structure and storage precision." },
+        { type: 'steps', title: "The three formulas for a context of n tokens", items: [
+          { title: "CSA entries stored", text: "n ÷ 4 compressed entries, plus the 128 uncompressed window tokens." },
+          { title: "CSA entries attended", text: "The smaller of n ÷ 4 and the top-k of 1,024, plus the 128 window tokens. Top-k cannot pick more entries than exist." },
+          { title: "HCA entries", text: "n ÷ 128 compressed entries plus the window. All of them are attended, so stored and attended are the same number." },
+        ] },
+        { type: 'table', caption: "Simple entry count per layer type, V4-Pro settings (whole-number division)", head: ['Context n', 'CSA stored', 'CSA attended per query', 'HCA stored and attended', 'Full attention'], rows: [
+          ['2,000', '628', '628', '143', '2,000'],
+          ['32,000', '8,128', '1,152', '378', '32,000'],
+          ['1,000,000', '250,128', '1,152', '7,940', '1,000,000'],
+        ] },
+        { type: 'p', text: "Read the middle column from top to bottom. At 2,000 tokens there are only 500 compressed entries, fewer than the top-k, so in this count selection has nothing to drop and a query reads 628 entries: about 31% of full attention. At 32,000 tokens it reads 1,152, about 3.6%. At 1M tokens it still reads 1,152, about 0.12%. The work per query in a CSA layer stops growing once n ÷ 4 passes the top-k, while HCA keeps growing slowly, at 1/128 of the rate of full attention." },
+        { type: 'p', text: "This is the arithmetic behind the earlier warning that gains are smaller at short contexts. It also shows what to test on our own task: place one exact detail far back in a long input and ask for it. Whether it comes back depends on the indexer picking its block, which no entry count can tell us." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will build a toy to feel why pooling is lossy and why selection helps. We hide one “needle” token in 64 random tokens, merge keys with a plain mean, and check whether a query that resembles the needle still finds the right entry. This is a simplified simulation with random keys and plain averaging, not the model's learned pooling or indexer." },
+        { type: 'code', lang: 'python', title: 'practice_pooling_recall.py', code: `import numpy as np
+rng = np.random.default_rng(0)
+
+n, d = 64, 8                                   # toy context: 64 tokens, 8-dim keys
+keys = rng.normal(0, 1, (n, d))
+needle = 37                                    # the token our query is looking for
+query = keys[needle] + rng.normal(0, 0.3, d)   # the query resembles the needle's key
+
+def pooled_scores(m):
+    # merge every m keys into one entry (a plain mean in this toy), then score
+    entries = keys.reshape(n // m, m, d).mean(axis=1)
+    return entries @ query
+
+for m in [1, 4, 16]:
+    s = pooled_scores(m)
+    best = int(s.argmax())
+    ranked = np.sort(s)
+    print(f"pool x{m:<2}: entries={n // m:>2} best entry={best:>2} "
+          f"holds needle={best == needle // m} lead over runner-up={ranked[-1] - ranked[-2]:.2f}")
+
+# Sparse selection on the x4 entries: keep the top-k, plus a recent local window
+k, window = 3, 8
+top = np.argsort(pooled_scores(4))[-k:][::-1]
+print("top-k x4 entries:", top.tolist(), "-> token ranges",
+      [(int(e) * 4, int(e) * 4 + 3) for e in top])
+print("entries attended:", k + window, "instead of", n)`, output: `pool x1 : entries=64 best entry=37 holds needle=True lead over runner-up=10.12
+pool x4 : entries=16 best entry= 5 holds needle=False lead over runner-up=0.66
+pool x16: entries= 4 best entry= 1 holds needle=False lead over runner-up=0.55
+top-k x4 entries: [5, 9, 15] -> token ranges [(20, 23), (36, 39), (60, 63)]
+entries attended: 11 instead of 64`,
+          walkthrough: [
+            { lines: [4, 7], note: "64 random token keys. Token 37 is the needle, and the query is a slightly noisy copy of its key, so with no compression the match is obvious." },
+            { lines: [9, 12], note: "Pooling: average every m keys into one entry, then score each entry against the query." },
+            { lines: [14, 19], note: "Try no pooling, 4× and 16×. Without pooling the needle wins by a wide margin (10.12). After pooling, the needle's key is averaged with unrelated keys, the lead collapses, and the single best entry is no longer the needle's block." },
+            { lines: [21, 26], note: "Keep the top 3 of the 4× entries. Block 9, which covers tokens 36 to 39 and holds the needle, is in the list even though it was not ranked first. We attend to 11 entries instead of 64." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `k = 1`. Predict from the output above whether the needle's block is still selected.",
+          "Change the noise on line 7 from `0.3` to `0.0`, so the query equals the needle's key. Predict whether pooling 16× now finds the right entry.",
+          "Set `needle = 62`. Predict whether pooling matters for this needle at all, given the local window of 8 recent tokens.",
+        ] },
+        { type: 'check', question: "At 4× pooling the top-ranked entry was block 5, not the needle's block 9, yet top-k = 3 kept block 9. What does this tell us about choosing k?", answer: "After pooling, the needle's key is mixed with three unrelated keys, so its score is noisy and it may not rank first. A larger k is a safety margin: it keeps blocks that are relevant but not top-ranked. The price is more entries to attend to, so k trades recall against compute." },
+        { type: 'check', question: "If the needle were token 60 of 64 and the local window covers the last 8 tokens, would compression affect it?", answer: "No. Tokens 56 to 63 are inside the local window, which is kept uncompressed, so the query can read token 60 exactly. Compression only affects tokens that have left the window. This is why recent detail stays sharp while old detail depends on pooling and selection." },
       ],
     },
     {

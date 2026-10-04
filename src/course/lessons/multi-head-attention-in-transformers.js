@@ -1,6 +1,6 @@
 export default {
   id: 'multi-head-attention-in-transformers',
-  minutes: 20,
+  minutes: 25,
   hook: 'One attention pattern per token is a single opinion about what matters. What if each layer could hold a dozen different opinions at once, for the same cost?',
   summary: 'Multi-head attention runs several smaller attention operations ("heads") side by side. Each head has its own query, key and value projections, so it can learn its own pattern, such as "look at the previous word" or "look at the subject". The head outputs are concatenated and mixed by one more matrix, W_o. Because each head works in d_model / h dimensions, the total cost is about the same as one big head.',
   sections: [
@@ -158,6 +158,88 @@ params in W_q,W_k,W_v,W_o: 256`,
         { type: 'p', text: '**Advantages** in summary: several relationships captured in parallel; no extra parameters versus one head of the same width; fully parallel on GPUs as one batched matrix operation; and some interpretability, because individual heads can be inspected.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes and limits', text: 'Reshaping in the wrong order (splitting tokens instead of features) silently mixes up heads; always split the feature dimension. Scaling by √d_model instead of √d_head. Forgetting W_o, which leaves heads unable to combine. And reading too much into a single head: head roles are fuzzy, overlapping and differ from model to model, so "head 5 does coreference" is a description of tendencies, not a rule.' },
         { type: 'callout', tone: 'tip', title: 'Where this goes next', text: 'Because every head stores its own keys and values during generation, multi-head attention is memory-hungry at inference. Multi-query and grouped-query attention keep many query heads but share key/value heads to shrink that memory. You will meet them in the efficiency module.' },
+      ],
+    },
+    {
+      id: "worked-example-attention-budget",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We said one head must compromise between relationships. Let us put numbers on that. Take the token “it” and three tokens it could attend to: “animal”, “street” and “tired”. Suppose “it” needs two things at once: its referent (“animal”) and its property (“tired”). All scores below are illustrative, already scaled." },
+        { type: "steps", title: "One head, then two", items: [
+          { title: "One head tries to do both", text: "It gives scores [2, 0, 2] to animal, street and tired. Softmax: e² ≈ 7.39, e⁰ = 1, e² ≈ 7.39, total 15.78. Weights ≈ [0.47, 0.06, 0.47]." },
+          { title: "Push harder", text: "Raise both wanted scores to 6: [6, 0, 6]. Weights ≈ [0.50, 0.00, 0.50]. The unwanted token is gone, but each wanted token is stuck at one half." },
+          { title: "See the limit", text: "One softmax row is a budget of 100%. Two targets can never both get more than 50%. Three targets would be capped at 33% each." },
+          { title: "Two heads", text: "Head A scores [3, 0, 0] and head B scores [0, 0, 3]. e³ ≈ 20.09, so each head gives its target 20.09 / 22.09 ≈ 0.91 and the other two tokens about 0.05 each." },
+          { title: "Keep the results apart", text: "Head A's output fills the first half of the vector and head B's fills the second half. W_o can then combine “who” and “what state” instead of receiving one blurred average." },
+        ] },
+        { type: "table", caption: "Weights of “it” on each token (illustrative scores, softmax computed exactly).", head: ["Setup", "animal", "street", "tired"], rows: [
+          ["One head, scores [2, 0, 2]", "0.47", "0.06", "0.47"],
+          ["One head, scores [6, 0, 6]", "0.50", "0.00", "0.50"],
+          ["Head A, scores [3, 0, 0]", "0.91", "0.05", "0.05"],
+          ["Head B, scores [0, 0, 3]", "0.05", "0.05", "0.91"],
+        ] },
+        { type: "p", text: "The gain is not free. With two heads, each one sees only half of the vector's width, so each has less room to describe a token. That is the trade behind the choice of h: more heads means more separate budgets, but a narrower view for each. It is also why the head width in published models tends to stay at 64 or 128 while the number of heads grows with the model." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The most common multi-head bug is a reshape that has the right shape and the wrong content. We will reproduce it on purpose. We fill a matrix with labelled numbers, split it into heads the right way and the wrong way, and write a small test that tells them apart." },
+        { type: "code", lang: "python", title: "practice_split_heads.py", code: `import numpy as np
+
+T, d_model, h = 3, 4, 2            # 3 tokens, width 4, 2 heads
+d_head = d_model // h
+
+# Label every number so we can trace it: entry = 10 * token + feature
+M = np.array([[10 * t + f for f in range(d_model)] for t in range(T)])
+print("M (rows = tokens, columns = features):\\n", M)
+
+right = M.reshape(T, h, d_head).transpose(1, 0, 2)   # split the FEATURE axis
+wrong = M.reshape(h, T, d_head)                      # same shape, wrong content
+print("shapes:", right.shape, wrong.shape)
+print("head 0, correct split:\\n", right[0])
+print("head 0, wrong split:\\n", wrong[0])
+
+# Test: head 0 must hold features 0 and 1 of EVERY token
+def head0_ok(H):
+    return np.array_equal(H[0], M[:, :d_head])
+
+print("correct split passes:", head0_ok(right))
+print("wrong split passes  :", head0_ok(wrong))
+
+# Round trip: gluing the heads back together must return M exactly
+merged = right.transpose(1, 0, 2).reshape(T, d_model)
+print("round trip ok:", np.array_equal(merged, M))`, output: `M (rows = tokens, columns = features):
+ [[ 0  1  2  3]
+ [10 11 12 13]
+ [20 21 22 23]]
+shapes: (2, 3, 2) (2, 3, 2)
+head 0, correct split:
+ [[ 0  1]
+ [10 11]
+ [20 21]]
+head 0, wrong split:
+ [[ 0  1]
+ [ 2  3]
+ [10 11]]
+correct split passes: True
+wrong split passes  : False
+round trip ok: True`,
+          walkthrough: [
+            { lines: [3, 8], note: "Each entry is 10 × token + feature, so 21 means token 2, feature 1. Now we can read where any number came from." },
+            { lines: [10, 14], note: "Two ways to get shape (2, 3, 2). The correct one splits the feature axis and then moves the head axis to the front. The wrong one reshapes directly. Both print the same shape." },
+            { lines: [16, 21], note: "A content test: head 0 must contain features 0 and 1 of every token. The wrong split fails, because its second row is [2, 3], which are features of token 0." },
+            { lines: [23, 25], note: "The inverse operation: move the head axis back and flatten. A correct split and merge must return the original matrix." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `h = 4`, so each head is 1 number wide. Predict what `right[0]` prints before running.",
+          "Change `right` to `M.reshape(T, h, d_head)` with no transpose. Predict its shape, and say what the first axis now counts.",
+          "Set `T, d_model, h = 2, 6, 3`. Predict the three rows of “head 0, wrong split”.",
+        ] },
+        { type: "check", question: "In the wrong split, head 0's second row is [2, 3]. Attention would treat that row as a token. What would this head actually be comparing?", answer: "Pieces of the same token. [0, 1] and [2, 3] are the two halves of token 0's vector, and [10, 11] is half of token 1. The head would compute attention between fragments as if they were three tokens, so its weights no longer mean “token i looks at token j”. Nothing crashes, which is why only a content test with traceable numbers catches it." },
+        { type: "check", question: "A single head with scores [6, 0, 6] gave “animal” and “tired” 50% each. Could a cleverly trained single head give both of them 90%?", answer: "No. The weights in one softmax row always sum to 1, so two targets together can hold at most 100%, and 90% + 90% is impossible. To put high weight on two different tokens for two different reasons, the model needs two separate softmax rows, which means two heads (or two layers)." },
       ],
     },
   ],

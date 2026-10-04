@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-an-embedding-cache-work',
-  minutes: 17,
+  minutes: 22,
   hook: 'Every night our RAG pipeline re-embeds 2 million chunks, and 98% of them have not changed since yesterday. Why are we paying for the same numbers again?',
   summary: 'An embedding cache stores the vector computed for a piece of text so the same text never has to be embedded twice. The cache key is a hash of the exact text together with the model name (and version), the value is the vector, and a lookup either hits (return the stored vector) or misses (call the model, store the result). Eviction rules such as LRU and TTL keep it bounded, and it can live in memory, on disk or in a shared store like Redis.',
   sections: [
@@ -160,6 +160,86 @@ requests=7  api_calls=6`,
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'LangChain offers a `CacheBackedEmbeddings` wrapper that stores vectors in a key-value store, namespaced by model, keyed by a hash of the text. Teams commonly keep embeddings in Redis or in a database table keyed by content hash. Data pipelines use content hashes to skip unchanged documents entirely. Some vector databases and RAG frameworks offer similar "skip if unchanged" ingestion features; check the current docs.' },
         { type: 'p', text: 'An embedding cache is different from a **semantic cache** (the next lesson). An embedding cache reuses a *vector* only for the **exact same text**. A semantic cache reuses a whole *LLM answer* for a **similar** question, which is riskier and saves far more per hit.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Leaving the model or version out of the key. Hashing a different string from the one actually embedded (e.g. hashing before adding a prefix like "query: "). Storing vectors as JSON text and running out of memory. No size limit, so the cache grows forever. Caching per-user text containing personal data without thinking about retention and deletion rules.' },
+      ],
+    },
+    {
+      id: 'worked-example-cache-value',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Is the cache worth building? Let us put numbers on the nightly job from the start of this lesson. The price and the speed below are illustrative; plug in your own.' },
+        { type: 'steps', title: 'The nightly re-index, in numbers', items: [
+          { title: 'Size of the job', text: '2,000,000 chunks × 300 tokens each = 600 million tokens for one full run.' },
+          { title: 'Cost with no cache', text: 'At an illustrative $0.02 per million tokens: 600 × 0.02 = $12 per night, about $360 per month.' },
+          { title: 'Cost with a cache', text: '98% of chunks are unchanged, so we embed 40,000 chunks, or 12 million tokens: $0.24 per night.' },
+          { title: 'Time', text: 'If the model embeds 2,000 chunks per second, a full run takes 1,000 seconds (about 17 minutes). The 40,000 misses take 20 seconds, plus the time to hash and look up 2 million keys.' },
+          { title: 'Storage', text: '2,000,000 vectors × 1,536 numbers × 4 bytes ≈ 12.3 GB as float32. That is too much to hold inside every worker process, so the cache belongs in a shared store.' },
+        ] },
+        { type: 'p', text: 'The storage number explains the "two-level" pattern from the comparison above. A small in-memory map answers the hottest keys at once, and a big shared store holds everything else.' },
+        { type: 'flow', title: 'A two-level lookup', nodes: [
+          { label: 'Key', detail: 'Hash of model + version + text, as before.' },
+          { label: 'Level 1: memory', detail: 'A small LRU map inside the process. Answers in microseconds, but holds only recent keys.' },
+          { label: 'Level 2: shared store', detail: 'Redis or a database table. One network hop, shared by all workers. On a hit, the vector is also copied up into level 1.' },
+          { label: 'Model', detail: 'Called only when both levels miss. The new vector is written to level 2 and level 1.' },
+          { label: 'Vector', detail: 'Returned to the caller, whichever level it came from.' },
+        ] },
+        { type: 'p', text: 'One caution before building this for **query** traffic: measure the hit rate first, as hits / (hits + misses) on real logs. Re-indexing repeats almost everything, so the cache pays off at once. User queries may repeat far less. If only 5% of queries are exact repeats, the cache removes only 5% of the calls.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The earlier code handled one text at a time. Now we build the **batch** version used by indexing pipelines: hash every chunk, find the misses, embed only those in one batched call, and write them back. We replay four nightly runs, including one where the embedding model is upgraded.' },
+        { type: 'code', lang: 'python', title: 'practice_batch_cache.py', code: `import hashlib
+
+calls = 0
+def embed_batch(texts):                 # stand-in for one batched model call
+    global calls
+    calls += len(texts)
+    return [[len(t), t.count(" ")] for t in texts]
+
+def key(model, text):                   # model identity is part of the key
+    return hashlib.sha256(f"{model}|{text}".encode()).hexdigest()
+
+def index(chunks, model, cache):
+    todo = {}                           # unique misses: key -> text
+    for c in chunks:
+        if key(model, c) not in cache:
+            todo[key(model, c)] = c
+    for k, vec in zip(todo, embed_batch(list(todo.values()))):   # embed misses only
+        cache[k] = vec
+    return [cache[key(model, c)] for c in chunks], len(todo)
+
+monday = ["Refunds take 5 days.", "Shipping takes 2 days.", "Reset your password.",
+          "Contact support by chat.", "Refunds take 5 days."]      # note the duplicate
+tuesday = monday[:3] + ["Contact support by chat or phone."]       # one chunk edited
+
+cache = {}
+runs = [("Mon, model v1", monday, "embed-v1"), ("Tue, model v1", tuesday, "embed-v1"),
+        ("Wed, model v1", tuesday, "embed-v1"), ("Thu, model v2", tuesday, "embed-v2")]
+for label, chunks, model in runs:
+    _, embedded = index(chunks, model, cache)
+    saved = 1 - embedded / len(chunks)
+    print(f"{label}: {len(chunks)} chunks, embedded {embedded}, calls saved {saved:.0%}")
+print(f"total model calls = {calls}, cache entries = {len(cache)}")`, output: `Mon, model v1: 5 chunks, embedded 4, calls saved 20%
+Tue, model v1: 4 chunks, embedded 1, calls saved 75%
+Wed, model v1: 4 chunks, embedded 0, calls saved 100%
+Thu, model v2: 4 chunks, embedded 4, calls saved 0%
+total model calls = 9, cache entries = 9`,
+          walkthrough: [
+            { lines: [3, 10], note: 'A stand-in model that counts how many texts it embeds, and a key built from the model name and the exact text.' },
+            { lines: [12, 19], note: 'The batch indexer: collect the unique misses, embed them in one call, store them, then read every vector back from the cache.' },
+            { lines: [21, 27], note: 'Monday has five chunks, two of them identical. Tuesday keeps three and edits one. Four runs follow; the last one switches to model v2.' },
+            { lines: [28, 32], note: 'For each run, print how many chunks were really embedded and the share of model calls we avoided.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add a trailing space to one of the Tuesday chunks. Predict how many chunks are embedded on Tuesday now.',
+          'Change `key` so it ignores the model: hash only `text`. Predict the Thursday line, and explain why the "100% saved" it reports is bad news.',
+          'Add a fifth run, `("Fri, model v1", monday, "embed-v1")`. Monday contains the old "Contact support by chat." chunk that was edited on Tuesday. Predict how many chunks are embedded on Friday.',
+        ] },
+        { type: 'check', question: 'On Thursday all 4 chunks were embedded again although no text changed. Is the cache broken?', answer: 'No, it is doing its job. The model name is part of the key, so under model v2 none of the keys exist yet and every chunk is a miss. That is what keeps old-model vectors out of the new index. The v1 entries are still stored (9 entries in total) and now only waste space until they are evicted or their namespace is cleared.' },
+        { type: 'check', question: 'On Monday the cache started empty, and the list had 5 chunks, but only 4 were embedded. The cache could not have helped yet. What saved the fifth call?', answer: 'Removing duplicates inside the batch. Two chunks had the same text, so they had the same key, and the dictionary of misses kept one entry for both. Without that step, a cold cache would send both copies to the model, because the lookup for each happens before either result is stored.' },
       ],
     },
   ],

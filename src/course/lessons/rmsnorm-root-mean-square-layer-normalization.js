@@ -1,6 +1,6 @@
 export default {
   id: 'rmsnorm-root-mean-square-layer-normalization',
-  minutes: 17,
+  minutes: 22,
   hook: 'Most modern open LLMs quietly deleted half of LayerNorm, the mean subtraction and the bias, and trained just as well. Why does the simpler version work?',
   summary: 'RMSNorm normalizes a vector by dividing it by its root mean square, `x / √(mean(x²) + ε)`, then multiplies by a learned scale γ. Unlike LayerNorm it does not subtract the mean and has no shift β. It keeps the property that matters most, control over the scale of activations, while being simpler and somewhat cheaper, which is why many modern LLMs such as the Llama family use it.',
   sections: [
@@ -152,6 +152,70 @@ params per layer  LayerNorm=8192  RMSNorm=4096`, walkthrough: [
         { type: 'p', text: 'Some recent models also apply RMSNorm to the query and key vectors inside attention ("QK-norm") to stop attention scores growing too large; whether a given model does this varies.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Forgetting ε, which turns an all-zero vector into a division by zero. Computing the mean of squares in 16-bit floats, where squaring large values can overflow; implementations usually upcast to 32-bit. Loading weights from a model whose γ is stored as an offset (some models multiply by `1 + γ`) into code that multiplies by `γ` directly, which silently breaks the model. And assuming RMSNorm subtracts the mean: it does not.' },
         { type: 'check', question: 'A teammate swaps LayerNorm for RMSNorm in an already-trained model without retraining. Will the outputs be the same?', answer: 'Generally **no**. The trained weights expect centred outputs plus a learned β. RMSNorm skips both, so the activations differ unless every input already had mean 0 and β was 0. Switching normalizers is an architecture change that needs (re)training.' },
+      ],
+    },
+    {
+      id: 'mistakes-in-numbers',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'RMSNorm is only a few lines of code, but three of those few lines can go wrong without any error message. Let us put real numbers on each failure so we can recognise it.' },
+        { type: 'p', text: '**1. Squaring in 16-bit floats.** A 16-bit float cannot hold a number larger than about 65,504. Take the vector `x = [300, −200, 100, 50]`. The first square is `300² = 90,000`, which does not fit, so it becomes infinity. The mean of the squares is then infinity, the RMS is infinity, and every value divided by infinity is 0. The layer quietly outputs `[0, 0, 0, 0]`. In 32-bit floats the same vector gives the correct `[1.589, −1.060, 0.530, 0.265]`. This is why implementations compute the norm in 32-bit even when the rest of the model runs in 16-bit.' },
+        { type: 'p', text: '**2. Misjudging ε.** With `ε = 10⁻⁶`, take a very small vector `x = [0.001, 0.002]`. Its mean of squares is `2.5 × 10⁻⁶`, about the same size as ε. Adding ε gives `3.5 × 10⁻⁶`, so the divisor is 0.00187 instead of 0.00158, and the output is `[0.535, 1.069]` instead of `[0.632, 1.265]`. The output RMS is 0.845, not 1. So ε is not always invisible: for tiny activations it weakens the normalization. Without ε at all, an all-zero vector gives `0 / 0`, which is NaN.' },
+        { type: 'p', text: '**3. The wrong γ convention.** Some models store the scale as an offset and multiply by `1 + γ`, so a stored 0 means "no change". If we load those weights into code that multiplies by `γ` directly, a stored 0 wipes the vector out.' },
+        { type: 'table', caption: 'How each mistake shows up, and how to confirm it', head: ['Symptom', 'Likely cause', 'How to confirm'], rows: [
+          ['Outputs of a norm layer are all zeros for some tokens', 'Squares overflowed in 16-bit', 'Print the largest |x| entering the layer; redo the norm in 32-bit and compare'],
+          ['NaN appears right after a norm layer', 'ε missing, or placed outside the square root with a zero vector', 'Feed an all-zero vector through the layer alone'],
+          ['Output RMS clearly below 1 for small inputs', 'ε is large compared with mean(x²)', 'Print mean(x²) next to ε'],
+          ['A loaded model produces nonsense from the first layer', 'γ convention mismatch (γ vs 1 + γ)', 'Look at the stored γ values: near 0 means offset style, near 1 means direct style'],
+        ] },
+        { type: 'callout', tone: 'tip', title: 'One test that catches most of these', text: 'Take the output of the layer before γ is applied and compute its RMS. For any ordinary input it must be very close to 1. If it is 0, NaN or well below 1, one of the mistakes above is in play.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The lesson opened with a claim: without normalization, the size of a token vector drifts as it passes through many layers. Now we test it. We push one vector through 12 random layers, with and without RMSNorm in front of each layer, and print its RMS along the way.' },
+        { type: 'code', lang: 'python', title: 'practice_rmsnorm_stack.py', code: `import numpy as np
+
+def rms(x):
+    return float(np.sqrt((x ** 2).mean()))
+
+def rms_norm(x, eps=1e-6):
+    return x / np.sqrt((x ** 2).mean() + eps)      # gamma = 1 for simplicity
+
+def run_stack(gain, use_norm, d=64, layers=12):
+    rng = np.random.default_rng(0)                 # same weights for both runs
+    x = rng.normal(0, 1, d)                        # one token vector, RMS near 1
+    sizes = []
+    for _ in range(layers):
+        # A random layer that multiplies the typical size by about 'gain'
+        W = rng.normal(0, gain / np.sqrt(d), (d, d))
+        x = W @ (rms_norm(x) if use_norm else x)
+        sizes.append(rms(x))
+    return sizes
+
+for gain in (0.5, 1.5):
+    for use_norm in (False, True):
+        s = run_stack(gain, use_norm)
+        label = "with RMSNorm" if use_norm else "no norm     "
+        print(f"gain={gain}  {label}  RMS after layer 1, 4, 8, 12: "
+              f"{s[0]:.3f}  {s[3]:.3f}  {s[7]:.3f}  {s[11]:.4f}")`, output: `gain=0.5  no norm       RMS after layer 1, 4, 8, 12: 0.476  0.049  0.003  0.0002
+gain=0.5  with RMSNorm  RMS after layer 1, 4, 8, 12: 0.520  0.497  0.467  0.5339
+gain=1.5  no norm       RMS after layer 1, 4, 8, 12: 1.428  3.981  19.930  118.0336
+gain=1.5  with RMSNorm  RMS after layer 1, 4, 8, 12: 1.561  1.492  1.401  1.6017`, walkthrough: [
+          { lines: [6, 7], note: 'RMSNorm with γ fixed at 1: divide the vector by its root mean square.' },
+          { lines: [9, 18], note: 'A stack of random layers. Each weight matrix is scaled so that it multiplies the size of its input by roughly `gain`. With `use_norm` on, the vector is normalized before it enters each layer, as in a pre-norm block.' },
+          { lines: [20, 25], note: 'Without a norm, a gain of 0.5 shrinks the vector to 0.0002 and a gain of 1.5 blows it up to 118 in just 12 layers. With RMSNorm the size stays near the gain at every depth: it never compounds.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Multiply the starting vector by 1000: `x = 1000 * rng.normal(0, 1, d)`. Predict what happens to the two "with RMSNorm" lines and to the two "no norm" lines. Which property from the lesson are we testing?',
+          'Change `layers=12` to `layers=48` and print `s[47]`. Before running, estimate the "no norm" size for a gain of 1.5 (it grows about 1.5× per layer). What would this do to a 16-bit float?',
+          'Write a `layer_norm(x)` that subtracts the mean and divides by the standard deviation, and use it in place of `rms_norm`. Predict whether the stack stays stable, and whether the numbers differ much from the RMSNorm run.',
+        ] },
+        { type: 'check', question: 'With RMSNorm the printed RMS is about 0.5 or about 1.5, not 1. Did the normalization fail?', answer: 'No. We measure the vector **after** the weight matrix, and the norm is applied **before** it. Each layer receives an input of RMS 1 and multiplies it by about the gain, so the output sits near the gain. What matters is that the next layer normalizes again, so the factor is applied once per layer instead of being multiplied layer after layer.' },
+        { type: 'check', question: 'Could we skip normalization and simply initialise every layer with a gain of exactly 1.0?', answer: 'It would look fine at the start, and careful initialisation does help. But the weights change at every training step. As soon as the layers drift to an average gain slightly above or below 1, the error compounds across the whole depth: even 1.1 per layer is about 3× after 12 layers and far more in a deep model. Normalization makes each layer\'s input size independent of what the layers below are doing, so training stays stable as the weights move.' },
       ],
     },
     {

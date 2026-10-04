@@ -1,6 +1,6 @@
 export default {
   id: 'recursive-language-models',
-  minutes: 21,
+  minutes: 26,
   hook: 'What if, instead of stuffing a 10-million-token document into a model\'s prompt, we let the model write code to explore it and call itself on the pieces?',
   summary: 'A Recursive Language Model (RLM) is an inference strategy, not a new network: the long input is stored as a variable in a programming environment (a Python REPL), and the model writes code to peek at it, search it, split it and call language models, including itself, on chosen pieces. Only small results ever enter the model\'s own context. This sidesteps context limits and "context rot", and it handles inputs far beyond any context window, at the cost of more calls, latency and reliance on the model\'s coding skill.',
   sections: [
@@ -175,6 +175,74 @@ FINAL: bo asked most often`,
       blocks: [
         { type: 'callout', tone: 'example', title: 'Auditing a large codebase', text: 'A security team asks: "List every place where user input reaches a SQL query without parameterisation." The repository is millions of tokens. An RLM loads the file tree into the REPL, greps for database calls, groups hits by file, sends each group to a sub-LM with the question "Is the query built from unsanitised input? Answer yes/no with the line", and collects the yes-answers into a report in code. Every file is considered; each model call only sees a few hundred lines.' },
         { type: 'p', text: 'Other natural fits: analysing months of server logs during an incident review, comparing clauses across hundreds of contracts, and answering research questions over large document collections where the answer is spread across many sources.' },
+      ],
+    },
+    {
+      id: 'common-mistakes-diagnosis',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: "An RLM run can finish without any error and still return a wrong answer. Most such failures come from how the input was split or how the pieces were put back together. Here are the ones we meet most often and how to catch each." },
+        { type: 'table', caption: "RLM failure cases and their fixes", head: ['What we see', 'Cause', 'Fix'], rows: [
+          ['Counts come out slightly too low', 'A chunk boundary cut a record in half, so neither side matched it', 'Split on natural boundaries such as lines, files or records'],
+          ['Counts come out too high', 'Chunks overlap and the same record was counted twice', 'Remove duplicates by a record id before adding up'],
+          ['The root model answers from a tiny sample', 'The printout was cut short and the model took it for the whole result', 'Print lengths and counts first; keep full results in variables, not in printouts'],
+          ['The aggregation code crashes or skips items', 'Sub-calls answered in free text that code cannot parse', 'Ask sub-calls for a strict format, such as one name per line'],
+          ['The run never seems to end', 'Chunks that are still too big keep being split again', 'Cap the depth and the total number of calls, and stop with a clear message'],
+        ] },
+        { type: 'p', text: "A cheap test catches the first two: run the RLM on a small input where we can compute the exact answer in ordinary code, and compare. Our practice script below does exactly that." },
+        { type: 'steps', title: "Estimating the number of calls before we run", items: [
+          { title: "Start from the sizes", text: "Say the input has 26,715 characters, one call may read 1,000, and each split makes 4 parts (toy numbers)." },
+          { title: "Divide until it fits", text: "26,715 ÷ 4 ≈ 6,679, still too big. ÷ 4 again ≈ 1,670, too big. ÷ 4 again ≈ 417, which fits. That is 3 levels of splitting, so the depth is 3." },
+          { title: "Count the leaves", text: "Each level multiplies the pieces by 4: 4 × 4 × 4 = 64 leaf calls." },
+          { title: "Count the inner calls", text: "1 at the root, 4 below it and 16 below those: 21 calls that only split and combine." },
+          { title: "Decide", text: "85 calls in total. If that is too many, raise the amount each call may read or search first and skip chunks with no hits." },
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "The earlier script used recursion of depth 1. Here we will write a version that really calls itself: any piece that is still too big for one “model call” is split again. We count the calls at each level and check the answer against an exact count." },
+        { type: 'code', lang: 'python', title: 'practice_recursive_split.py', code: `WINDOW = 1_000          # most characters one "model call" may read (toy limit)
+calls = {"leaf": 0, "inner": 0, "max_depth": 0}
+
+def leaf_llm(chunk):
+    # stand-in for a sub-LM call: count the word ERROR in one small chunk
+    calls["leaf"] += 1
+    return chunk.count("ERROR")
+
+def rlm(text, depth=0, fanout=4):
+    calls["max_depth"] = max(calls["max_depth"], depth)
+    if len(text) <= WINDOW:                  # small enough: answer directly
+        return leaf_llm(text)
+    calls["inner"] += 1                      # too big: split on lines and recurse
+    lines = text.splitlines(keepends=True)
+    size = -(-len(lines) // fanout)          # ceiling division
+    parts = ["".join(lines[i:i + size]) for i in range(0, len(lines), size)]
+    return sum(rlm(p, depth + 1, fanout) for p in parts)   # aggregate in code
+
+log = "".join(f"line {i:04d} {'ERROR disk full' if i % 37 == 0 else 'ok'}\\n"
+              for i in range(2000))
+print("input chars:", len(log), "| window:", WINDOW)
+print("ERROR count from RLM:", rlm(log), "| exact:", log.count("ERROR"))
+print(calls)`, output: `input chars: 26715 | window: 1000
+ERROR count from RLM: 55 | exact: 55
+{'leaf': 64, 'inner': 21, 'max_depth': 3}`,
+          walkthrough: [
+            { lines: [1, 2], note: "A toy context limit of 1,000 characters per call, and counters for leaf calls, inner calls and the deepest level reached." },
+            { lines: [4, 7], note: "The leaf call. A simple count stands in for a language model reading one small chunk and answering a focused question." },
+            { lines: [9, 17], note: "The recursive function. If the text fits, answer it directly. If not, split it into 4 parts on line boundaries, call itself on each part, and add the results in code." },
+            { lines: [19, 23], note: "Build a 2,000-line log, run the RLM and compare with the exact count. Both give 55, using 64 leaf calls and 21 inner calls at depth 3, as we estimated by hand." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `fanout=2` in the function definition. Predict the depth and the number of leaf calls before running.",
+          "Set `WINDOW = 10_000`. Predict how many leaf and inner calls are needed now.",
+          "Replace the line split with a character split: `size = -(-len(text) // fanout)` and `parts = [text[i:i + size] for i in range(0, len(text), size)]`. Predict whether the RLM count can still be trusted, then compare it with the exact count.",
+        ] },
+        { type: 'check', question: "The run made 64 leaf calls. If each were a real model call taking 2 seconds, run one after another, how long would the leaves take, and what are two ways to cut that time?", answer: "64 × 2 = 128 seconds. We could run the sub-calls in parallel, since the chunks do not depend on each other. Or we could make fewer calls: let each call read more, or search for the word in code first and only send chunks that contain a hit." },
+        { type: 'check', question: "Why does the function split on line boundaries instead of every N characters?", answer: "A cut at an arbitrary character can land inside a record, for example between “ERR” and “OR”. Then neither piece contains the full word and the record is silently missed. Splitting where records end keeps every record whole, so the parts can be counted independently and added up." },
       ],
     },
   ],

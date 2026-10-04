@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-model-quantization-work',
-  minutes: 22,
+  minutes: 27,
   hook: 'How can a 7-billion-parameter model that needs 28 GB in full precision squeeze into 4 GB and still give nearly the same answers?',
   summary: 'Quantization stores a model\'s numbers with fewer bits, for example 8-bit or 4-bit integers instead of 32-bit floats, using a scale (and sometimes a zero-point) to map between the two. That cuts memory by 4–8× and speeds up the memory-bound parts of inference. The art is choosing the right granularity, method and bit width so that rare large values (outliers) do not destroy accuracy.',
   sections: [
@@ -181,6 +181,79 @@ memory for 7B params: FP32 28 GB, FP16 14 GB, INT8 7 GB, INT4 3.5 GB`, walkthrou
         { type: 'callout', tone: 'example', title: 'Our laptop, solved', text: 'A 7B model in a 4-bit format with group scales is about 4 GB of weights. It fits in the 6 GB GPU with room for a few thousand tokens of KV cache. The same idea lets a 70B model run in about 40 GB, within reach of a high-memory desktop or Mac.' },
         { type: 'callout', tone: 'tip', title: 'When not to quantize (much)', text: 'Avoid aggressive quantization when you are training or doing full fine-tuning (use BF16), when the task is very sensitive (exact maths, long code generation) and you have the memory to spare, or when you serve huge batches where compute, not memory, is the bottleneck and weight-only quantization brings little speedup. Always evaluate the quantized model on your own task, not just on perplexity.' },
       ],
+    },
+    {
+      id: "asymmetric-by-hand",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Earlier we quantized four weights by hand with a symmetric grid. Let us now do the asymmetric case, where the zero-point does real work. We use only 4 bits so the numbers stay small. Our five values are lopsided, as activations often are: −0.6, 0.0, 0.47, 1.33 and 2.4." },
+        { type: "steps", title: "Asymmetric 4-bit quantization (integers 0 … 15)", items: [
+          { title: "Find the range", text: "min = −0.6 and max = 2.4, so the range is 3.0." },
+          { title: "Compute the scale", text: "s = (max − min) / (qmax − qmin) = 3.0 / 15 = 0.2. Each integer step is worth 0.2." },
+          { title: "Compute the zero-point", text: "z = round(qmin − min / s) = round(0 − (−0.6 / 0.2)) = 3. The integer 3 now stands for the real value 0.0." },
+          { title: "Quantize", text: "q = round(x / s) + z. For 0.47: round(2.35) + 3 = 5. For 1.33: round(6.65) + 3 = 10. The ends map to 0 and 15." },
+          { title: "Dequantize", text: "x̂ = s · (q − z). For q = 5: 0.2 × 2 = 0.4. For q = 10: 0.2 × 7 = 1.4. Each is off by 0.07." },
+          { title: "Compare with symmetric", text: "A symmetric 4-bit grid uses −7 … 7 with s = 2.4 / 7 ≈ 0.343. The step is 70% larger, because the grid also covers −2.4 to −0.6, where we have no values at all." }
+        ] },
+        { type: "table", caption: "The same five values on both 4-bit grids", head: ["Value", "Asymmetric q", "Asymmetric x̂", "Error", "Symmetric q", "Symmetric x̂", "Error"], rows: [
+          ["−0.6", "0", "−0.6", "0", "−2", "−0.686", "0.086"],
+          ["0.0", "3", "0.0", "0", "0", "0.0", "0"],
+          ["0.47", "5", "0.4", "0.07", "1", "0.343", "0.127"],
+          ["1.33", "10", "1.4", "0.07", "4", "1.371", "0.041"],
+          ["2.4", "15", "2.4", "0", "7", "2.4", "0"]
+        ] },
+        { type: "p", text: "The symmetric grid only ever uses the integers −2 to 7: ten of its fifteen levels. The asymmetric grid uses all sixteen. A single value can still come out better on the coarser grid by luck, as 1.33 does here. What we can rely on is the worst case: the error is at most half a step, so 0.1 for the asymmetric grid against about 0.17 for the symmetric one." },
+        { type: "p", text: "Notice also that 0.0 is stored exactly on both grids. That is the reason the zero-point is rounded to a whole integer: zeros are very common in a network, and we do not want them to pick up an error." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson named per-group scales as the standard for 4-bit LLM formats, but our earlier code only compared per-tensor with per-channel. Here we sweep the group size. We quantize one small weight matrix to 4 bits with one scale per 256, 64, 32 or 8 weights. For each we report the real cost in bits per weight, the weight error, and the error of the layer's output `W @ x`." },
+        { type: "code", lang: "python", title: "practice_group_size.py", code: `import numpy as np
+rng = np.random.default_rng(0)
+W = rng.normal(0, 0.02, size=(64, 256))          # a small weight matrix
+idx = rng.integers(0, W.size, size=40)
+W.flat[idx] *= 25                                # 40 scattered outlier weights
+x = rng.normal(size=256)                         # one input vector
+BITS = 4
+qmax = 2 ** (BITS - 1) - 1                       # 7 for 4-bit symmetric
+
+def quantize_groups(W, group):
+    # one symmetric scale per \`group\` consecutive weights in a row
+    g = W.reshape(-1, group)
+    scale = np.abs(g).max(axis=1, keepdims=True) / qmax
+    return (np.clip(np.round(g / scale), -qmax, qmax) * scale).reshape(W.shape)
+
+y = W @ x                                        # the exact layer output
+print("group  bits/weight  weight error  output error")
+for group in (256, 64, 32, 8):
+    Wq = quantize_groups(W, group)
+    bpw = BITS + 16 / group                      # 4-bit ints + one FP16 scale per group
+    w_err = np.abs(W - Wq).mean()
+    y_err = np.linalg.norm(Wq @ x - y) / np.linalg.norm(y)
+    print(f"{group:5d}  {bpw:11.2f}  {w_err:12.5f}  {y_err:12.3f}")
+print(f"size: FP16 {W.size * 2} bytes, group 32 {int(W.size * 4.5 / 8)} bytes")`, output: `group  bits/weight  weight error  output error
+  256         4.06       0.00665         0.374
+   64         4.25       0.00305         0.183
+   32         4.50       0.00227         0.121
+    8         6.00       0.00127         0.082
+size: FP16 32768 bytes, group 32 9216 bytes`, walkthrough: [
+          { lines: [1, 8], note: "A 64 × 256 weight matrix with 40 scattered outlier weights, one input vector, and the 4-bit symmetric range −7 … 7." },
+          { lines: [10, 14], note: "Cut every row into groups, give each group its own scale, round, clip and dequantize." },
+          { lines: [16, 23], note: "For each group size, count 4 bits per weight plus one 16-bit scale per group, and measure both the weight error and the relative error of the layer output." },
+          { lines: [24, 24], note: "The size of this matrix in FP16 and at 4.5 bits per weight." }
+        ] },
+        { type: "p", text: "Going from groups of 256 to groups of 32 costs less than half a bit per weight and cuts the output error from 0.374 to 0.121. Going on to groups of 8 helps a little more but costs 6 bits per weight. Now change it:" },
+        { type: "list", items: [
+          "Set `BITS = 3`. Predict first: does 3 bits with groups of 8 (5 bits per weight in total) beat 4 bits with groups of 256 (4.06 in total) on output error?",
+          "Delete the two lines that create the outlier weights. Predict how much the group size still matters when all weights are of similar size.",
+          "Add `x[:4] *= 20` after `x` is created, to mimic a few large activations. Predict which of the two error columns changes and which cannot change. What does that say about judging quality by weight error alone?"
+        ] },
+        { type: "check", question: "In the worked example, both grids have 4 bits, yet the asymmetric step is 0.2 and the symmetric step is about 0.343. For what kind of data would the two grids be equally good?", answer: "Data spread evenly around zero, with min ≈ −max. Then the symmetric grid wastes nothing, the two scales are almost the same, and the zero-point brings no benefit. This is why symmetric grids are the usual choice for weights and asymmetric ones for lopsided activations." },
+        { type: "check", question: "A file is labelled 4-bit, but its size works out to about 4.5 bits per weight. Using the practice output, explain where the extra half bit goes and why we accept it.", answer: "It pays for the scales. With one 16-bit scale per 32 weights, each weight carries 16 / 32 = 0.5 extra bits. We accept it because small groups stop one large weight from setting the scale for many others: in the practice run the output error fell from 0.374 with groups of 256 to 0.121 with groups of 32." }
+      ]
     },
     {
       id: 'wrapping-up',

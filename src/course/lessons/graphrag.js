@@ -1,6 +1,6 @@
 export default {
   id: 'graphrag',
-  minutes: 22,
+  minutes: 27,
   hook: 'Ask a normal RAG bot "What are the main themes across all 5,000 of our incident reports?" and it will summarise five random chunks. How could it ever see the whole picture?',
   summary: 'GraphRAG uses an LLM to read every chunk of a corpus and extract entities and relationships into a knowledge graph, groups the graph into communities of closely connected entities, and writes a summary for each community. At question time, local search starts from the entities a question mentions and gathers their neighbourhood, while global search combines community summaries to answer questions about the whole dataset. It answers connection and big-picture questions that chunk retrieval cannot, at a much higher indexing cost.',
   sections: [
@@ -163,6 +163,85 @@ local('Postgres'): 9 of 12 facts reached
         { type: 'chart', kind: 'bar', title: 'Relative indexing effort per chunk', yLabel: 'Model calls per chunk', labels: ['Vector RAG', 'GraphRAG'], series: [ { name: 'Calls', values: [1, 4] } ], caption: 'Illustrative: one embedding call vs an extraction call, possible extra "gleaning" passes and a share of summary calls. The real ratio varies by configuration, and GraphRAG calls use a full LLM, which is far more expensive than an embedding model.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Running GraphRAG on a corpus where questions are simple look-ups (paying a lot for nothing). Not reviewing extraction quality: if the LLM merges "Apple (company)" with "apple (fruit)" or misses relationships, every later step inherits the error. Using generic entity types that do not fit the domain; tune the extraction prompt. Using global search for specific questions (slow and vague) or local search for themes (narrow).' },
         { type: 'p', text: 'Researchers are actively reducing the indexing cost. For example, Microsoft described **LazyGraphRAG** (late 2024), which defers most LLM summarisation until query time, making indexing much cheaper. Expect this area to keep changing.' },
+      ],
+    },
+    {
+      id: 'worked-example-cost',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The trade-offs table says GraphRAG indexing is "high" cost. Let us count the model calls for the 5,000 incident reports from the hook. The setup below is illustrative; real counts depend on the configuration and on the data.' },
+        { type: 'steps', title: 'Counting calls', items: [
+          { title: 'Text units', text: '5,000 reports × 2 text units each = 10,000 units.' },
+          { title: 'Vector RAG index', text: '10,000 embedding calls, and the index is done.' },
+          { title: 'GraphRAG extraction', text: 'One LLM call per unit plus one extra "gleaning" pass to catch missed entities: 20,000 LLM calls.' },
+          { title: 'Entity summaries', text: 'Say 3,000 entities show up in more than one unit and need their descriptions merged: 3,000 more LLM calls.' },
+          { title: 'Community reports', text: 'Say the graph has 400 communities across all levels: 400 more LLM calls.' },
+          { title: 'Total', text: 'About 23,400 LLM calls against 10,000 embedding calls. And each LLM call reads and writes far more tokens than an embedding call.' },
+          { title: 'Query time', text: 'A global question over a level with 120 community reports, read in batches of 10: 12 map calls + 1 reduce call = 13 LLM calls. A local question needs 1.' },
+        ] },
+        { type: 'table', caption: 'Model calls in this illustrative setup.', head: ['Stage', 'Vector RAG', 'GraphRAG'], rows: [
+          ['Build the index', '10,000 embedding calls', 'About 23,400 LLM calls'],
+          ['Local question', '1 LLM call', '1 LLM call'],
+          ['Global question', '1 LLM call that sees 5 chunks', '13 LLM calls that see every community'],
+          ['One report edited', 'Re-embed 2 units', 'Re-extract 2 units; refresh the entity and community summaries they touch'],
+        ] },
+        { type: 'p', text: 'One failure is worth checking before any of this money is spent at full scale: **entity merging**. If the extractor creates "Postgres", "PostgreSQL" and "the PG cluster" as three separate nodes, the facts about one database are split three ways, and a local search from any one node misses the rest. Two cheap checks on a sample: list all node names in alphabetical order and look for near-duplicates, and list the nodes that have exactly one edge.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The earlier code did local search. Now we build a toy **global search**: a map step that turns each community into a partial answer, and a reduce step that merges the partial answers into one. We ask "what are the most common causes of incidents?" and compare the result with what a plain top-k retriever would see. Simple counting stands in for the LLM in both steps.' },
+        { type: 'code', lang: 'python', title: 'practice_global_search.py', code: `from collections import Counter
+
+# Incident causes, already grouped into communities by the graph step.
+# Illustrative data: each string is the cause noted in one incident report.
+communities = {
+    "payments": ["bad config push", "expired certificate", "bad config push",
+                 "database failover"],
+    "search":   ["memory leak", "bad config push", "memory leak"],
+    "mobile":   ["expired certificate", "third-party outage", "bad config push"],
+}
+
+def map_step(name, causes):          # stand-in for an LLM reading one community report
+    points = Counter(causes)
+    return {"community": name, "points": points, "helpfulness": len(causes)}
+
+def reduce_step(partials, top=3):    # stand-in for the LLM merging partial answers
+    total = Counter()
+    for part in sorted(partials, key=lambda p: -p["helpfulness"]):
+        total.update(part["points"])
+    return total.most_common(top)
+
+partials = [map_step(name, causes) for name, causes in communities.items()]
+for part in partials:
+    print(f"map {part['community']:8} -> {dict(part['points'])}")
+print("global answer ->", reduce_step(partials))
+
+# What plain top-k retrieval sees: only the few chunks nearest to the question.
+top_k_chunks = communities["search"]            # pretend these 3 chunks matched best
+print("top-3 chunks  ->", Counter(top_k_chunks).most_common(3))
+print("LLM calls: global =", len(partials) + 1, "| top-k = 1")`, output: `map payments -> {'bad config push': 2, 'expired certificate': 1, 'database failover': 1}
+map search   -> {'memory leak': 2, 'bad config push': 1}
+map mobile   -> {'expired certificate': 1, 'third-party outage': 1, 'bad config push': 1}
+global answer -> [('bad config push', 4), ('expired certificate', 2), ('memory leak', 2)]
+top-3 chunks  -> [('memory leak', 2), ('bad config push', 1)]
+LLM calls: global = 4 | top-k = 1`,
+          walkthrough: [
+            { lines: [3, 10], note: 'Ten incident causes, already grouped into three communities. In real GraphRAG each community would have an LLM-written report.' },
+            { lines: [12, 20], note: 'Map: one partial answer per community, with a helpfulness score. Reduce: merge the partial answers, most helpful first, and keep the top themes.' },
+            { lines: [22, 25], note: 'Run the map step on every community, print each partial answer, then print the combined global answer.' },
+            { lines: [27, 30], note: 'For contrast: a top-k retriever only sees the three chunks nearest to the question, here all from one community. Also compare the number of LLM calls.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'In `reduce_step`, keep only the two most helpful partial answers by adding `[:2]` after the `sorted(...)` call. Predict whether the top theme changes, and which community gets dropped.',
+          'Change `top_k_chunks` to `communities["payments"][:3]`. Predict what top-k reports now, and decide whether it was right for a good reason or by luck.',
+          'Add a fourth community, `"billing": ["expired certificate"] * 3`. Predict the new number one theme in the global answer.',
+        ] },
+        { type: 'check', question: 'The top-3 chunks say "memory leak" is the main cause. The global answer says "bad config push" with 4 incidents. The three chunks were all relevant to the question, so why did top-k get it wrong?', answer: 'It only saw one corner of the data. "Bad config push" appears once or twice in every community, so no single community makes it look dominant; it only stands out when all partial answers are added together. Themes that are spread thinly across the whole corpus are exactly what top-k retrieval misses and what map-reduce over communities finds.' },
+        { type: 'check', question: 'In our code the reduce step merges every partial answer, so sorting by helpfulness changes nothing. Why does a real system still need that score?', answer: 'Because of the context limit. With hundreds of community reports, the reduce step cannot read every partial answer, so it takes the most helpful ones first and drops the rest. If the helpfulness scores are poor, useful information is thrown away before the final answer is written.' },
       ],
     },
     {

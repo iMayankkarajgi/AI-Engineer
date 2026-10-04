@@ -1,6 +1,6 @@
 export default {
   id: 'batch-normalization-vs-layer-normalization',
-  minutes: 18,
+  minutes: 23,
   hook: 'Two layers do almost the same arithmetic, subtract a mean and divide by a standard deviation, so why does one rule image networks and the other rule every Transformer?',
   summary: 'Normalization layers rescale activations so they have a mean of about 0 and a standard deviation of about 1, then apply a learned scale and shift. Batch Normalization computes those statistics for each feature across the examples in a mini-batch; Layer Normalization computes them for each example across its features. That single difference in direction decides where each one works best.',
   sections: [
@@ -146,6 +146,93 @@ LayerNorm, batch size 1: [[-0.7   1.41 -0.71]]`, walkthrough: [
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'ResNet and many classic image models place BatchNorm after almost every convolution. The original Transformer, BERT and GPT-2 use LayerNorm. GPT-2 moved LayerNorm to the start of each sub-layer ("pre-norm") rather than after the residual addition ("post-norm"), which makes deep Transformers more stable to train; pre-norm is now the common choice. Many recent LLMs replaced LayerNorm with RMSNorm, covered next.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Running inference with a BatchNorm model still in training mode: predictions then depend on the batch and can change wildly for a single example. Training BatchNorm with tiny batches (e.g. 2) and wondering why results are noisy. Fine-tuning with a very different data distribution and forgetting that BatchNorm\'s running statistics also need updating or freezing deliberately. And applying LayerNorm to raw features measured in different units.' },
         { type: 'check', question: 'You fine-tune an image model that uses BatchNorm, but your GPU only fits a batch size of 2. What two options could you consider?', answer: 'Freeze the BatchNorm layers (keep their pretrained running statistics and parameters fixed, using evaluation-mode behaviour), or replace them with a batch-independent alternative such as GroupNorm. Gradient accumulation alone does not help, because BatchNorm statistics are still computed over each tiny batch.' },
+      ],
+    },
+    {
+      id: 'running-statistics-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'We said BatchNorm keeps an exponential moving average of the mean and variance for use at inference. Let us follow that average with real numbers, because it is the source of the most confusing BatchNorm bugs.' },
+        { type: 'p', text: 'Take one feature whose true mean is 10. The running mean starts at 0 (the default) and the momentum is 0.1. Each training batch updates it with `running ← 0.9 · running + 0.1 · batch_mean`. To keep it simple, suppose every batch mean is exactly 10.' },
+        { type: 'steps', title: 'The running mean warming up', items: [
+          { title: 'Batch 1', text: '`0.9 · 0 + 0.1 · 10 = 1.0`. After one batch the stored mean is still 9 away from the truth.' },
+          { title: 'Batch 2', text: '`0.9 · 1.0 + 0.1 · 10 = 1.9`.' },
+          { title: 'Batch 3', text: '`0.9 · 1.9 + 0.1 · 10 = 2.71`. Each update closes one tenth of the remaining gap.' },
+          { title: 'The pattern', text: 'After `n` batches the running mean is `10 · (1 − 0.9ⁿ)`. The gap shrinks by a factor of 0.9 per batch.' },
+          { title: 'How long until it is right?', text: 'After 10 batches: 6.51. After 22 batches: 9.02. After 44 batches: 9.90. It takes dozens of batches before inference statistics can be trusted.' },
+        ] },
+        { type: 'chart', kind: 'line', title: 'Running mean vs the batch mean it is chasing', xLabel: 'Training batches seen', yLabel: 'Mean', series: [
+          { name: 'Running mean (used at inference)', points: [[0, 0], [1, 1], [2, 1.9], [3, 2.71], [5, 4.095], [10, 6.513], [22, 9.015], [44, 9.903]] },
+          { name: 'Batch mean (used in training)', points: [[0, 10], [44, 10]] },
+        ], caption: 'Exact values of 10 · (1 − 0.9ⁿ). Training mode uses the flat line; evaluation mode uses the rising curve.' },
+        { type: 'p', text: 'Now the consequence. In training mode the value 12 is normalized with the batch mean 10, so it comes out a little above zero. In evaluation mode after only three batches, the same 12 is normalized with the stored mean 2.71 and comes out far above zero. The layers after it have never seen such numbers.' },
+        { type: 'table', caption: 'Symptoms that point to running statistics', head: ['What we see', 'Likely cause', 'What to check'], rows: [
+          ['Good training loss, terrible validation loss in the first few hundred steps', 'Running statistics have not caught up yet', 'Validate again later; compare with a run in training mode'],
+          ['A fine-tuned model is worse in evaluation mode than in training mode', 'Stored statistics still describe the old data', 'Let them update on the new data, or freeze the layers on purpose'],
+          ['Results change with the batch size at inference', 'The model is still in training mode', 'Switch to evaluation mode'],
+        ] },
+        { type: 'p', text: 'LayerNorm has none of these problems. It stores no statistics, so there is nothing to warm up and nothing to go stale.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We build a tiny BatchNorm for a single feature, with a training mode and an evaluation mode. Then we watch two things: how the same value gets different outputs depending on its batch mates, and how the running statistics slowly become usable.' },
+        { type: 'code', lang: 'python', title: 'practice_batchnorm_modes.py', code: `import numpy as np
+
+class BatchNorm1Feature:
+    """BatchNorm for a single feature, without the learned scale and shift."""
+    def __init__(self, momentum=0.1, eps=1e-5):
+        self.run_mean, self.run_var = 0.0, 1.0    # starting values
+        self.momentum, self.eps = momentum, eps
+        self.training = True
+
+    def __call__(self, x):
+        if self.training:                         # use this batch's statistics
+            mean, var = x.mean(), x.var()
+            m = self.momentum                     # and update the running ones
+            self.run_mean = (1 - m) * self.run_mean + m * mean
+            self.run_var = (1 - m) * self.run_var + m * var
+        else:                                     # use the stored statistics
+            mean, var = self.run_mean, self.run_var
+        return (x - mean) / np.sqrt(var + self.eps)
+
+rng = np.random.default_rng(0)
+bn = BatchNorm1Feature()
+
+# 1) Training mode: the same value 12.0 with two different sets of batch mates
+print("train, mates 8 and 10 :", bn(np.array([12.0, 8.0, 10.0])).round(2))
+print("train, mates 14 and 16:", bn(np.array([12.0, 14.0, 16.0])).round(2))
+
+# 2) Feed batches drawn around mean 10, std 2, then test 12.0 in eval mode
+bn = BatchNorm1Feature()
+for step in range(1, 101):
+    bn.training = True
+    bn(rng.normal(10.0, 2.0, size=32))
+    if step in (1, 5, 20, 100):
+        bn.training = False
+        out = bn(np.array([12.0]))[0]
+        print(f"after {step:3d} batches: run_mean={bn.run_mean:5.2f} "
+              f"run_var={bn.run_var:4.2f}  eval(12.0)={out:5.2f}")`, output: `train, mates 8 and 10 : [ 1.22 -1.22  0.  ]
+train, mates 14 and 16: [-1.22  0.    1.22]
+after   1 batches: run_mean= 0.97 run_var=1.16  eval(12.0)=10.26
+after   5 batches: run_mean= 4.10 run_var=2.07  eval(12.0)= 5.48
+after  20 batches: run_mean= 8.75 run_var=3.50  eval(12.0)= 1.74
+after 100 batches: run_mean= 9.99 run_var=4.15  eval(12.0)= 0.98`, walkthrough: [
+          { lines: [5, 8], note: 'The layer starts with a running mean of 0 and a running variance of 1, and in training mode.' },
+          { lines: [10, 18], note: 'The whole layer. In training mode it normalizes with the batch statistics and nudges the running ones towards them. In evaluation mode it only reads the stored values.' },
+          { lines: [23, 25], note: 'The value 12.0 is the largest in the first batch and the smallest in the second, so it comes out as +1.22 and then −1.22. Its output depends on its neighbours.' },
+          { lines: [27, 36], note: 'The data has mean 10 and standard deviation 2, so the right answer for 12.0 is (12 − 10) / 2 = 1. After 1 batch evaluation mode says 10.26. Only after about 100 batches does it settle near 1.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Create the second layer with `BatchNorm1Feature(momentum=0.5)`. Predict how the `after 5 batches` line changes. Then think about the price: with a large momentum, what does one unusual batch do to the stored statistics?',
+          'Change `size=32` to `size=2`. The true variance is 4. Predict whether `run_var` still ends near 4, and whether `eval(12.0)` ends above or below 1.',
+          'After the loop, evaluate `bn(np.array([22.0]))`, a typical-plus-one-std value from new data centred on 20. Predict the output, and say what it tells us about using old running statistics on data that has shifted.',
+        ] },
+        { type: 'check', question: 'In training mode the value 12.0 came out as +1.22 with one set of batch mates and −1.22 with another. Is that a bug in our layer?', answer: 'No, it is BatchNorm doing exactly what it is defined to do. In training mode the output says where a value sits **relative to its batch**: 12 is the top of [12, 8, 10] and the bottom of [12, 14, 16]. This is why an example\'s output depends on its mini-batch during training, and why inference must switch to fixed, stored statistics to give one stable answer per input.' },
+        { type: 'check', question: 'After one batch, evaluation mode turns 12.0 into 10.26, although the correct normalized value is about 1. A teammate concludes that the model is broken. What would we tell them?', answer: 'The model is fine; the stored statistics are not ready. After one batch the running mean is 0.97 instead of 10 and the running variance 1.16 instead of 4, so (12 − 0.97) / √1.16 is about 10. The running averages move only a tenth of the way per batch. Evaluate after more training steps, and the same input gives about 1.' },
       ],
     },
   ],

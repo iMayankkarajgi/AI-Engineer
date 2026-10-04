@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-the-machine-learning-library-tensorflow-work',
-  minutes: 20,
+  minutes: 25,
   hook: 'The name says it all if you know how to read it: tensors flowing through a graph. But why would anyone describe a program as a graph instead of just running it line by line?',
   summary: 'TensorFlow is Google\'s open-source machine-learning library. It represents computations as dataflow graphs in which operations are nodes and tensors flow along the edges, which lets it optimise the computation, run it on CPUs, GPUs and TPUs, and export it to servers, phones and browsers. TensorFlow 2 runs eagerly like normal Python, records gradients with `tf.GradientTape`, turns Python functions into fast graphs with `tf.function`, and offers Keras as its high-level API.',
   sections: [
@@ -215,6 +215,98 @@ model.save("house_price.keras")        # save architecture + weights`, walkthrou
           '**Do consider it** when you must deploy to Android, microcontrollers or browsers, or when your organisation already runs TFX and TensorFlow Serving.',
         ] },
         { type: 'check', question: 'Your team trains a model in TensorFlow and needs to run it on an Android phone with no Python available. What makes this possible?', answer: 'TensorFlow saves the model as a **graph plus weights** (SavedModel), which can be converted to the TensorFlow Lite / LiteRT format and executed by its lightweight on-device runtime. Because the computation is described as a graph rather than as Python code, no Python interpreter is needed.' },
+      ],
+    },
+    {
+      id: 'graph-optimisation-example',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'We said a graph can be "optimised" before it runs: unused ops removed, constants folded. Let us do both by hand on a tiny graph, so the words become concrete. Suppose a teammate wrote this function for our house prices:' },
+        { type: 'list', items: [
+          '`scale = 2 × 3` (two fixed numbers)',
+          '`debug = x − 1` (computed, but never used again)',
+          '`pred = x × scale + b`',
+        ] },
+        { type: 'p', text: 'Traced as written, the graph has four ops: `Mul(2, 3)`, `Sub(x, 1)`, `Mul(x, scale)` and `Add(·, b)`. With `x = [1, 2]` and `b = 3` it returns `[9, 15]`.' },
+        { type: 'steps', title: 'Two optimisation passes over the graph', items: [
+          { title: 'Start from the output', text: 'The only thing the caller wants is `pred`. Everything else exists to serve it.' },
+          { title: 'Walk backwards and mark', text: '`pred` needs the `Add`. The `Add` needs `Mul(x, scale)` and `b`. That multiply needs `x` and `Mul(2, 3)`. We mark all of these as needed.' },
+          { title: 'Prune', text: '`Sub(x, 1)` was never marked: nothing on the way to the output reads it. We delete it. Three ops remain.' },
+          { title: 'Fold constants', text: '`Mul(2, 3)` has only constants as inputs, so its result can never change. We compute it once, now, and replace the op with the constant `6`. Two ops remain.' },
+          { title: 'Check the result', text: 'The optimised graph is `Add(Mul(x, 6), b)`. With `x = [1, 2]`, `b = 3` it still returns `[9, 15]`. Same answer, half the work on every call.' },
+        ] },
+        { type: 'table', caption: 'The same function before and after optimisation', head: ['', 'As traced', 'After pruning and folding'], rows: [
+          ['Ops run per call', '4', '2'],
+          ['Ops', 'Mul(2, 3), Sub(x, 1), Mul(x, scale), Add', 'Mul(x, 6), Add'],
+          ['Output for x = [1, 2], b = 3', '[9, 15]', '[9, 15]'],
+          ['Ops run over 1,000,000 calls', '4,000,000', '2,000,000'],
+        ] },
+        { type: 'p', text: 'Why can eager execution not do this? Because it sees one line at a time. When it reaches `debug = x − 1` it must compute it straight away: it cannot know that nobody will read `debug` later. Only a system that holds the **whole** computation as data can look ahead from the output and decide what is needed. TensorFlow\'s built-in graph optimiser (named Grappler) runs passes like these on traced graphs automatically.' },
+        { type: 'callout', tone: 'warn', title: 'Pruning can surprise you', text: 'The same rule removes things you wanted. A Python `print()` or a list `append` inside a traced function is not a graph op at all, so it never reaches the graph. If a result matters, return it or use a TensorFlow op such as `tf.print` for it.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We build a miniature `@tf.function`. It traces a Python function once with a symbolic input, stores the recorded graph under the input shape, and afterwards runs the graph without touching the Python body. Then we call it four times and count how often the body really runs.' },
+        { type: 'code', lang: 'python', title: 'practice_mini_tf_function.py', code: `import numpy as np
+
+class Sym:                                   # a symbolic tensor: a name, no numbers
+    def __init__(self, name, graph):
+        self.name, self.graph = name, graph
+    def _op(self, kind, other):
+        out = Sym(f"t{len(self.graph)}", self.graph)
+        other = other.name if isinstance(other, Sym) else other
+        self.graph.append((out.name, kind, self.name, other))   # record the op
+        return out
+    def __mul__(self, other): return self._op("mul", other)
+    def __add__(self, other): return self._op("add", other)
+
+def function(py_fn):                         # a miniature @tf.function
+    cache = {}
+    def wrapper(x):
+        key = x.shape                        # the input signature
+        if key not in cache:                 # trace: run the Python body once
+            graph = []
+            out = py_fn(Sym("x", graph))
+            cache[key] = (graph, out.name)
+            print(f"  [traced for shape {key}: {len(graph)} ops recorded]")
+        graph, out_name = cache[key]
+        env = {"x": x}                       # execute the graph, no Python body
+        for name, kind, a, b in graph:
+            b = env[b] if isinstance(b, str) else b
+            env[name] = env[a] * b if kind == "mul" else env[a] + b
+        return env[out_name]
+    return wrapper
+
+@function
+def predict(size):
+    print("  python body is running")
+    return size * 2.0 + 3.0                  # price = 2 * size + 3
+
+for batch in ([1.0, 2.0], [3.0, 4.0], [1.0, 2.0, 3.0], [5.0, 6.0]):
+    print("call ->", predict(np.array(batch)))`, output: `  python body is running
+  [traced for shape (2,): 2 ops recorded]
+call -> [5. 7.]
+call -> [ 9. 11.]
+  python body is running
+  [traced for shape (3,): 2 ops recorded]
+call -> [5. 7. 9.]
+call -> [13. 15.]`, walkthrough: [
+          { lines: [3, 12], note: 'A symbolic tensor holds no numbers. When we multiply or add it, it does not compute anything. It appends a line to the graph (result name, op, inputs) and returns a new symbol.' },
+          { lines: [14, 29], note: 'The decorator. On a new input shape it calls the Python function once with a symbol, which fills the graph, and caches it. Then, on every call, it runs the cached graph with the real numbers in a small loop.' },
+          { lines: [31, 34], note: 'An ordinary Python function. The `print` is plain Python, not a graph op.' },
+          { lines: [36, 37], note: 'Four calls. The body runs for the first shape (2,) and again for the new shape (3,). The second and fourth calls reuse a cached graph, so "python body is running" does not appear.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add a global list `seen = []` and put `seen.append(1)` inside `predict`. After the loop, print `len(seen)`. Predict the number before running: 4, or something else?',
+          'Change the signature to include the values: `key = (x.shape, tuple(x))`. Predict how many traces the four calls now cause. Which mistake from the lesson does this imitate?',
+          'Add a fifth batch `[7.0, 8.0, 9.0]` to the loop. Predict whether it triggers a trace, and how many graphs the cache holds at the end.',
+        ] },
+        { type: 'check', question: 'The graphs traced for shape (2,) and shape (3,) contain exactly the same two ops. Why does our decorator, like tf.function, still trace a second time?', answer: 'Because it cannot know in advance that the body ignores the shape. The only safe rule is: a new signature means a new trace. A real graph is also specialised to its input shapes, which helps the optimiser. When we know many shapes will arrive, TensorFlow lets us declare a looser signature with an unknown dimension, so one graph serves them all. Without that, a stream of differently shaped inputs causes a retrace each time, which is slow.' },
+        { type: 'check', question: 'Suppose we wrote `if size > 3:` inside predict. What would happen during tracing in our miniature, and how does real TensorFlow deal with it?', answer: 'During tracing `size` is a symbol with no value, so Python cannot decide which branch to take. Our miniature would simply fail, because `Sym` has no comparison. Real TensorFlow uses AutoGraph to rewrite such an `if` into a graph control-flow op, so **both** branches go into the graph and the choice is made at run time, when the tensor has real numbers.' },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: "variational-autoencoders",
-  minutes: 21,
+  minutes: 26,
   hook: "A normal autoencoder can squeeze a photo into a few numbers and rebuild it — so why can it not invent a new photo when we hand it a few random numbers?",
   summary: "An autoencoder compresses data into a small latent code and reconstructs it, but its latent space has gaps, so random codes decode to garbage. A Variational Autoencoder (VAE) fixes this by making the encoder output a small probability cloud (a mean and a spread) instead of a single point, and by adding a KL penalty that pulls all clouds toward a standard normal distribution. The result is a smooth, well-organised latent space we can sample from to generate new data; the reparameterization trick makes this trainable with backpropagation.",
   sections: [
@@ -190,6 +190,89 @@ beta=4.0: recon=0.030 + KL term=4.466 = loss 4.496`,
           ["Discrete tokenizers (VQ-VAE family)", "Vector-quantised autoencoders turn images or audio into discrete tokens that transformers can model"],
         ] },
         { type: "callout", tone: "example", title: "Back to the shop", text: "We could train a VAE on photos of *intact* products only. At inspection time, a photo of a cracked jar reconstructs poorly and gets a high loss, so it is flagged for a human — without ever collecting labelled examples of every kind of damage." },
+      ],
+    },
+    {
+      id: "mistakes-and-diagnosis",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "A VAE that trains without errors can still be broken. The most useful habit is to log the two loss parts **separately**, and to log the KL **per latent dimension**, averaged over a batch. One total number hides nearly everything." },
+        { type: "chart", kind: "bar", title: "KL per latent dimension in a trained VAE", yLabel: "KL", labels: ["z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8"], series: [{ name: "KL", values: [2.1, 1.6, 1.2, 0.9, 0.02, 0.01, 0, 0] }], caption: "Illustrative. Four dimensions carry information. The other four sit at KL ≈ 0: for them the encoder always outputs μ ≈ 0 and σ ≈ 1, so they are pure noise and the decoder ignores them." },
+        { type: "p", text: "A few unused dimensions are normal: the model only keeps as many as it needs. *All* dimensions at zero is posterior collapse. Here is a second, very common bug, with numbers. Our photos have 64 × 64 × 3 = 12,288 values and the latent has 16. The loss formula *sums* squared error over all 12,288 values and sums KL over the 16 dimensions. If our code instead takes the **mean** over pixels but still sums the KL, the reconstruction term becomes 12,288 times smaller. That is the same as training with β = 12,288. The KL term wins, and the clouds collapse onto the prior." },
+        { type: "table", caption: "Symptoms, likely causes and what to check", head: ["What we see", "Likely cause", "What to check"], rows: [
+          ["KL ≈ 0 in every dimension; all samples look alike", "Posterior collapse", "KL per dimension; is β too large, or is one term averaged and the other summed?"],
+          ["Sharp reconstructions, but random samples are garbage", "KL weight far too small; the model behaves like a plain autoencoder", "Mean and spread of the μ values over the dataset: far from 0 and 1?"],
+          ["Everything blurry, even reconstructions", "β too high, or the latent is too small", "Reconstruction loss on its own; try a lower β"],
+          ["σ blows up or the loss becomes NaN", "exp of a large log-variance overflowed", "Range of log σ² values; clamp them to a sensible range"],
+          ["Search results change every time we embed the same photo", "Using a sampled z instead of μ at inference", "Encode twice and compare the two codes"],
+        ] },
+        { type: "steps", title: "A quick health check after training", items: [
+          { title: "Reconstruct", text: "Encode and decode a few held-out photos. This tests the encoder and decoder together." },
+          { title: "Sample", text: "Decode z ~ N(0, I) a few dozen times. This tests whether the prior and the learned clouds actually line up." },
+          { title: "Interpolate", text: "Walk in a straight line between the μ of two photos and decode along the way. Sudden jumps or nonsense in the middle mean holes." },
+          { title: "Count active dimensions", text: "Average the KL per dimension over a batch. That tells us how many latent numbers the model really uses." },
+        ] },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will measure the 'holes' directly. Five product photos live in a 1-d latent space, once as a plain autoencoder would place them and once as a VAE would. We then draw 20,000 codes from the prior N(0, 1), exactly as we do when generating, and count how many land somewhere the decoder has seen before." },
+        { type: "code", lang: "python", title: "practice_latent_holes.py", code: `import numpy as np
+rng = np.random.default_rng(5)
+
+# A 1-d latent space holding five product photos.
+# Plain autoencoder: five sharp points, placed wherever training left them.
+# VAE: five wide clouds, pulled toward the prior N(0, 1) by the KL term.
+models = {
+    "plain AE": (np.array([-6.0, -2.5, 0.5, 3.0, 7.0]), 0.05),
+    "VAE":      (np.array([-1.2, -0.6, 0.0, 0.6, 1.2]), 0.50),
+}
+
+def kl(mu, sigma):
+    """KL( N(mu, sigma^2) || N(0, 1) ) for one latent dimension."""
+    return 0.5 * (mu**2 + sigma**2 - np.log(sigma**2) - 1)
+
+z_prior = rng.normal(size=20_000)                # what we sample at generation
+
+for name, (mu, sigma) in models.items():
+    # A prior sample is "known" to the decoder if it lies inside some cloud
+    # (within 2 sigma of a centre): the decoder saw codes like it in training.
+    known = (np.abs(z_prior[:, None] - mu) < 2 * sigma).any(axis=1).mean()
+    # The codes seen in training: pick an image, then sample z with the trick
+    pick = rng.integers(0, 5, size=20_000)
+    z_train = mu[pick] + sigma * rng.normal(size=20_000)
+    mid = (mu[1] + mu[2]) / 2                    # halfway between two photos
+    mid_known = bool((np.abs(mid - mu) < 2 * sigma).any())
+    print(f"{name}")
+    print(f"  prior samples the decoder knows : {known:.0%}")
+    print(f"  training codes: mean {z_train.mean():+.2f}, std {z_train.std():.2f}")
+    print(f"  midpoint of photos 2 and 3 known: {mid_known}")
+    print(f"  average KL per photo            : {kl(mu, sigma).mean():.2f}")`, output: `plain AE
+  prior samples the decoder knows : 7%
+  training codes: mean +0.38, std 4.46
+  midpoint of photos 2 and 3 known: False
+  average KL per photo            : 12.55
+VAE
+  prior samples the decoder knows : 97%
+  training codes: mean -0.01, std 0.98
+  midpoint of photos 2 and 3 known: True
+  average KL per photo            : 0.68`,
+          walkthrough: [
+            { lines: [7, 10], note: "Two latent layouts for the same five photos: centres and one shared spread. The plain autoencoder's codes are sharp points scattered from −6 to 7. The VAE's are wide clouds packed around 0." },
+            { lines: [16, 21], note: "We draw codes from the prior and call a code 'known' if it lies within 2σ of some photo's centre. Only 7% of prior samples are known to the plain autoencoder's decoder, against 97% for the VAE." },
+            { lines: [23, 26], note: "The codes the decoder trains on, made with z = μ + σ·ε. For the VAE they have mean ≈ 0 and std ≈ 1, just like the prior. We also test the point halfway between two photos." },
+            { lines: [27, 31], note: "The price of each layout in KL. Sharp, far-away points cost 12.55 per photo; overlapping clouds near the origin cost 0.68. The KL term is what pushes a model from the first layout to the second." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Give the VAE a spread of `0.05` instead of `0.50`, keeping its centres. Predict the 'known' percentage and whether the average KL goes up or down.",
+          "Give the plain AE the VAE's centres but keep its spread of `0.05`. Predict: is putting the points in the right place enough to fill the holes?",
+          "Set all five VAE centres to `0.0` and the spread to `1.0`. Predict the KL and the 'known' percentage. Then explain why this 'perfect' score is actually a failure.",
+        ] },
+        { type: "check", question: "In the run above, the VAE's training codes had mean −0.01 and std 0.98. Why does that matter for generating new photos?", answer: "At generation time we feed the decoder codes drawn from N(0, 1). The decoder only works well on codes like the ones it saw in training. If the training codes, taken all together, also look like N(0, 1), then prior samples are familiar territory. The plain autoencoder's codes had std 4.46 with empty gaps between them, so most prior samples fall where the decoder was never trained." },
+        { type: "check", question: "A teammate's VAE code computes the reconstruction loss as a mean over all 12,288 pixel values and the KL as a sum over 16 latent dimensions. Training runs smoothly, KL falls to almost 0, and every sample is the same grey blur. What went wrong?", answer: "The two terms are on different scales. Taking the mean divides the reconstruction term by 12,288, so the KL term is thousands of times heavier than intended, like a very large β. The cheapest way to lower the loss is to make every cloud equal the prior, which removes all information from z: posterior collapse. The fix is to reduce both terms the same way (sum both per image), or to lower β to compensate." },
       ],
     },
   ],

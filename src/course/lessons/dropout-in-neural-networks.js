@@ -1,6 +1,6 @@
 export default {
   id: 'dropout-in-neural-networks',
-  minutes: 18,
+  minutes: 23,
   hook: 'Why would switching off random neurons on purpose, every single training step, make a neural network smarter?',
   summary: 'Dropout is a regularisation technique: during training, each neuron\'s output is set to zero with probability p, and the survivors are scaled up by 1/(1 − p). This stops neurons from relying on specific partners and acts like training many thinned networks at once, which reduces overfitting. At test time dropout is switched off and the full network is used.',
   sections: [
@@ -170,6 +170,70 @@ model.eval()    # dropout is a no-op -> use for validation and inference`, walkt
         { type: 'callout', tone: 'example', title: 'Where dropout is used', text: 'Classic image networks such as AlexNet and VGG used dropout with p = 0.5 in their large fully connected layers. The original Transformer applied dropout of 0.1 to the outputs of each sub-layer and to the embeddings, and Transformer-based models such as BERT use dropout of about 0.1 as well. Smaller models fine-tuned on modest datasets commonly keep dropout on. Many very large language models are pretrained with dropout set very low or turned off, because each training example is seen only about once and overfitting is less of a concern; exact settings vary by model and are not always published.' },
         { type: 'p', text: '**Typical rates:** 0.1–0.3 for Transformers and convolutional layers, up to 0.5 for big dense layers. Rates above about 0.5 usually hurt because too little signal gets through.' },
         { type: 'p', text: '**When not to use it, or to use less:** when the model is *underfitting* (training loss itself is high), dropout makes things worse. With huge datasets seen once, it may add little. Mixing dropout with Batch Normalization in the same block can cause a mismatch between training and test statistics, so many CNNs that rely on BatchNorm use little or no dropout in convolutional layers. Never apply dropout at inference unless you want Monte Carlo dropout on purpose.' },
+      ],
+    },
+    {
+      id: 'noise-size',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'We showed that inverted dropout keeps the **average** of each activation unchanged. But an average hides how much a single pass jumps around. Let us measure that jump, because it explains why high drop rates hurt.' },
+        { type: 'p', text: 'Take one activation `h`. After dropout it is either `0` (with probability `p`) or `h / (1 − p)` (with probability `1 − p`). The average is `h`. The typical distance from that average, the **standard deviation**, works out to:' },
+        { type: 'formula', expr: 'std(h̃) = h · √( p / (1 − p) )', where: [['h', 'the original activation'], ['p', 'the drop rate'], ['√(p / (1 − p))', 'the noise, measured as a multiple of the signal h']], caption: 'It follows from the two possible values: variance = h²·p / (1 − p).' },
+        { type: 'p', text: 'Example with `h = 4` and `p = 0.5`: the value is either 0 or 8, always 4 away from the average 4. So the noise is exactly as large as the signal. With `p = 0.9` the value is 0 nine times out of ten and 40 once: the noise is three times the signal.' },
+        { type: 'chart', kind: 'bar', title: 'Noise added by dropout, as a multiple of the activation', yLabel: 'std ÷ signal', labels: ['p = 0.1', 'p = 0.2', 'p = 0.3', 'p = 0.5', 'p = 0.7', 'p = 0.8', 'p = 0.9'], series: [
+          { name: '√(p / (1 − p))', values: [0.333, 0.5, 0.655, 1, 1.528, 2, 3] },
+        ], caption: 'Exact values from the formula. The noise grows slowly up to p = 0.5 and very fast after it.' },
+        { type: 'table', caption: 'What one activation of 4.0 looks like under different rates', head: ['Drop rate p', 'Value if kept', 'Chance it is kept', 'Noise (std)'], rows: [
+          ['0.1', '4.44', '90%', '1.33'],
+          ['0.5', '8.00', '50%', '4.00'],
+          ['0.9', '40.00', '10%', '12.00'],
+        ] },
+        { type: 'p', text: 'Two things calm this noise down. **Width:** the next layer adds up many activations, each with its own independent mask, so their noise partly cancels. A wide layer feels less noise per unit than a narrow one, which is one reason big dense layers tolerate `p = 0.5` while small ones do not. **Averaging:** if we average `n` independent passes, the noise shrinks by `√n`. That is what Monte Carlo dropout relies on, and it is also what training does over many steps.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We test the "cheap ensemble" claim. We take our six activations, feed them into one neuron of the next layer, and compare two things: the single answer of the full network in evaluation mode, and the average answer of 20,000 random thinned networks.' },
+        { type: 'code', lang: 'python', title: 'practice_dropout_ensemble.py', code: `import numpy as np
+
+rng = np.random.default_rng(1)
+h = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])     # hidden activations
+w = np.array([0.5, -0.4, 0.3, 0.2, -0.3, 0.2])   # weights of one next-layer neuron
+b = 0.1
+
+def pre_activation(h_in):
+    return h_in @ w + b                           # z = w.h + b
+
+# Evaluation mode: no dropout, one fixed answer
+z_full = pre_activation(h)
+print(f"eval mode       z={z_full:.3f}  ReLU(z)={max(0.0, z_full):.3f}")
+
+# Training mode: 20,000 random thinned networks for each drop rate
+for p in (0.1, 0.5, 0.8):
+    keep = rng.random((20000, 6)) >= p            # one mask per row
+    thinned = h * keep / (1 - p)                  # inverted dropout
+    z = pre_activation(thinned)
+    out = np.maximum(0.0, z)                      # ReLU of each thinned network
+    print(f"p={p}  mean z={z.mean():.3f}  std z={z.std():.3f}  "
+          f"mean ReLU(z)={out.mean():.3f}")`, output: `eval mode       z=1.200  ReLU(z)=1.200
+p=0.1  mean z=1.202  std z=0.824  mean ReLU(z)=1.231
+p=0.5  mean z=1.212  std z=2.474  mean ReLU(z)=1.725
+p=0.8  mean z=1.229  std z=4.899  mean ReLU(z)=2.515`, walkthrough: [
+          { lines: [3, 9], note: 'The same six activations as before, plus one neuron of the next layer with fixed weights and a bias. It computes z = w·h + b.' },
+          { lines: [11, 13], note: 'Evaluation mode gives one answer: z = 1.2, and ReLU leaves it at 1.2.' },
+          { lines: [15, 20], note: 'For each drop rate we draw 20,000 masks at once (one per row), apply inverted dropout, and push every thinned layer through the same neuron.' },
+          { lines: [21, 22], note: 'The mean of z stays near 1.2 for every rate: scaling works. The spread grows quickly with p. After the ReLU, the ensemble average drifts away from the eval answer: 1.231, then 1.725, then 2.515.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Remove the `/ (1 - p)` on line 18. Before running, predict the mean of z for `p = 0.5`. (Hint: the weighted sum without the bias is 1.1.)',
+          'Make the layer ten times wider with the same total signal: `h = np.tile(h, 10)`, `w = np.tile(w, 10) / 10`, and change the mask shape to `(20000, 60)`. Predict what happens to `std z`, and to the gap between the eval answer and `mean ReLU(z)`.',
+          'Change the bias `b` from 0.1 to 10.0. Predict whether `mean ReLU(z)` now stays close to the eval answer, and explain why the ReLU no longer matters.',
+        ] },
+        { type: 'check', question: 'The mean of z stays near 1.2 at every drop rate, yet the mean of ReLU(z) climbs to 2.515 at p = 0.8. Where does the extra come from?', answer: 'From the ReLU being non-linear. With a wide spread, many thinned networks give a negative z, which ReLU lifts to 0, while the large positive ones pass through untouched. Clipping only the low side raises the average. So "the full network equals the average of all thinned networks" is exact only for a linear layer. Through non-linearities it is an approximation, and the approximation gets worse as the noise grows.' },
+        { type: 'check', question: 'At p = 0.5 the spread of z (2.474) is about twice the signal itself (1.2). How can a network learn anything from a signal that noisy?', answer: 'Because training never relies on a single pass. Each step draws a new mask, and gradient descent adds up small updates over thousands of steps and examples, so the random part averages out while the consistent part (the true pattern) accumulates. The noise is the point: it stops the network from fitting details that only survive under one exact combination of neurons.' },
       ],
     },
   ],

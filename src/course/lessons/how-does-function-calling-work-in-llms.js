@@ -1,6 +1,6 @@
 export default {
   id: "how-does-function-calling-work-in-llms",
-  minutes: 20,
+  minutes: 25,
   hook: "If a language model can only output text, how does it “check the weather”, “query a database” or “book a meeting”?",
   summary: "Function calling (also called tool calling) lets an LLM ask our application to run a function. We describe the available functions with names, descriptions and JSON Schemas; the model replies with a structured request naming a function and its arguments; our code runs it and sends the result back; the model then answers using that result. The model never executes anything itself, which is exactly what makes the pattern safe and controllable.",
   sections: [
@@ -231,6 +231,97 @@ messages in history: 4`,
           ] },
         { type: "callout", tone: "example", title: "Writing good tool definitions", text: "Treat descriptions as documentation for a new colleague. Say what the tool does, when to use it, and when not to. Use clear parameter names (`order_id`, not `x`), enums for fixed choices (`\"unit\": \"celsius\" | \"fahrenheit\"`), and keep the tool list short. Too many similar tools confuse models and bloat every prompt." },
         { type: "p", text: "**Quick summary.** We describe functions with a name, a description and a JSON Schema. The model replies with a structured call, never running anything itself. Our code validates and executes the call, returns the result tagged with the call id, and calls the model again. Independent calls can run in parallel; dependent calls need multiple rounds. Wrap that in a loop with a step limit, and you have the core of an AI agent." }
+      ]
+    },
+    {
+      id: "common-mistakes",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Most function-calling bugs show up in one of two places: the tool call the model wrote, or the history we send back. The good news is that each bug leaves a clear trace. If we log every tool call and every tool result, we can usually name the problem in a minute." },
+        { type: "table", caption: "Symptoms we see in logs, the likely cause, and the fix",
+          head: ["Symptom", "Likely cause", "Fix"],
+          rows: [
+            ["The model answers from memory and never calls the tool", "The description does not say when to use the tool, or the question does not match it", "Rewrite the description with a clear “use this when…” line; force the tool if it must always run"],
+            ["A call names a tool that does not exist", "Similar tool names, or a tool the model has seen elsewhere", "Return an error result listing the valid names; keep names distinct"],
+            ["Arguments have the wrong type, such as `\"ten\"` for a number", "Loose schema, or vague parameter names", "Tighter schema with types and enums; validate in code; use strict mode where the API offers it"],
+            ["The arguments string does not parse as JSON", "Output was cut off by the token limit, or the model drifted", "Parse inside error handling; raise the output limit; send the parse error back"],
+            ["The API rejects our second request", "A tool call in the history has no result with the same id", "Append exactly one result per call, including for failed calls"],
+            ["The model calls the right tool with a made-up id or name", "It had to guess a value it never saw", "Give it a lookup tool first, or tell it to ask the user when a value is unknown"]
+          ] },
+        { type: "p", text: "When a call is broken, the order of our checks matters. Each check assumes the one before it passed." },
+        { type: "steps", title: "A safe order for checking one tool call",
+          items: [
+            { title: "Is the tool known?", text: "Look the name up in our own table of functions. Never build a function name from model text and run it." },
+            { title: "Do the arguments parse?", text: "Turn the JSON string into data. A parse failure is a normal event, not a crash." },
+            { title: "Are the fields present and the right type?", text: "Compare against the schema: required fields, types, allowed values." },
+            { title: "Is the call allowed?", text: "Business rules and permissions: may this user do this, and is the amount within limits?" },
+            { title: "Run it and report back", text: "Whether a check failed or the function ran, send one result with the call id. A clear error message is what lets the model fix its own call." }
+          ] }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the part of the app that sits between the model and our functions: a dispatcher. It takes a tool call, checks it in the safe order above, runs it, and always returns a result message. We feed it one good call and four broken ones to see every path." },
+        { type: "code", lang: "python", title: "practice_tool_dispatcher.py", code: `import json
+
+# One tool: its schema says which arguments it needs and their Python types.
+SCHEMAS = {"convert": {"amount": float, "to": str}}
+RATES = {"EUR": 0.5, "INR": 80.0}            # made-up rates, easy to check
+
+def convert(amount, to):                     # the real function
+    return {"amount": amount * RATES[to], "currency": to}
+
+FUNCS = {"convert": convert}
+
+def dispatch(call):
+    """Validate one tool call, run it, and always return a result message."""
+    name, raw = call["name"], call["arguments"]
+    try:
+        if name not in FUNCS:
+            raise ValueError(f"unknown tool '{name}'")
+        args = json.loads(raw)               # arguments arrive as a JSON string
+        for key, typ in SCHEMAS[name].items():
+            if key not in args:
+                raise ValueError(f"missing argument '{key}'")
+            if isinstance(args[key], int) and typ is float:
+                args[key] = float(args[key])  # 10 is a fine float
+            if not isinstance(args[key], typ):
+                raise ValueError(f"'{key}' must be {typ.__name__}")
+        if args["to"] not in RATES:
+            raise ValueError(f"'to' must be one of {sorted(RATES)}")
+        result = FUNCS[name](**args)
+    except (ValueError, json.JSONDecodeError) as e:
+        result = {"error": str(e)}           # errors go back as results
+    return {"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result)}
+
+# Five calls a model might produce: one good, four broken in different ways.
+calls = [{"id": "c1", "name": "convert", "arguments": '{"amount": 10, "to": "EUR"}'},
+         {"id": "c2", "name": "convert", "arguments": '{"amount": "ten", "to": "EUR"}'},
+         {"id": "c3", "name": "convert", "arguments": '{"amount": 10}'},
+         {"id": "c4", "name": "convert", "arguments": '{"amount": 10, "to": "EUR"'},
+         {"id": "c5", "name": "exchange", "arguments": '{"amount": 10, "to": "INR"}'}]
+for c in calls:
+    print(c["id"], "->", dispatch(c)["content"])`, output: `c1 -> {"amount": 5.0, "currency": "EUR"}
+c2 -> {"error": "'amount' must be float"}
+c3 -> {"error": "missing argument 'to'"}
+c4 -> {"error": "Expecting ',' delimiter: line 1 column 27 (char 26)"}
+c5 -> {"error": "unknown tool 'exchange'"}`,
+          walkthrough: [
+            { lines: [3, 10], note: "A small schema, some made-up rates, the real function, and a table that maps tool names to functions." },
+            { lines: [12, 28], note: "The checks, in order: known tool, parseable JSON, required fields and types, then an allowed-values rule. Only after all of them does the function run." },
+            { lines: [29, 31], note: "Any failure becomes an `error` result. Success or failure, we return exactly one tool message carrying the call id." },
+            { lines: [33, 40], note: "Five calls a model might write. Compare each one with its line of output." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change call `c1` to `\"to\": \"USD\"`. Predict which check catches it and the exact error text before you run it.",
+          "Change call `c3` to `'{\"amount\": 10, \"to\": 5}'`. Predict whether the message will talk about a missing argument or a wrong type.",
+          "Remove `json.JSONDecodeError` from the `except` line, leaving only `ValueError`, and run again. Predict what happens at `c4`. (Hint: check whether `JSONDecodeError` is a kind of `ValueError`.) Then remove the whole `try`/`except` and predict again."
+        ] },
+        { type: "check", question: "Call `c2` and call `c4` both fail, but they fail at different checks. Why is it useful that the two error messages are different?", answer: "The error text is what the model reads on the next turn. “'amount' must be float” tells it to send a number. A parse error tells it the JSON itself was malformed, which often means the output was cut off. A single vague message like “bad call” would leave the model guessing and it might repeat the same mistake." },
+        { type: "check", question: "Suppose the dispatcher raised an exception for `c5` instead of returning an error result. What two things would go wrong?", answer: "First, the program would stop, so one bad call would end the whole conversation. Second, the history would hold a tool call `c5` with no matching result, and many APIs reject such a history. Returning an error result keeps the history consistent and gives the model a chance to pick the correct tool name." }
       ]
     }
   ],

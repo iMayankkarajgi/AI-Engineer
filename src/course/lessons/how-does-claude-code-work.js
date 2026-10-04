@@ -1,6 +1,6 @@
 export default {
   id: "how-does-claude-code-work",
-  minutes: 22,
+  minutes: 27,
   hook: "How does an AI go from “here is a code snippet, good luck pasting it” to actually opening our files, running our tests and fixing the bug itself?",
   summary: "Claude Code is Anthropic's agentic coding tool. It runs a Claude model in an agent loop with real tools (read and edit files, search with patterns, run shell commands) inside our project, so it can gather context, make changes and verify them by running tests. Project instructions live in CLAUDE.md, permission rules keep us in control of risky actions, and plan mode, subagents and hooks let us shape how it works. It is a clear real-world example of harness and loop engineering.",
   sections: [
@@ -171,6 +171,62 @@ final cart.py: 'def total(prices):\\n    return sum(prices)\\n'`, walkthrough: [
           { label: "PostToolUse hook", detail: "Runs after, e.g. auto-format the edited file or run a quick lint." },
           { label: "Stop hook", detail: "When Claude finishes, a hook could run the test suite or send a notification." }
         ] }
+      ]
+    },
+    {
+      id: "worked-context-accounting",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "This lesson said that subagents keep the main context clean. Let us put illustrative numbers on that. We ask: “find every place we parse dates”. Answering takes 12 search and read calls, and each call returns about 1,500 tokens of file content." },
+        { type: "steps", title: "Where do the tokens go?", items: [{ title: "Search in the main conversation", text: "12 × 1,500 = 18,000 tokens of file content are added to the main context. Most of it is code we looked at once and will not need again." }, { title: "Carry it on every turn", text: "An agent loop sends its context again on each later turn. If the task runs for 20 more turns, those 18,000 tokens are carried 20 more times." }, { title: "Delegate instead", text: "A subagent makes the same 12 calls in its own context window. That window fills with the same 18,000 tokens, but it is set aside when the subagent finishes." }, { title: "Only the summary returns", text: "The main agent receives a short report, say 300 tokens: the files and line numbers where dates are parsed." }, { title: "Compare", text: "18,000 tokens against 300 in the main context: 60 times less. The main conversation stays focused on the fix." }] },
+        { type: "chart", kind: "hbar", title: "Tokens added to the main context by one investigation", xLabel: "Tokens", labels: ["Search in the main conversation", "Delegate to a subagent"], series: [{ name: "Tokens", values: [18000, 300] }], caption: "Illustrative numbers from the steps above. The search work is the same; only the place where its output lives changes." },
+        { type: "p", text: "There is a price on the other side. The subagent starts with none of the main conversation, so the task we hand over must stand on its own: what to look for, where, and what to report back. A summary can also leave out a detail we need later, and then the main agent must read that file itself. Delegation suits broad searches with a short result. For one file we are about to edit, reading it directly is simpler." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a small permission checker in the spirit of this lesson: read-only tools run freely, deny rules beat allow rules, anything the rules do not cover asks the user, and a hook that we wrote can block a call. The rule format is a simplified sketch, not the tool's exact syntax." },
+        { type: "code", lang: "python", title: "practice_permission_rules.py", code: `from fnmatch import fnmatchcase
+
+# A simplified sketch of permission rules: deny beats allow, the rest asks.
+ALLOW = ["Read(*)", "Grep(*)", "Bash(npm run test*)"]
+DENY = ["Bash(git push*)", "Read(.env)"]
+
+def pre_tool_hook(tool, arg):
+    # Our own deterministic check, run before every tool call
+    if tool == "Edit" and arg.startswith("migrations/"):
+        return "blocked by hook: migrations are protected"
+    return None
+
+def decide(tool, arg):
+    call = f"{tool}({arg})"
+    blocked = pre_tool_hook(tool, arg)
+    if blocked:
+        return blocked
+    if any(fnmatchcase(call, rule) for rule in DENY):     # deny is checked first
+        return "denied by rule"
+    if any(fnmatchcase(call, rule) for rule in ALLOW):
+        return "allowed, runs without asking"
+    return "ask the user first"
+
+# Tool calls a model might propose while fixing the cart bug
+calls = [("Read", "cart.py"), ("Read", ".env"), ("Bash", "npm run test:unit"),
+         ("Edit", "cart.py"), ("Edit", "migrations/001.sql"),
+         ("Bash", "git push origin main"), ("Bash", "rm -rf build")]
+for tool, arg in calls:
+    print(f"{tool + '(' + arg + ')':27} -> {decide(tool, arg)}")`, output: `Read(cart.py)               -> allowed, runs without asking
+Read(.env)                  -> denied by rule
+Bash(npm run test:unit)     -> allowed, runs without asking
+Edit(cart.py)               -> ask the user first
+Edit(migrations/001.sql)    -> blocked by hook: migrations are protected
+Bash(git push origin main)  -> denied by rule
+Bash(rm -rf build)          -> ask the user first`, walkthrough: [{ lines: [3, 5], note: "Allow and deny lists as simple patterns, where `*` matches any text." }, { lines: [7, 11], note: "Our own hook: plain code that runs before every tool call and can block it. Here it protects the `migrations/` folder." }, { lines: [13, 22], note: "The decision order in our sketch: the hook first, then deny rules, then allow rules, and “ask the user” for everything else." }, { lines: [24, 29], note: "Seven tool calls a model might propose, each with the decision the checker reaches." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Add `\"Edit(*)\"` to `ALLOW`. Predict the result for both Edit calls. Which one still does not run, and why?", "Add `\"Bash(*)\"` to `ALLOW`. Predict the results for `git push origin main` and for `rm -rf build`. Is this a rule we would want?", "Remove `\"Read(.env)\"` from `DENY`. Predict what happens to `Read(.env)`. Why does a broad allow rule make a specific deny rule necessary?"] },
+        { type: "check", question: "`Read(.env)` matches the allow rule `Read(*)` and also the deny rule `Read(.env)`. Why is “deny wins” the safer way to settle the tie?", answer: "Allow rules are usually broad, so that routine work runs without prompts. Deny rules are narrow and protect specific things. If allow won, every broad allow rule would silently cancel the protections behind it, and we would have to remember each secret file whenever we wrote one. With deny winning, a mistake errs on the side of blocking, which costs us a prompt and not a leaked secret." },
+        { type: "check", question: "`Bash(rm -rf build)` matched no rule and got “ask the user first”. Why is asking a better default for unmatched calls than allowing them or denying them?", answer: "We cannot list every command in advance. If unmatched calls were allowed, anything we forgot to deny would run, including destructive commands. If they were denied, the agent would be stopped by every new, harmless command. Asking puts a person in front of exactly the cases the rules did not foresee, and each answer shows us which rule to add next." }
       ]
     },
     {

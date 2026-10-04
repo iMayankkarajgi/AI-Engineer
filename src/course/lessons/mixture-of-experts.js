@@ -1,6 +1,6 @@
 export default {
   id: 'mixture-of-experts',
-  minutes: 22,
+  minutes: 27,
   hook: 'How can a model have 671 billion parameters but only use 37 billion of them for each word it writes?',
   summary: 'A Mixture of Experts (MoE) layer replaces one big feed-forward network with many smaller "experts" and a small router that picks a few experts for each token. Total parameters (knowledge capacity) grow while compute per token stays close to that of a much smaller dense model. The price is memory for all experts, load-balancing work during training, and more complex serving.',
   sections: [
@@ -154,6 +154,71 @@ total expert params: 512, active per token: 128`,
           '**Use MoE** when you serve at scale with plenty of GPU memory and want the best quality per unit of compute.',
           '**Prefer dense** when memory is tight (phones, laptops), batch sizes are tiny, or you need simple fine-tuning and deployment.',
         ] },
+      ],
+    },
+    {
+      id: 'common-mistakes-diagnosis',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: "MoE models fail in a few typical ways, and most of them show up in one simple measurement: **how many tokens each expert receives**. Let us read one batch by hand." },
+        { type: 'p', text: "Take 400 tokens, 4 experts and top-1 routing. The fair share is 400 / 4 = 100 tokens per expert. Suppose the counts are [288, 38, 35, 39] (illustrative; our practice script below produces them). The busiest expert holds 2.88 times its fair share. With a capacity factor of 1.25, each expert accepts at most 125 tokens, so 288 − 125 = 163 tokens overflow. That is about 41% of the batch skipping its expert. In a healthy layer the busiest expert stays close to the fair share and the overflow is small." },
+        { type: 'table', caption: "Typical MoE problems and the first thing to measure", head: ['What we see', 'Likely cause', 'What to check'], rows: [
+          ['A few experts receive most tokens', 'Router collapse: early winners keep winning', 'Tokens per expert in each batch; busiest count ÷ fair share'],
+          ['Quality drops after adding a capacity limit', 'Many tokens overflow and skip their expert', 'Overflow tokens per batch as a share of all tokens'],
+          ['Out of memory although active parameters are small', 'Every expert must be loaded, used or not', 'Plan memory from total parameters, not active ones'],
+          ['Slow with one user, fast with many', 'Each expert gets only a handful of tokens per step', 'Tokens per expert per step; batch more requests together'],
+          ['Balance looks fine on average, bad on one kind of input', 'Counts were averaged over mixed data', 'Tokens per expert separately for each kind of input'],
+        ] },
+        { type: 'callout', tone: 'tip', title: 'One number to log', text: "For every MoE layer, log `busiest expert count ÷ fair share`. A value near 1 means balanced. A value that climbs during training is an early warning of collapse, long before quality metrics move." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will build a router that starts out unfair, then fix it with the bias trick from the load-balancing section: push the score of busy experts down and the score of idle experts up, a little after every batch. We also count how many tokens would overflow a capacity limit." },
+        { type: 'code', lang: 'python', title: 'practice_moe_balance.py', code: `import numpy as np
+rng = np.random.default_rng(0)
+
+n_tokens, n_experts = 400, 4
+# Router scores (illustrative): expert 0 starts with an unfair head start
+scores = rng.normal(0, 1, (n_tokens, n_experts))
+scores[:, 0] += 1.5
+
+def loads(bias):
+    # top-1 routing: each token goes to its best expert after the bias is added
+    choice = (scores + bias).argmax(axis=1)
+    return np.bincount(choice, minlength=n_experts)
+
+fair = n_tokens / n_experts                 # 100 tokens per expert
+cap = int(1.25 * fair)                      # capacity factor 1.25 -> 125 tokens
+bias = np.zeros(n_experts)
+for step in range(6):
+    load = loads(bias)
+    dropped = int(np.maximum(load - cap, 0).sum())   # tokens over the cap
+    print(f"step {step}: load={load.tolist()} over cap {cap}: {dropped} "
+          f"bias={np.round(bias, 2).tolist()}")
+    # busy experts get a lower bias, idle experts a higher one
+    bias -= 0.5 * (load - fair) / fair`, output: `step 0: load=[288, 38, 35, 39] over cap 125: 163 bias=[0.0, 0.0, 0.0, 0.0]
+step 1: load=[139, 85, 77, 99] over cap 125: 14 bias=[-0.94, 0.31, 0.32, 0.3]
+step 2: load=[107, 98, 93, 102] over cap 125: 0 bias=[-1.14, 0.38, 0.44, 0.31]
+step 3: load=[101, 102, 97, 100] over cap 125: 0 bias=[-1.17, 0.4, 0.48, 0.3]
+step 4: load=[100, 101, 98, 101] over cap 125: 0 bias=[-1.17, 0.38, 0.49, 0.3]
+step 5: load=[100, 99, 100, 101] over cap 125: 0 bias=[-1.17, 0.38, 0.5, 0.3]`,
+          walkthrough: [
+            { lines: [4, 7], note: "400 tokens with random scores for 4 experts. We add 1.5 to every score of expert 0, which imitates an expert that got ahead early in training." },
+            { lines: [9, 12], note: "Top-1 routing with a bias: add the bias to the scores, send each token to its best expert, and count tokens per expert." },
+            { lines: [14, 16], note: "The fair share is 100 tokens. A capacity factor of 1.25 means an expert accepts at most 125. The bias starts at zero." },
+            { lines: [17, 23], note: "Each round we measure the load, count overflow, then move each bias against its expert's excess load. After two rounds the overflow is gone, and after five every expert is within one token of the fair share." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Raise the head start on line 7 from `1.5` to `3.0`. Predict the first load of expert 0, and whether 6 rounds are still enough to balance.",
+          "Change the step size on the last line from `0.5` to `4.0`. Predict: do the loads settle faster, or do they swing back and forth?",
+          "Set the capacity factor to `1.0` so the cap equals the fair share. Predict whether the overflow count can ever stay at exactly 0.",
+        ] },
+        { type: 'check', question: "After balancing, expert 0 has a bias of −1.17. Does that mean expert 0 became a worse expert?", answer: "No. The bias does not touch the expert's own weights. It only cancels most of the unfair head start in the router scores. Tokens that prefer expert 0 by a wide margin still go there; tokens that preferred it only slightly now go elsewhere. The bias changes who gets which tokens, not what each expert computes." },
+        { type: 'check', question: "In round 0 the load is [288, 38, 35, 39] with a cap of 125 and overflow tokens are dropped. How many tokens are actually processed by an expert, and what happens to the rest?", answer: "125 + 38 + 35 + 39 = 237 tokens are processed. The other 163 skip the expert and pass through on the residual path, so they get no feed-forward update in this layer. That is why heavy overflow hurts quality even though nothing crashes." },
       ],
     },
   ],

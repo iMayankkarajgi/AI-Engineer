@@ -1,6 +1,6 @@
 export default {
   id: "what-is-generative-ai",
-  minutes: 22,
+  minutes: 27,
   hook: "How can a program that was only ever shown existing text, images and sound produce a sentence, picture or song that never existed before?",
   summary: "Generative AI is AI that creates new content (text, images, audio, video, code) instead of only labelling or scoring existing content. It learns the patterns of a huge amount of example data, stores them as numbers called parameters, and then creates something new by sampling from what it learned, one small piece at a time. It is powerful and useful every day, but it can be confidently wrong, biased and out of date, so we must use it with care.",
   sections: [
@@ -212,6 +212,87 @@ sample 4: the order has shipped today      (copied)`,
         ] },
         { type: "callout", tone: "warn", title: "The most common mistake", text: "Treating fluent output as proof of truth. Never let a generative model be the only check for facts, numbers, legal or medical advice, or actions with real consequences (refunds, payments, deletions). Ground it in trusted data and keep a human or a rule-based check in the loop." },
         { type: "p", text: "**When not to use it**: if a simple rule or a lookup gives an exact answer (today's order status from the database, a tax calculation), use that instead. Generative AI is best when the output is language or media, when some variation is fine, and when a mistake can be caught." },
+      ],
+    },
+    {
+      id: "worked-example-reply-probability",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Our bigram model printed “the way” as a reply. How likely was that, compared with a sensible reply? We can work it out by hand. The chance of a whole reply is the chance of each word given the word before it, all multiplied together. We use the counts from the five training sentences." },
+        { type: "steps", title: "How likely is “your order has shipped today”?", items: [
+          { title: "First word", text: "Four training sentences start with “the” and one starts with “your”. So P(your | start) = 1/5 = 0.2." },
+          { title: "your → order", text: "“your” was only ever followed by “order”. P = 1.0. Running total: 0.2." },
+          { title: "order → has", text: "“order” was followed by “has” twice and “is” once. P = 2/3. Running total: 0.2 × 0.667 ≈ 0.133." },
+          { title: "has → shipped", text: "“has” was followed by “been” twice and “shipped” once. P = 1/3. Running total: ≈ 0.044." },
+          { title: "shipped → today → end", text: "Both steps had only one option in training, so each is 1.0. Final answer: about 0.044, or 4.4%." },
+        ] },
+        { type: "p", text: "Now the surprise. “the way” needs only three steps: P(the | start) = 4/5, P(way | the) = 2/6, and P(end | way) = 1.0. That gives 0.8 × 0.333 × 1.0 ≈ 0.267. The nonsense reply is the single most likely output of this model." },
+        { type: "table", caption: "Reply probabilities under the bigram model, computed by hand from the training counts.", head: ["Reply", "Factors", "Probability"], rows: [
+          ["the way", "0.8 × 1/3 × 1", "≈ 0.267"],
+          ["the order has shipped today", "0.8 × 1/3 × 2/3 × 1/3 × 1 × 1", "≈ 0.059"],
+          ["your order has shipped today", "0.2 × 1 × 2/3 × 1/3 × 1 × 1", "≈ 0.044"],
+          ["the refund is on the way", "0.8 × 1/3 × 1/2 × 1 × 1 × 1/3 × 1", "≈ 0.044"],
+        ] },
+        { type: "p", text: "Two lessons hide in this table. First, short outputs have fewer factors below 1, so a weak model favours them. Second, the model only sees one word back. After “the” it cannot tell whether “on” came before, so it treats “the way” at the start of a reply as normal. More context is the cure, and that is exactly what large models add." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the sampling step on its own. We give four candidate next words a score, turn the scores into probabilities at three temperatures, and then draw 1,000 words each time to see what the customer would actually get." },
+        { type: "code", lang: "python", title: "practice_sampling.py", code: `import math
+import random
+
+# Illustrative scores (logits) for the word after "Your order has"
+logits = {"been": 2.0, "shipped": 1.4, "arrived": 0.3, "exploded": -1.5}
+
+def softmax(scores, temperature):
+    # Divide each score by the temperature, then turn scores into probabilities
+    exps = {w: math.exp(s / temperature) for w, s in scores.items()}
+    total = sum(exps.values())
+    return {w: e / total for w, e in exps.items()}
+
+def sample_counts(temperature, draws=1000, seed=7):
+    # Draw many next words and count how often each one is picked
+    random.seed(seed)
+    probs = softmax(logits, temperature)
+    picks = random.choices(list(probs), weights=list(probs.values()), k=draws)
+    return probs, {w: picks.count(w) for w in probs}
+
+for t in [0.2, 1.0, 3.0]:
+    probs, counts = sample_counts(t)
+    print(f"temperature {t}")
+    for w in logits:
+        print(f"  {w:9s} p = {probs[w]:.3f}   picked {counts[w]:4d} / 1000")`, output: `temperature 0.2
+  been      p = 0.952   picked  946 / 1000
+  shipped   p = 0.047   picked   54 / 1000
+  arrived   p = 0.000   picked    0 / 1000
+  exploded  p = 0.000   picked    0 / 1000
+temperature 1.0
+  been      p = 0.568   picked  608 / 1000
+  shipped   p = 0.312   picked  263 / 1000
+  arrived   p = 0.104   picked  115 / 1000
+  exploded  p = 0.017   picked   14 / 1000
+temperature 3.0
+  been      p = 0.371   picked  404 / 1000
+  shipped   p = 0.304   picked  289 / 1000
+  arrived   p = 0.210   picked  187 / 1000
+  exploded  p = 0.115   picked  120 / 1000`,
+          walkthrough: [
+            { lines: [4, 5], note: "Four candidate words with made-up scores. A higher score means the model likes the word more. “exploded” is the bad choice." },
+            { lines: [7, 11], note: "Softmax with temperature: divide each score by the temperature, exponentiate, then divide by the total so the results add up to 1." },
+            { lines: [13, 18], note: "Draw 1,000 words using those probabilities and count how often each word was picked. The fixed seed makes the run repeatable." },
+            { lines: [20, 24], note: "Repeat for a low, a normal and a high temperature and print probability next to the real pick count." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Add `0.05` to the temperature list. Predict first: how many of the 1,000 picks will be “been”?",
+          "Change `draws=1000` to `draws=10` and fix the last print to match. Predict: will the counts still look like the probabilities?",
+          "Raise the score of “exploded” from `-1.5` to `2.5`. Predict which word wins at temperature 1.0, and whether a low temperature makes the bad word rarer or more common.",
+        ] },
+        { type: "check", question: "At temperature 3.0 the word “exploded” was picked 120 times in 1,000, but only 14 times at temperature 1.0. The model's scores did not change. What does this tell us about where risky output can come from?", answer: "It can come from the sampling settings, not only from the model. A high temperature flattens the probabilities, so words the model itself rated as unlikely get picked far more often. The same model can be safe or sloppy depending on how we sample from it." },
+        { type: "check", question: "At temperature 1.0, “been” has p = 0.568 but was picked 608 times, not 568. Is that a bug?", answer: "No. Sampling is random, so counts wobble around probability × draws. With 1,000 draws a gap of a few dozen is normal. With more draws the share gets closer to 0.568; with only 10 draws it can be far off." },
       ],
     },
     {

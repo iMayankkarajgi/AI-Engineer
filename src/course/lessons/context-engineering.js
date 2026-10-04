@@ -1,6 +1,6 @@
 export default {
   id: "context-engineering",
-  minutes: 18,
+  minutes: 23,
   hook: "When an AI assistant gives a wrong answer, is the model usually the problem, or is it what we showed the model?",
   summary: "Context engineering is the work of deciding what information goes into an LLM's context window for each call: instructions, memory, history, retrieved documents, tool definitions and tool results. The model only knows what is in front of it, so selecting, ordering, compressing and isolating that information often matters more than clever wording. Good context is relevant, sufficient, compact and well structured.",
   sections: [
@@ -170,6 +170,67 @@ total: 66 of 70 tokens`,
           "**Evaluate end to end** with a test set of real questions whenever the assembly logic changes."
         ] },
         { type: "callout", tone: "example", title: "Real-world use", text: "Coding agents decide which files, error messages and test results to show the model at each step, and summarize the session when it gets long. Customer-support bots combine a customer profile from a database, the last few messages, policy documents from search and order data from tools. Research assistants hand sub-questions to sub-agents and merge their short reports." }
+      ]
+    },
+    {
+      id: "budget-and-diagnosis",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "Two skills turn the ideas above into daily practice: doing the budget arithmetic before we build, and reading a failed call to find which part of the context let us down." },
+        { type: "steps", title: "A worked budget (illustrative numbers)", items: [{ title: "Start from the window", text: "Say our model has an 8,000-token window." }, { title: "Reserve the answer", text: "Input and output share the window. We keep 1,000 tokens for the reply, which leaves 7,000 for input." }, { title: "Subtract the fixed parts", text: "System prompt 600, tool definitions 900, output format 100. That is 1,600, so 5,400 tokens remain." }, { title: "Split the flexible parts", text: "Question up to 200, memory 300, history 1,400, retrieved documents 3,500. Together: 5,400." }, { title: "Turn tokens into counts", text: "With chunks of about 500 tokens, 3,500 tokens means at most 7 chunks. If retrieval returns 10, three must be dropped or compressed, and code should decide which." }] },
+        { type: "p", text: "The budget in our code example was only 70 tokens, but the logic is the same at any size: fixed parts first, then a hard cap for each flexible part." },
+        { type: "table", caption: "From symptom to cause: what to look for in the logged context", head: ["Symptom", "Likely context cause", "What to check in the log"], rows: [["A confident answer that is wrong", "The needed document was never retrieved", "Search the logged context for the fact. If it is absent, fix retrieval."], ["The fact is present but ignored", "It sits in the middle of a long, cluttered window", "Count the tokens around it. Cut weak chunks and move the fact near the question."], ["The model follows an outdated rule", "An old instruction in the history contradicts the system prompt", "Look for two rules that disagree. Summarize or drop the old one."], ["The answer stops mid-sentence", "The input left too little room for the output", "Compare the input token count with the window size."]] }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a packer that works by priority. Each piece of context has a priority, a full version and, for some pieces, a short version. Under a tight budget the packer tries the full text first, then the short one, and only then drops the piece. At the end it lays out the kept pieces in a fixed order, with the question last." },
+        { type: "code", lang: "python", title: "practice_priority_packer.py", code: `def tokens(text):
+    return len(text.split())          # rough stand-in for a tokenizer
+
+# (name, priority, full text, short version). Lower number = more important.
+items = [
+    ("system",   0, "You are Acme's support assistant. Cite doc ids.", None),
+    ("question", 0, "Does the warranty cover my X200 leak?", None),
+    ("warranty", 1, "X200 warranty: we cover parts for 2 years from purchase. "
+                    "A worn gasket counts as a part.", "X200 warranty: parts and gaskets, 2 years."),
+    ("order",    1, "order_id=1009 status=delivered purchased=2025-08-03 carrier=FastShip "
+                    "tracking=ZX81 gift_wrap=no", "Order 1009 purchased 2025-08-03."),
+    ("history",  2, "user: my blender leaks | assistant: which model? | user: the X200",
+                    "User has a leaking X200."),
+    ("promo",    3, "This month all Acme mixers are cheaper for Pro members.", None),
+]
+ORDER = ["system", "promo", "history", "order", "warranty", "question"]  # question last
+
+def pack(budget):
+    chosen, used = {}, 0
+    for name, _, full, short in sorted(items, key=lambda it: it[1]):
+        for label, text in (("full", full), ("short", short)):
+            if text and used + tokens(text) <= budget:   # try full, then short
+                chosen[name] = (label, tokens(text))
+                used += tokens(text)
+                break
+    return [n for n in ORDER if n in chosen], chosen, used
+
+for budget in (70, 44, 30):
+    layout, chosen, used = pack(budget)
+    print(f"budget {budget}: used {used}")
+    print("  kept:", ", ".join(f"{n}({chosen[n][0]}, {chosen[n][1]})" for n in layout))
+    print("  dropped:", [it[0] for it in items if it[0] not in chosen])`, output: `budget 70: used 60
+  kept: system(full, 8), promo(full, 10), history(full, 12), order(full, 6), warranty(full, 17), question(full, 7)
+  dropped: []
+budget 44: used 43
+  kept: system(full, 8), history(short, 5), order(full, 6), warranty(full, 17), question(full, 7)
+  dropped: ['promo']
+budget 30: used 28
+  kept: system(full, 8), order(full, 6), warranty(short, 7), question(full, 7)
+  dropped: ['history', 'promo']`, walkthrough: [{ lines: [4, 15], note: "The candidate pieces. Each has a priority (0 is most important), a full text and an optional short version." }, { lines: [16, 16], note: "The layout order used in the final window. It is separate from priority: the question is top priority but goes last." }, { lines: [18, 26], note: "The packer: walk the pieces by priority, take the full version if it fits, else the short one, else nothing." }, { lines: [28, 32], note: "Run three budgets and print what was kept in which form, and what was dropped." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Add `50` to the list of budgets. Before running, predict which pieces are full, short or dropped.", "Give `promo` priority 0 and look at budget 30. Predict which piece gets squeezed out. Is that what we want from a wrongly set priority?", "Give `promo` a short version such as `\"Mixers cheaper for Pro.\"` and look at budget 44 again. Predict whether it gets in."] },
+        { type: "check", question: "At budget 30 the warranty document is kept in its short form, while the history is dropped. Why is that a better outcome for this question than full history and no warranty?", answer: "The question asks about warranty cover, so the warranty text is the one piece the model cannot answer without. The short version still carries the key fact: parts and gaskets, 2 years. The history only repeats that the user has a leaking X200, which the question already says. Compressing a high-value piece beats keeping a low-value piece whole." },
+        { type: "check", question: "The packer chooses pieces by priority but lays them out in the `ORDER` list. Why keep those two orders separate?", answer: "They answer different questions. Priority decides *what survives* when space is short. Layout decides *where each survivor sits* in the window: stable instructions first, so a cache can reuse them, and the question last, close to where the answer begins. If we laid the pieces out by priority, the question would sit near the top with all the documents after it." }
       ]
     },
     {

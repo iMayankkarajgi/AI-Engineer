@@ -1,6 +1,6 @@
 export default {
   id: "how-does-cursor-work",
-  minutes: 22,
+  minutes: 27,
   hook: "When we type in Cursor and a grey suggestion appears before we have finished thinking, or the agent edits five files in one go, what is actually happening behind the screen?",
   summary: "Cursor is a code editor (built on VS Code) with AI woven into every part of it. It indexes our codebase into embeddings so it can find relevant code by meaning, uses a small fast model for Tab predictions, larger models for Chat and the Agent, and a specialised apply step that merges suggested edits into files quickly. Different jobs use different models because each job has a different trade-off between speed, cost and intelligence, and privacy settings control what is stored.",
   sections: [
@@ -149,6 +149,71 @@ for p, s in sorted(((p, float(q @ v)) for p, v in index.items()), key=lambda t: 
         { type: "chart", kind: "hbar", title: "Rough latency budget per feature", unit: " s", labels: ["Tab suggestion", "Apply an edit", "Chat answer", "Agent task"], series: [ { name: "Typical seconds", values: [0.3, 2, 10, 120] } ], caption: "Illustrative orders of magnitude only, not measured figures. The point: budgets differ by more than 100×, so one model cannot serve all features well." },
         { type: "p", text: "**Privacy.** Requests go from the editor through Cursor's servers to the model providers. Cursor offers a **Privacy Mode**; with it enabled, Cursor states that code is not stored by Cursor or its model providers for training (it relies on zero-data-retention agreements with providers). For indexing, embeddings and obfuscated metadata are stored, while the plain code is read from our local machine when needed. `.cursorignore` keeps files out of indexing and AI features. Organisations should check the current security documentation, because these policies are what really matter for compliance." },
         { type: "check", question: "A teammate worries that turning on codebase indexing uploads the whole repo as plain text to be stored. How would you answer, based on Cursor's documented design?", answer: "Chunks are sent to compute embeddings, and what is stored remotely is the embeddings plus obfuscated paths and line ranges; the actual code shown to the model is read locally at request time. Files can be excluded with `.cursorignore`, and Privacy Mode controls retention. For strict compliance, verify against Cursor's current security docs." }
+      ]
+    },
+    {
+      id: "worked-merkle-sync",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The mini index above had three files, so its Merkle tree saved almost nothing. Let us count on a larger project. Take 20,000 files spread evenly over 200 folders, 100 files each, and a two-level tree like the one in our code: one root hash, 200 folder hashes and 20,000 file hashes. We edit 3 files that sit in 2 folders. The layout is illustrative." },
+        { type: "steps", title: "Finding the 3 changed files", items: [{ title: "Compare the root", text: "1 comparison. The roots differ, so something changed." }, { title: "Compare the folder hashes", text: "200 comparisons. 198 folders match and are skipped whole. 2 folders differ." }, { title: "Open the 2 changed folders", text: "2 × 100 = 200 file-hash comparisons. They reveal the 3 changed files." }, { title: "Re-embed", text: "Only those 3 files are chunked and embedded again." }, { title: "Add it up", text: "1 + 200 + 200 = 401 comparisons, against 20,000 if we compared every file hash. That is about 50 times fewer." }] },
+        { type: "chart", kind: "hbar", title: "Hash comparisons needed to find 3 changed files", xLabel: "Comparisons", labels: ["Compare every file hash", "Two-level Merkle tree"], series: [{ name: "Comparisons", values: [20000, 401] }], caption: "Illustrative: 20,000 files in 200 equal folders, with edits in 2 folders. A deeper tree of nested folders can skip even more." },
+        { type: "p", text: "Two details are worth noticing. The count depends mostly on how many folders the edits touch, not on the size of the project: a project ten times larger, with the same edits in 2 folders, needs 1 + 2,000 + 200 = 2,201 comparisons, not ten times 401. And comparing hashes is the cheap part. The costly work is embedding, and that is done for 3 files either way, as long as we know which 3. The tree's job is to find them quickly." },
+        { type: "p", text: "When nothing has changed at all, the answer costs a single comparison of the root." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a plain-code stand-in for the apply step. It takes the original file and a sketch made of changed lines plus `# ... existing code ...` markers, and it produces the full new file. Then it prints the diff a person would review. Cursor uses a trained model for this job; our version uses a simple copying rule, which is enough to see why the step exists and how it can go wrong." },
+        { type: "code", lang: "python", title: "practice_apply_sketch.py", code: `import difflib
+
+MARK = "# ... existing code ..."
+original = ["def total(prices):",
+            "    subtotal = sum(prices)",
+            "    tax = subtotal * 0.2",
+            "    return subtotal + tax",
+            "",
+            "def label(name):",
+            "    return name.upper()"]
+# The sketch a chat model might write: changed lines plus markers
+sketch = ["def total(prices, discount=0):",
+          "    subtotal = sum(prices) - discount",
+          "    " + MARK,
+          "",
+          "def label(name):",
+          "    " + MARK]
+
+def apply(original, sketch):
+    # Plain-code stand-in for the apply step: build the full new file
+    out, i = [], 0                        # i points into the original file
+    for j, line in enumerate(sketch):
+        if line.strip() == MARK:
+            # Copy original lines until the sketch's next line shows up
+            stop = sketch[j + 1] if j + 1 < len(sketch) else None
+            while i < len(original) and original[i] != stop:
+                out.append(original[i]); i += 1
+        else:
+            out.append(line); i += 1      # a line the sketch rewrote
+    return out
+
+new = apply(original, sketch)
+copied = sum(a == b for a, b in zip(original, new))
+print(f"{copied} of {len(new)} lines copied unchanged from the old file")
+for d in difflib.unified_diff(original, new, "before", "after", lineterm="", n=0):
+    print(d)`, output: `5 of 7 lines copied unchanged from the old file
+--- before
++++ after
+@@ -1,2 +1,2 @@
+-def total(prices):
+-    subtotal = sum(prices)
++def total(prices, discount=0):
++    subtotal = sum(prices) - discount`, walkthrough: [{ lines: [3, 17], note: "The marker text, the original file as a list of lines, and the sketch: two rewritten lines plus markers that stand for unchanged code." }, { lines: [19, 30], note: "The merge rule. A normal sketch line replaces one original line. A marker copies original lines until the sketch's next line appears." }, { lines: [32, 36], note: "Build the new file, count the lines that were copied unchanged, and print a unified diff for review." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Delete the empty string `\"\"` from `sketch`. Predict the new file before running. Look at which line the first marker now waits for.", "Insert a new line, `\"    prices = list(prices)\"`, as the second line of `sketch`. Predict which original line goes missing from the result, then find it in the diff.", "Replace the last marker line with `\"    return name.lower()\"`. Predict the hunks of the diff and the “copied unchanged” count."] },
+        { type: "check", question: "The program reports that 5 of 7 lines were copied unchanged. How does that number relate to the speculative edits idea from this lesson?", answer: "Speculative edits rest on the same observation: most of the new file is identical to the old one. Here 5 of 7 lines need no new writing at all, and only 2 must be produced fresh. That is why the old file makes a good draft: long unchanged stretches can be checked and accepted quickly, and slow token-by-token generation is needed only where the code really changes." },
+        { type: "check", question: "Our copying rule stops when it meets the sketch's next line in the original file. Suppose that next line were `return x`, and the original file had `return x` in three functions. What could go wrong, and who catches it?", answer: "The rule would stop at the first `return x` it meets, which may not be the one the sketch meant, so code could be dropped or land in the wrong function. The sketch is ambiguous, and no merging rule can fully repair that. The safety net is the diff: a reviewer who reads it sees lines removed that nobody asked to remove." }
       ]
     },
     {

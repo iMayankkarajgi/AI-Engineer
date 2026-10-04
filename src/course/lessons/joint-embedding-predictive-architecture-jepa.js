@@ -1,6 +1,6 @@
 export default {
   id: "joint-embedding-predictive-architecture-jepa",
-  minutes: 24,
+  minutes: 29,
   hook: "If you see half of a dog behind a fence, you instantly “know” the rest is there, without imagining every hair. Can a machine learn to predict like that?",
   summary: "JEPA (Joint Embedding Predictive Architecture) is a self-supervised learning design proposed by Yann LeCun. Instead of predicting the missing part of an input pixel by pixel, it encodes both the visible part and the hidden part into embeddings and trains a predictor to guess the hidden part's embedding from the visible part's. This lets the model ignore unpredictable detail and focus on meaning, avoids the need for negative examples, and is a key building block in LeCun's vision of world models. I-JEPA applies it to images and V-JEPA to video.",
   sections: [
@@ -162,7 +162,85 @@ target weights after 1000 EMA steps: 0.982 (slowly follows 1.0)`, walkthrough: [
         { type: "p", text: "**Why it matters:** if future AI systems need to understand and plan in the physical world (robots, video understanding, autonomous agents), they need to predict consequences efficiently. Predicting everything at the pixel level is expensive and unnecessary; predicting abstract states is closer to how we seem to reason. JEPA is one leading proposal for learning those abstract predictive models from observation." },
         { type: "callout", tone: "warn", title: "Common misunderstandings", text: "JEPA is not a generative model: it does not produce images or video by itself (a separate decoder would be needed). It is not yet a replacement for LLMs on language tasks. And “no negatives” does not mean “no collapse risk”: the EMA target, stop-gradient or variance regularisation are essential. Whether JEPA-style world models will be the path to more general intelligence is an open research debate, not a settled fact." }
       ]
-    }
+    },
+    {
+      id: "going-deeper-collapse",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "We said collapse means every input gets the same embedding. In practice the more common failure is quieter. The embedding keeps a few useful dimensions and the rest go flat. This is called **dimensional collapse** (or partial collapse). The prediction loss looks healthy, because a flat dimension is trivially easy to predict. So we cannot find it by watching the loss. We have to look at the embeddings themselves." },
+        { type: "p", text: "A simple check: take a batch of embeddings and compute the **standard deviation of each dimension** across the batch. A healthy dimension varies from input to input. A dead one barely moves. Methods such as VICReg turn this check into a training penalty: for each dimension, add max(0, 1 − std) to the loss. Here is that penalty worked by hand for a made-up 3-dimension embedding." },
+        { type: "table", caption: "Illustrative batch statistics for a 3-dimension embedding", head: ["Dimension", "Std across the batch", "Penalty max(0, 1 − std)", "Reading"], rows: [
+          ["1", "1.10", "0", "Healthy: varies more than the target of 1"],
+          ["2", "0.90", "0.10", "Slightly low: a gentle nudge"],
+          ["3", "0.02", "0.98", "Collapsed: almost the same for every input"]
+        ] },
+        { type: "p", text: "The average penalty is (0 + 0.10 + 0.98) / 3 = 0.36, and nearly all of it comes from dimension 3. The gradient of this term pushes the encoder to spread that dimension out again. I-JEPA does not use this penalty; it relies on the EMA target and stop-gradient instead. But the per-dimension std is still the right thing to *monitor* in any JEPA-style run." },
+        { type: "p", text: "The EMA momentum `m` is the other dial worth understanding in numbers. After k steps, the target encoder has absorbed a share 1 − mᵏ of a change in the context encoder. A handy rule: the target averages over roughly 1 / (1 − m) recent steps." },
+        { type: "table", caption: "How fast the target encoder follows, computed from 1 − mᵏ", head: ["Momentum m", "Averages over about", "Share absorbed after 100 steps", "Share absorbed after 1,000 steps"], rows: [
+          ["0.9", "10 steps", "≈ 100%", "≈ 100%"],
+          ["0.99", "100 steps", "63%", "≈ 100%"],
+          ["0.996", "250 steps", "33%", "98%"],
+          ["0.999", "1,000 steps", "10%", "63%"]
+        ] },
+        { type: "steps", title: "Reading the momentum dial", items: [
+          { title: "Too low", text: "With m = 0.9 the target is almost a copy of the context encoder. Both sides can drift together towards a constant output, so the protection against collapse is weak." },
+          { title: "Too high", text: "With m very close to 1 the target hardly moves. It is stable, but it keeps offering stale targets, so learning is slow." },
+          { title: "In between", text: "Values near 0.996, often raised towards 1 as training goes on, give a target that is steady from one step to the next but still improves over thousands of steps." },
+          { title: "What to watch", text: "Whatever m we choose, we log the per-dimension std of the target embeddings. If it sinks towards zero, the run is collapsing, however good the loss looks." }
+        ] }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a small **collapse monitor**. Three hand-made encoders embed the same scenes: a healthy one, one that silently drops a dimension, and one that outputs a constant. For each we print the JEPA prediction loss, the std of each embedding dimension, the variance penalty, and how much of the true scene facts a linear readout can recover. Watch which number tells the truth." },
+        { type: "code", lang: "python", title: "practice_collapse_monitor.py", code: `import numpy as np
+
+rng = np.random.default_rng(0)
+N = 500
+facts = rng.normal(size=(N, 2))                  # 2 true facts per scene
+ctx = facts + 0.1 * rng.normal(size=(N, 2))      # visible view (a little noise)
+tgt = facts + 0.1 * rng.normal(size=(N, 2))      # hidden view (different noise)
+
+encoders = {                                     # three candidate 2 -> 2 encoders
+    "healthy":   np.array([[1.0, 0.0], [0.0, 1.0]]),   # keeps both facts
+    "one dim":   np.array([[1.0, 0.0], [0.0, 0.0]]),   # silently drops fact 2
+    "collapsed": np.zeros((2, 2)),                     # outputs a constant
+}
+
+def fit(X, Y):                                   # least-squares linear map X -> Y
+    return np.linalg.lstsq(X, Y, rcond=None)[0]
+
+print("encoder    pred loss  std per dim   var penalty  facts recovered")
+for name, E in encoders.items():
+    s_ctx, s_tgt = ctx @ E, tgt @ E              # embeddings of both views
+    pred = s_ctx @ fit(s_ctx, s_tgt)             # predictor: context -> target
+    loss = ((pred - s_tgt) ** 2).mean()          # the JEPA prediction loss
+    std = s_tgt.std(axis=0)
+    penalty = np.maximum(0, 1 - std).mean()      # hinge: wants std >= 1 per dim
+    # Probe: how much of the true facts can a linear readout get back?
+    resid = facts - s_tgt @ fit(s_tgt, facts)
+    r2 = 1 - resid.var() / facts.var()
+    print(f"{name:9s}  {loss:9.4f}  [{std[0]:.2f}, {std[1]:.2f}]  {penalty:11.2f}  {r2:14.0%}")`, output: `encoder    pred loss  std per dim   var penalty  facts recovered
+healthy       0.0195  [0.98, 0.97]         0.02             99%
+one dim       0.0099  [0.98, 0.00]         0.51             50%
+collapsed     0.0000  [0.00, 0.00]         1.00              0%`, walkthrough: [
+          { lines: [5, 7], note: "Each scene has 2 true facts. The context view and the target view both show them, each with its own small noise." },
+          { lines: [9, 12], note: "Three encoders as 2 × 2 matrices: keep both facts, keep only the first, or output zeros for everything." },
+          { lines: [20, 24], note: "Embed both views, fit a predictor from context embedding to target embedding, and compute the prediction loss, the per-dimension std and the variance penalty." },
+          { lines: [25, 28], note: "The honest test: a linear probe tries to rebuild the true facts from the embedding. We report the share of their variance it recovers." }
+        ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Raise the view noise from `0.1` to `0.5` in both views. Predict which encoder's prediction loss rises the most, and whether the std and penalty columns change much.",
+          "Add an encoder that shrinks instead of dropping: `\"tiny dim\": np.array([[1.0, 0.0], [0.0, 0.01]])`. Predict its penalty and its “facts recovered”. Is a tiny dimension the same as a dead one for a linear probe?",
+          "Change the penalty target from `1` to `0.5` in the `penalty` line. Predict which rows change, and what a lower target means for how spread out the embeddings must be."
+        ] },
+        { type: "check", question: "Rank the three encoders by prediction loss, then by “facts recovered”. What do the two rankings tell us?", answer: "By loss, collapsed is best (0.0000), then one dim (0.0099), then healthy (0.0195). By facts recovered the order is exactly reversed: 99%, 50%, 0%. The prediction loss rewards having less to predict, so on its own it prefers the least informative encoder. That is why a JEPA needs an anti-collapse mechanism, and why we monitor variance and not only the loss." },
+        { type: "check", question: "The “one dim” encoder has about half the prediction loss of the healthy one. Where did the other half go?", answer: "Each embedding dimension carries the view noise of its own fact, and that noise cannot be predicted from the other view. The healthy encoder pays this unpredictable cost on two dimensions. The one-dim encoder outputs a constant 0 on the second dimension, which is predicted perfectly, so it pays the cost only once. It lowered its loss by throwing information away, and the std column [0.98, 0.00] is what gives it away." }
+      ]
+    },
   ],
   quiz: [
     { q: "What does a JEPA predictor try to predict?", options: ["The raw pixel values of the hidden region of the image", "The target encoder's embedding of the hidden region", "Whether two augmented images show the same object", "The next word of a caption written about the image"], answer: 1, explain: "JEPA predicts in representation space: the target encoder's embedding of the hidden part." },

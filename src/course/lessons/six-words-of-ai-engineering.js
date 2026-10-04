@@ -1,6 +1,6 @@
 export default {
   id: 'six-words-of-ai-engineering',
-  minutes: 18,
+  minutes: 23,
   hook: 'Six words show up in almost every AI job post and product demo: LLM, RAG, MCP, Agent, Fine-tuning and Quantization. What does each one actually do, and how do they click together into one working product?',
   summary: 'An LLM is a model that predicts text; RAG feeds it fresh facts at question time; MCP is a standard plug that connects it to tools and data; an Agent lets it act in a loop; Fine-tuning changes its habits by training; Quantization shrinks it so it runs cheaply. We tour all six through one running example: a support assistant for an online shop.',
   sections: [
@@ -174,6 +174,92 @@ mean absolute error after round trip: 0.000186`, walkthrough: [
         ] },
         { type: 'callout', tone: 'tip', title: 'Start simple', text: 'A real team would not build all six on day one. A common order is: prompt a hosted LLM, add RAG for knowledge, add tools and an agent loop when actions are needed, then consider fine-tuning and quantization (or a smaller model) when quality, cost, or latency demand it. We also need **evaluation** (Module 14) to know whether each change actually helped.' },
         { type: 'callout', tone: 'warn', title: 'When not to reach for the fancy words', text: 'If a question can be answered by a simple search or a fixed form, an agent is overkill. If our documents fit easily in the prompt, a full RAG pipeline may not be needed. Every extra component adds cost and new ways to fail.' },
+      ],
+    },
+    {
+      id: 'common-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'Most early failures come from reaching for the wrong word. The cure is to name the **symptom** first, and only then pick the tool. A useful habit is to ask three questions in order: is the model missing a *fact*, missing an *ability to act*, or showing the wrong *habit*? Each answer points to a different word.' },
+        { type: 'table', caption: 'ShopBot symptoms: the tempting fix and the fix that actually works', head: ['What we observe', 'Tempting but wrong', 'Better fix', 'Why'], rows: [
+          ['Bot states an old delivery time', 'Fine-tune on the new document', 'RAG: fix the document and re-index', 'It is a missing fact, and facts change'],
+          ['Bot says "I have refunded you" but no refund exists', 'A bigger model', 'Give it a real refund tool and check the tool result', 'Text alone cannot move money; the model only described an action'],
+          ['Bot calls the same tool again and again', 'More documents in RAG', 'A step limit and clearer tool results in the agent loop', 'It is a loop-control problem, not a knowledge problem'],
+          ['Replies are correct but too long and off-brand', 'More retrieved passages', 'Clearer instructions first, then fine-tuning', 'It is a habit, not a fact'],
+          ['Answers are good but each one costs too much', 'Remove RAG', 'A smaller or quantized model, then measure quality again', 'It is a serving-cost problem'],
+        ] },
+        { type: 'p', text: 'Notice the second row. A plain LLM will happily *write* that it took an action. Only a tool call that returns a result proves the action happened. So in an agent we trust the **observation**, never the model\'s own claim.' },
+        { type: 'steps', title: 'A quick diagnosis routine', items: [
+          { title: 'Read one failing chat', text: 'Do not guess from averages. Open a real failure and read the full prompt, the retrieved text and every tool call.' },
+          { title: 'Check what the model saw', text: 'If the right fact was not in the prompt, the retriever failed. That is a RAG problem.' },
+          { title: 'Check what the model did', text: 'If the fact was there but the wrong tool was called, or none was called, that is an agent or tool-description problem.' },
+          { title: 'Check how it said it', text: 'If facts and actions were right but tone or format was wrong, improve the instructions, and only then think about fine-tuning.' },
+          { title: 'Change one thing, then re-test', text: 'Fix a single component and run the same failing chats again, so we know what helped.' },
+        ] },
+        { type: 'callout', tone: 'tip', title: 'Cheapest fix first', text: 'Editing a prompt or a document is usually the quickest change. Adding a tool is more work. Fine-tuning needs data and training on top of that. We try the fixes in that order.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will build a tiny agent loop in plain Python. There is no real LLM here: a small rule function plays the part of the model and decides the next step. The tools live in one registry with one common shape, which is the idea behind MCP. Watch how the loop thinks, acts, observes and stops.' },
+        { type: 'code', lang: 'python', title: 'practice_agent_loop.py', code: `# A toy agent loop: a rule-based "model" picks tools until it can answer.
+ORDERS = {"4512": "lost", "7001": "delivered"}       # fake order database
+POLICY = "lost parcels get a full refund"            # fake retrieved document
+
+# Tool registry: one common shape (name -> function), like a tiny MCP server
+TOOLS = {
+    "get_order_status": lambda order_id: ORDERS.get(order_id, "unknown"),
+    "search_policy": lambda query: POLICY,
+    "issue_refund": lambda order_id: f"refund sent for {order_id}",
+}
+
+def decide(order_id, seen):
+    """Stand-in for the LLM: choose the next action from what we know so far."""
+    if "get_order_status" not in seen:
+        return "get_order_status", order_id
+    if seen["get_order_status"] != "lost":
+        return "answer", "No refund: the order is " + seen["get_order_status"]
+    if "search_policy" not in seen:
+        return "search_policy", "lost parcel"
+    if "issue_refund" not in seen:
+        return "issue_refund", order_id
+    return "answer", "Refund issued: " + seen["issue_refund"]
+
+def run_agent(order_id, max_steps=5):
+    seen = {}                                        # observations so far
+    for step in range(1, max_steps + 1):
+        action, arg = decide(order_id, seen)
+        if action == "answer":
+            return f"step {step}: ANSWER -> {arg}"
+        seen[action] = TOOLS[action](arg)            # act, then observe
+        print(f"step {step}: {action}({arg!r}) -> {seen[action]!r}")
+    return "stopped: step limit reached"
+
+for oid in ("4512", "7001"):
+    print(f"--- order {oid} ---")
+    print(run_agent(oid))`, output: `--- order 4512 ---
+step 1: get_order_status('4512') -> 'lost'
+step 2: search_policy('lost parcel') -> 'lost parcels get a full refund'
+step 3: issue_refund('4512') -> 'refund sent for 4512'
+step 4: ANSWER -> Refund issued: refund sent for 4512
+--- order 7001 ---
+step 1: get_order_status('7001') -> 'delivered'
+step 2: ANSWER -> No refund: the order is delivered`, walkthrough: [
+          { lines: [2, 3], note: 'Fake data: two orders and one policy sentence. In a real product these would be a database and a retrieved document.' },
+          { lines: [5, 9], note: 'The tool registry. Every tool is reached the same way, by name with one argument. That common shape is what a standard like MCP gives us.' },
+          { lines: [12, 22], note: 'The stand-in for the LLM. It looks at the observations so far and picks the next action, or decides it can answer.' },
+          { lines: [24, 32], note: 'The agent loop: decide, act, store the observation, repeat. The step limit stops a runaway loop.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change `max_steps=5` to `max_steps=2` in `run_agent`. Predict first: which order still gets an answer, and what does the other one print?',
+          'Add an order `"9000": "in transit"` to `ORDERS` and add `"9000"` to the final loop. Predict how many steps it takes and whether the refund tool is called.',
+          'Delete the two lines in `decide` that call `search_policy`. Predict what changes in the trace, and say why skipping the policy check would be risky in a real product.',
+        ] },
+        { type: 'check', question: 'Order 7001 finished in 2 steps but order 4512 needed 4. Nothing in the loop code says "use fewer steps for delivered orders". Where does the difference come from?', answer: 'From the decision function reacting to the observation. After the status tool returned "delivered", it chose to answer at once. The loop is the same for every request; the path through it depends on what the tools return. That is what separates an agent from a fixed script of steps.' },
+        { type: 'check', question: 'Suppose `decide` had a bug and always returned `get_order_status`. What would `run_agent` return, and which part of the code protects us?', answer: 'It would call the status tool five times and then return "stopped: step limit reached". The `max_steps` limit in the `for` loop protects us. Without a limit, a confused model could call tools forever and run up cost.' },
       ],
     },
   ],

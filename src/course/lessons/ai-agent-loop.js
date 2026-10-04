@@ -1,6 +1,6 @@
 export default {
   id: "ai-agent-loop",
-  minutes: 19,
+  minutes: 24,
   hook: "Every AI agent, from a tiny script to a coding assistant, runs the same few lines of code over and over; what are they, and how do they know when to stop?",
   summary: "The agent loop is the small piece of ordinary code that repeatedly calls the model, runs any tools it asks for, feeds the results back, and stops when the model gives a final answer or a limit is hit. Each pass is one think-act-observe cycle. Getting the loop right (stop conditions, error handling, parallel calls, budgets) is what separates a demo from a dependable agent.",
   sections: [
@@ -209,6 +209,92 @@ wander
           ] },
         { type: "callout", tone: "warn", title: "The most expensive bug", text: "No step limit plus a tool that keeps erroring. The model retries forever, and each retry re-sends the growing history. Every production loop needs a hard cap on steps and cost, no matter how good the model is." },
         { type: "p", text: "**Quick summary.** The agent loop is a simple `while` loop: call the model, run requested tools, append results, repeat. Each pass is a think-act-observe cycle. The model decides; the loop executes and enforces rules. Handle parallel calls together, never drop a result, turn errors into observations, and always pair the natural finish with hard budgets and stuck detection." }
+      ]
+    },
+    {
+      id: "worked-example-trimming",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The failure table says “truncate or summarise old tool outputs”. Let us do that by hand once, with small illustrative numbers, so the idea is concrete. Our loop has a rule: the history sent to the model must stay under 1,000 tokens." },
+        { type: "p", text: "After three steps the history holds the system prompt and goal (200 tokens), a log file from step 1 (600), a short lookup from step 2 (100), and a second log from step 3 (300). That is 1,200 tokens: over the limit before step 4 even starts." },
+        { type: "table", caption: "Three ways to get back under 1,000 tokens (illustrative numbers)",
+          head: ["Option", "What the history becomes", "Tokens", "What we lose"],
+          rows: [
+            ["Drop the oldest result", "200 + 100 + 300", "600", "Everything from step 1, including the clue the agent followed"],
+            ["Cut every result to 150 tokens", "200 + 150 + 100 + 150", "600", "The tails of both logs, which may hold the key line"],
+            ["Summarise the oldest result", "200 + 50 + 100 + 300", "650", "Detail from step 1, but its main finding is kept in 50 tokens"]
+          ] },
+        { type: "steps", title: "How the loop applies the third option",
+          items: [
+            { title: "Measure before every model call", text: "Count the tokens of the history. Here: 1,200, which is more than 1,000." },
+            { title: "Pick the oldest large observation", text: "The step 1 log is the oldest and the biggest. Recent results are usually the ones the model still needs in full." },
+            { title: "Replace it, do not delete it", text: "Swap its content for a short note such as “step 1: log showed disk full on node-7”. The tool call and its result message both stay, so the history is still consistent." },
+            { title: "Never touch the goal", text: "The system prompt and the user's goal are kept word for word. An agent that loses its goal wanders." },
+            { title: "Measure again", text: "Now 650 tokens. The loop calls the model for step 4." }
+          ] },
+        { type: "p", text: "No option is free. Dropping is cheapest but forgets. Cutting is simple but blind. Summarising keeps the most meaning but may need an extra model call to write the summary. Many loops start with a size cap on every result and add summarising only when runs get long." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will write a loop that handles two things the earlier example skipped: a tool that fails, and observations that are too big. The scripted model asks for a file with a typo in its name, reads the error, and recovers. The loop caps every observation and watches a history budget. We count words as a rough stand-in for tokens." },
+        { type: "code", lang: "python", title: "practice_resilient_loop.py", code: `# An agent loop that survives tool errors and keeps its history under a budget.
+FILES = {"notes.txt": "disk full on node-7 " * 12,       # a long file (48 words)
+         "node-7.log": "cleanup job disabled since Monday"}
+
+def read_file(name):
+    return FILES[name]                    # raises KeyError for a missing file
+
+def fake_model(history):
+    """Scripted LLM: reacts to the latest observation in the history."""
+    last = history[-1] if history else ""
+    if not history:
+        return ("read_file", "node7.log")              # a typo: file is missing
+    if last.startswith("error"):
+        return ("read_file", "notes.txt")              # recover: try another file
+    if "node-7" in last and "cleanup" not in last:
+        return ("read_file", "node-7.log")             # follow the clue
+    return ("final", "Disk filled up because the cleanup job is disabled.")
+
+def words(history):                        # crude stand-in for a token count
+    return sum(len(h.split()) for h in history)
+
+history, MAX_OBS_WORDS, BUDGET = [], 10, 40
+for step in range(1, 7):
+    action, arg = fake_model(history)
+    if action == "final":
+        print(f"step {step}: FINAL {arg}")
+        break
+    try:
+        obs = read_file(arg)
+    except Exception as e:                 # an error becomes an observation
+        obs = f"error: no file {e}"
+    kept = obs.split()[:MAX_OBS_WORDS]     # cap the size of every observation
+    obs = " ".join(kept) + (" ...[cut]" if len(obs.split()) > MAX_OBS_WORDS else "")
+    history.append(obs)
+    print(f"step {step}: read_file({arg!r}) -> {len(obs.split())} words, history={words(history)}")
+    if words(history) > BUDGET:
+        print("stopped: history budget used up")
+        break`, output: `step 1: read_file('node7.log') -> 4 words, history=4
+step 2: read_file('notes.txt') -> 11 words, history=15
+step 3: read_file('node-7.log') -> 5 words, history=20
+step 4: FINAL Disk filled up because the cleanup job is disabled.`,
+          walkthrough: [
+            { lines: [2, 6], note: "Two files and one tool. `read_file` raises `KeyError` when the name is wrong, like a real tool would." },
+            { lines: [8, 17], note: "The scripted model. Its first request has a typo. After that it only looks at the latest observation: an error makes it try another file, a clue makes it open the next file." },
+            { lines: [28, 33], note: "The two protections. The `try`/`except` turns a crash into an observation. The next two lines cut any observation down to `MAX_OBS_WORDS` and mark that it was cut." },
+            { lines: [34, 38], note: "Append the observation, report the history size, and stop if the budget is used up." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `BUDGET = 12`. Predict the step at which the loop stops and whether the agent reaches its final answer.",
+          "Set `MAX_OBS_WORDS = 3`. Predict what the model sees from `notes.txt`, and which branch of `fake_model` it takes next. Does it still find the cause?",
+          "Remove the `try`/`except` and call `read_file(arg)` directly. Predict the output of step 1. Which row of the loop-failure table is this?"
+        ] },
+        { type: "check", question: "At step 2 the file has 48 words but the output says 11 words. Where did the other words go, and why is the `...[cut]` marker worth adding?", answer: "The loop kept only the first 10 words and added one marker word, giving 11. The marker tells the model the observation is incomplete. Without it, the model could treat a cut-off file as the whole file and draw a wrong conclusion, or never think to ask for the rest." },
+        { type: "check", question: "This loop reaches the right answer even though its first tool call failed. Which part deserves the credit: the model or the loop?", answer: "Both, in different roles. The loop caught the exception and turned it into text in the history instead of crashing. The model then read that text and chose a different file. If the loop had crashed, the model would never have had the chance; if the model ignored the error, the loop's care would not have helped." }
       ]
     }
   ],

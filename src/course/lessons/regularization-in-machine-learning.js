@@ -1,6 +1,6 @@
 export default {
   id: 'regularization-in-machine-learning',
-  minutes: 18,
+  minutes: 23,
   hook: 'Our model fits the training data almost perfectly, then does far worse on new data. Can a tiny penalty on the size of its weights fix that?',
   summary: 'Overfitting happens when a model learns the noise in its training data instead of the real pattern. Regularisation fights it by adding a penalty on the model\'s weights to the loss, controlled by a strength λ. L1 (Lasso) adds λ·∑|w|, which drives many weights to exactly zero and so selects features; L2 (Ridge) adds λ·∑w², which shrinks all weights smoothly towards zero. We choose λ using validation data.',
   sections: [
@@ -153,6 +153,76 @@ lasso weights: [1.14, -0.02, -0.54, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]`, walkthrough:
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'Credit-risk and medical models often use L1 to keep a short, explainable list of predictors. Ridge is a strong default for forecasting with many correlated signals (for example, overlapping economic indicators). Logistic regression in common libraries such as scikit-learn applies L2 regularisation by default.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Choosing λ on the test set (that leaks the test set into model selection; use validation data). Forgetting to scale features. Turning λ up so high that the model underfits. And assuming L1 picked the "true" features: with correlated features, which one survives can change from one data sample to another.' },
         { type: 'check', question: 'A model has training MSE 0.30 and validation MSE 0.31, both much worse than a simple baseline. We are using Ridge with λ = 100. What should we try?', answer: 'Lower λ. Training and validation errors are similar and both high, which signals underfitting, not overfitting. Too much regularisation is forcing the weights too close to zero.' },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'With a single weight, both penalties can be solved on paper. That lets us see the shrinking happen number by number. We use three made-up points that lie exactly on the line `y = 2x`: (1, 2), (2, 4) and (3, 6). The model is `ŷ = w·x`. To keep the sums short we use the *sum* of squared errors here, not the mean.' },
+        { type: 'steps', title: 'Solving for w by hand', items: [
+          { title: 'Two sums are all we need', text: '∑x·y = 1×2 + 2×4 + 3×6 = 28. ∑x² = 1 + 4 + 9 = 14.' },
+          { title: 'No penalty', text: 'Least squares gives w = ∑xy / ∑x² = 28 / 14 = 2.0. This is the true slope.' },
+          { title: 'Ridge (L2)', text: 'Minimising ∑(y − w·x)² + λ·w² gives w = ∑xy / (∑x² + λ). The penalty sits in the **denominator**. With λ = 14: w = 28 / 28 = 1.0.' },
+          { title: 'Lasso (L1)', text: 'Minimising ∑(y − w·x)² + λ·|w| gives w = (∑xy − λ/2) / ∑x², or 0 if that would go below zero. The penalty is **subtracted** from the top. With λ = 14: w = (28 − 7) / 14 = 1.5.' },
+          { title: 'Turn λ up', text: 'At λ = 56, Ridge gives 28 / 70 = 0.4. Lasso gives (28 − 28) / 14 = 0. Exactly zero, and it stays zero for every larger λ.' },
+        ] },
+        { type: 'chart', kind: 'line', title: 'One weight under each penalty as λ grows', xLabel: 'λ', yLabel: 'w', series: [
+          { name: 'Ridge (L2)', points: [[0, 2], [7, 1.33], [14, 1], [28, 0.67], [56, 0.4], [84, 0.29], [112, 0.22]] },
+          { name: 'Lasso (L1)', points: [[0, 2], [7, 1.75], [14, 1.5], [28, 1], [56, 0], [84, 0], [112, 0]] },
+        ], caption: 'Computed from the two formulas above for the three example points. Lasso falls in a straight line and hits zero at λ = 56. Ridge bends and never reaches zero.' },
+        { type: 'p', text: 'The two formulas explain everything in this lesson. Dividing by a bigger number makes `w` smaller but can never make it zero. Subtracting a fixed amount reaches zero as soon as the penalty is as strong as the signal ∑xy. A feature with a weak link to the target has a small ∑xy, so Lasso removes it early. That is feature selection.' },
+        { type: 'callout', tone: 'warn', title: 'Notice the bias', text: 'The data lies exactly on `y = 2x`, with no noise at all, yet every λ above 0 gives a slope below 2. Regularisation always pulls the fit away from the training data. We accept that small, steady error (bias) because on noisy data it buys a bigger drop in the wild swings (variance). On clean data with plenty of examples, it only hurts.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will watch Ridge fix a different problem from the polynomial one: two features that are almost copies of each other. Think of the same length measured twice with slightly different rulers. The truth is that each feature has weight 1. We fit with six values of λ and use a validation set to choose.' },
+        { type: 'code', lang: 'python', title: 'practice_ridge_twins.py', code: `import numpy as np
+
+rng = np.random.default_rng(5)
+
+def make(n, wobble=0.01):
+    """Two features that are almost copies of each other."""
+    x1 = rng.normal(0, 1, n)
+    x2 = x1 + rng.normal(0, wobble, n)        # x2 is x1 plus a tiny wobble
+    y = x1 + x2 + rng.normal(0, 0.5, n)       # truth: each feature has weight 1
+    return np.column_stack([x1, x2]), y
+
+X_tr, y_tr = make(20)                         # small training set
+X_va, y_va = make(200)                        # validation set to choose lambda
+
+def ridge(lam):
+    """Closed-form ridge: w = (XᵀX + λI)⁻¹ Xᵀy."""
+    return np.linalg.solve(X_tr.T @ X_tr + lam * np.eye(2), X_tr.T @ y_tr)
+
+print("  lambda      w1      w2   w1+w2  train MSE  val MSE")
+for lam in (0, 0.001, 0.1, 1, 10, 100):
+    w = ridge(lam)
+    tr = ((X_tr @ w - y_tr) ** 2).mean()
+    va = ((X_va @ w - y_va) ** 2).mean()
+    print(f"{lam:8g}  {w[0]:6.2f}  {w[1]:6.2f}  {w.sum():6.2f}  {tr:9.3f}  {va:7.3f}")`, output: `  lambda      w1      w2   w1+w2  train MSE  val MSE
+       0   10.98   -9.06    1.91      0.296    0.304
+   0.001    4.88   -2.97    1.91      0.298    0.298
+     0.1    1.01    0.88    1.90      0.302    0.298
+       1    0.93    0.92    1.85      0.305    0.309
+      10    0.75    0.75    1.49      0.455    0.528
+     100    0.25    0.25    0.51      2.072    2.384`, walkthrough: [
+          { lines: [5, 10], note: 'Build the data. `x2` is `x1` plus a tiny wobble, so the two columns are almost identical. The target is `x1 + x2` plus noise.' },
+          { lines: [12, 13], note: 'Only 20 training rows, and 200 separate validation rows that the fit never sees.' },
+          { lines: [15, 17], note: 'Ridge in closed form. With `lam = 0` it is ordinary least squares.' },
+          { lines: [20, 24], note: 'For each λ print both weights, their sum, and the error on the training and validation sets.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Make the twins drift apart in new data only: change the validation line to `make(200, wobble=0.3)`. Predict which rows of the `val MSE` column get much worse, and which barely move.',
+          'Make the twins less alike everywhere: change the default `wobble=0.01` to `wobble=1.0`. Predict whether the λ = 0 weights are still wild.',
+          'Give the model more data: change `make(20)` to `make(2000)`. Predict whether the λ = 0 weights move closer to 1 and 1, and whether λ = 100 still underfits as badly.',
+        ] },
+        { type: 'check', question: 'At λ = 0 the weights are 10.98 and −9.06. At λ = 0.1 they are 1.01 and 0.88. Yet the validation error is almost the same (0.304 vs 0.298). How can such different weights predict almost equally well?', answer: 'Because the two features are nearly equal, the prediction is roughly (w1 + w2) × x1, and the sum is about 1.9 in both rows. The data pins down the sum but says almost nothing about how to split it, so without a penalty the split is decided by noise. Ridge picks the split with the smallest weights, which is the even one. The wild weights are still a risk: they only work while the two features stay almost identical.' },
+        { type: 'check', question: 'Training MSE is lowest at λ = 0. Why do we not simply choose λ = 0, and what would we choose from this table?', answer: 'Training error always favours λ = 0, because any penalty can only make the fit to the training rows worse. So it cannot be used to choose λ. On validation data, λ = 0.001 and λ = 0.1 tie for the lowest error (0.298). Between them, λ = 0.1 is the safer pick because its weights are small and close to the true values of 1 and 1.' },
       ],
     },
   ],

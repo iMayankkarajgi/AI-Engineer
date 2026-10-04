@@ -1,6 +1,6 @@
 export default {
   id: 'linear-regression-vs-logistic-regression',
-  minutes: 18,
+  minutes: 23,
   hook: 'Despite the shared word "regression", one of these models predicts numbers and the other answers yes-or-no questions. How can one small change, a sigmoid, turn the first into the second?',
   summary: 'Linear regression predicts a continuous number by fitting a straight line (or plane) that minimises squared error. Logistic regression predicts the probability of a yes/no outcome by passing the same kind of linear score through a sigmoid that squashes it into 0 to 1, and it is trained with log loss. Use linear regression for "how much?" and logistic regression for "which class?".',
   sections: [
@@ -159,6 +159,74 @@ line on 0/1 labels at 15 h: 1.82  (not a valid probability)`, walkthrough: [
           '**Extrapolating far outside the training range.** A line fitted on 1–10 hours says 20 hours gives a score of 150 out of 100.',
         ] },
         { type: 'check', question: 'A model predicts whether an email is spam. On some emails, it outputs 1.3 and on others −0.2. Which model was probably used, and what should we use instead?', answer: 'Linear regression, because only an unbounded line can output values outside 0–1. Use logistic regression, whose sigmoid output is always a valid probability.' },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'The code above ran 20,000 updates in a blink. Let us slow down and do the very first update of a logistic regression by hand. We use four made-up students so every number fits on one line.' },
+        { type: 'table', caption: 'Four illustrative students, before and after one update (learning rate 0.1)', head: ['Hours', 'Passed (y)', 'p at start (w = 0, b = 0)', 'p − y', 'p after one update'], rows: [
+          ['2', '0', '0.50', '+0.50', '0.55'],
+          ['4', '0', '0.50', '+0.50', '0.60'],
+          ['6', '1', '0.50', '−0.50', '0.65'],
+          ['8', '1', '0.50', '−0.50', '0.69'],
+        ] },
+        { type: 'steps', title: 'One update of w and b, by hand', items: [
+          { title: 'Predict', text: 'With `w = 0` and `b = 0`, every score is z = 0, so every probability is σ(0) = 0.5. The model knows nothing yet.' },
+          { title: 'Measure the loss', text: 'Each student costs −ln(0.5) ≈ 0.693, so the log loss is 0.693. This is the loss of a coin flip, a useful number to remember.' },
+          { title: 'Gradient for w', text: 'Average (p − y) × hours: (0.5×2 + 0.5×4 − 0.5×6 − 0.5×8) / 4 = (1 + 2 − 3 − 4) / 4 = −1.0. Negative, so `w` should go up.' },
+          { title: 'Gradient for b', text: 'Average (p − y): (0.5 + 0.5 − 0.5 − 0.5) / 4 = 0. The classes are balanced, so `b` does not move on this step.' },
+          { title: 'Update', text: 'w = 0 − 0.1 × (−1.0) = 0.1 and b = 0. New scores are z = 0.2, 0.4, 0.6, 0.8, which give p ≈ 0.55, 0.60, 0.65, 0.69.' },
+          { title: 'Check it helped', text: 'The loss falls from 0.693 to about 0.630. The passing students moved the right way. The failing ones moved the *wrong* way, from 0.50 up to 0.55 and 0.60.' },
+        ] },
+        { type: 'p', text: 'That last point is the interesting one. With `b = 0`, a positive `w` pushes *every* student above 0.5, because hours are never negative. The next update fixes it: the gradient for `b` is now the average of (p − y) ≈ (0.55 + 0.60 − 0.35 − 0.31) / 4 ≈ +0.12, which is positive, so `b` moves down. Step by step, `w` grows and `b` falls until the boundary −b / w sits between 4 and 6 hours.' },
+        { type: 'callout', tone: 'tip', title: 'A quick health check for any classifier', text: 'Compare the log loss with 0.693. A two-class model that scores about 0.693 on balanced data has learned nothing yet. A model far above 0.693 is worse than a coin flip, which usually means confident wrong answers or a bug such as swapped labels.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will train logistic regression on data that is **perfectly separable**: one cut-off splits every fail from every pass with no exceptions. Then we keep training for longer and longer and watch the weight, the boundary and the loss. One of them never settles.' },
+        { type: 'code', lang: 'python', title: 'practice_separable.py', code: `import numpy as np
+
+# Eight students. The labels are perfectly separable: everyone at or
+# below 4 hours failed and everyone at or above 5 hours passed.
+hours = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=float)
+passed = np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=float)
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+w, b, lr, done = 0.0, 0.0, 0.1, 0
+print("  steps      w       b  boundary  P(pass | 5 h)  log loss")
+for target in (100, 1_000, 10_000, 100_000):
+    while done < target:                       # keep training from where we stopped
+        p = sigmoid(w * hours + b)
+        w -= lr * ((p - passed) * hours).mean()   # gradient of log loss
+        b -= lr * (p - passed).mean()
+        done += 1
+    p = sigmoid(w * hours + b)
+    loss = -(passed * np.log(p) + (1 - passed) * np.log(1 - p)).mean()
+    print(f"{done:7d}  {w:5.2f}  {b:6.2f}  {-b / w:8.2f}  {sigmoid(w * 5 + b):13.3f}  {loss:8.4f}")`, output: `  steps      w       b  boundary  P(pass | 5 h)  log loss
+    100   0.43   -1.38      3.20          0.685    0.4081
+   1000   1.32   -5.68      4.29          0.718    0.1512
+  10000   3.18  -14.16      4.46          0.849    0.0490
+ 100000   6.82  -30.58      4.48          0.971    0.0082`, walkthrough: [
+          { lines: [3, 6], note: 'Eight students with clean labels: 1 to 4 hours fail, 5 to 8 hours pass. No noisy student this time.' },
+          { lines: [8, 9], note: 'The sigmoid turns any score into a value between 0 and 1.' },
+          { lines: [13, 18], note: 'Train in stages. The inner loop carries on from where it stopped, so the four rows show one long training run at four moments.' },
+          { lines: [15, 21], note: 'At each checkpoint print the weight, the bias, the boundary −b / w, the probability for a 5-hour student, and the log loss.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Swap two labels so the data is no longer separable: set `passed` to `[0, 0, 0, 1, 0, 1, 1, 1]`. Predict: does `w` still keep growing between 10,000 and 100,000 steps?',
+          'Add a small pull towards zero inside the loop, right after the `w` update: `w -= lr * 0.01 * w`. Predict whether `w` and the loss still change much between the last two rows.',
+          'Change `lr` from `0.1` to `1.0`. Predict whether `w` at 100 steps is larger or smaller than before, and whether the boundary gets close to 4.5 sooner.',
+        ] },
+        { type: 'check', question: 'The boundary barely moves after 10,000 steps (4.46, then 4.48), but `w` more than doubles. Why does training keep making `w` bigger?', answer: 'Because the data is perfectly separable. Once the boundary sits between 4 and 5 hours, making `w` and `b` larger keeps the boundary in place but makes the curve steeper, so every probability moves closer to its label and the log loss falls a little more. There is no finite best value. In practice we stop early or add regularisation (Lesson 2.7) to keep the weights sensible.' },
+        { type: 'check', question: 'Use the row for 100 steps. Is a student with 4 hours classified as pass or fail, and is that right?', answer: 'z = 0.43 × 4 − 1.38 = 0.34, which is above 0, so the model says pass. That is wrong: this student failed. The boundary is still at 3.20 hours, below 4. The model has not trained long enough, and the high log loss (0.41) is the warning sign.' },
       ],
     },
   ],

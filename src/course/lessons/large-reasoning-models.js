@@ -1,6 +1,6 @@
 export default {
   id: 'large-reasoning-models',
-  minutes: 22,
+  minutes: 27,
   hook: 'Why would a model that answers more slowly, and costs more per question, be the right choice for your hardest problems?',
   summary: 'A Large Reasoning Model (LRM) is an LLM trained, mostly with reinforcement learning on problems with checkable answers, to produce a long chain of reasoning before its final answer. Spending more tokens on thinking at answer time (test-time compute) makes it markedly better at maths, coding, logic and planning. The cost is latency and tokens, so we use LRMs for hard, multi-step problems and regular LLMs for simple, fast tasks.',
   sections: [
@@ -165,6 +165,74 @@ reward('42', '42') = 1.0 | reward('41', '42') = 0.0`,
           '**Expecting unlimited scaling.** Studies have found that on puzzles beyond a certain complexity, reasoning models can still collapse; more thinking is not a guarantee.',
         ] },
         { type: 'check', question: 'A team switches its customer FAQ bot from a regular LLM to an LRM. Answers barely improve, but latency triples and the bill doubles. What went wrong?', answer: 'FAQ answers are simple lookups that do not need multi-step reasoning, so the extra thinking adds cost and latency without benefit. Use a regular LLM (plus retrieval) for the FAQ and reserve the LRM, or a higher reasoning effort, for genuinely hard queries.' },
+      ],
+    },
+    {
+      id: 'group-rewards-by-hand',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: "We said GRPO compares each sampled answer with the average of its group. Let us do that by hand. For one problem the model samples 4 reasoning traces, a checker gives each final answer a reward of 1 or 0, and each trace gets an **advantage**: its reward minus the group average. (Implementations usually also divide by the spread of the group; we skip that to keep the numbers readable.)" },
+        { type: 'table', caption: "Advantages for four sampled answers to one problem (illustrative groups)", head: ['Group rewards', 'Group average', 'Advantages', 'What the update does'], rows: [
+          ['1, 0, 0, 1', '0.5', '+0.5, −0.5, −0.5, +0.5', 'Makes the two correct traces more likely and the two wrong ones less likely'],
+          ['0, 0, 0, 1', '0.25', '−0.25, −0.25, −0.25, +0.75', 'A strong push toward the one trace that worked'],
+          ['1, 1, 1, 1', '1.0', '0, 0, 0, 0', 'Nothing: the problem is already too easy'],
+          ['0, 0, 0, 0', '0.0', '0, 0, 0, 0', 'Nothing: no trace shows what a good answer looks like'],
+        ] },
+        { type: 'p', text: "The last two rows explain a practical point about training data. A problem teaches the model only when some samples succeed and some fail. Problems that are far too easy or far too hard give an advantage of zero for every trace, so they cost compute and change nothing. Good training sets sit at the edge of what the model can currently do, and that edge moves as the model improves." },
+        { type: 'p', text: "A second piece of arithmetic is the token bill. Suppose a visible answer is 200 tokens and the hidden reasoning before it is 3,000 tokens (illustrative). We are billed for 3,200 output tokens, 16 times the visible answer, and the same 3,200 count against the output limit. If the limit were 2,000, the model would run out during the reasoning and return no answer at all. An empty or cut-off reply from a reasoning model is very often this budget problem, not a model failure." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "The earlier script spent test-time compute in parallel, by voting. Here we will simulate the sequential kind: a model that tries, checks its own answer, and backtracks when the check fails. We give it a larger and larger budget of tries and watch accuracy and tokens." },
+        { type: 'code', lang: 'python', title: 'practice_check_and_retry.py', code: `import random
+random.seed(0)
+
+P_SOLVE = 0.4          # chance one attempt is right (illustrative)
+P_CATCH = 0.8          # chance the self-check notices a wrong attempt (illustrative)
+TOKENS_PER_TRY = 500   # thinking tokens spent per attempt (illustrative)
+
+def solve(max_tries):
+    # try, check, and backtrack until the check passes or the budget runs out
+    for attempt in range(1, max_tries + 1):
+        correct = random.random() < P_SOLVE
+        looks_ok = correct or random.random() > P_CATCH   # a wrong answer can slip by
+        if looks_ok or attempt == max_tries:
+            return correct, attempt
+
+trials = 20_000
+print("max tries  accuracy  avg thinking tokens")
+for budget in [1, 2, 4, 8, 16]:
+    results = [solve(budget) for _ in range(trials)]
+    accuracy = sum(ok for ok, _ in results) / trials
+    tokens = sum(tries for _, tries in results) / trials * TOKENS_PER_TRY
+    print(f"{budget:>9}  {accuracy:>8.3f}  {tokens:>19.0f}")
+
+# With endless tries, accuracy is capped by the wrong answers the check lets through
+ceiling = P_SOLVE / (P_SOLVE + (1 - P_SOLVE) * (1 - P_CATCH))
+print(f"ceiling with this checker: {ceiling:.3f}")`, output: `max tries  accuracy  avg thinking tokens
+        1     0.401                  500
+        2     0.598                  741
+        4     0.726                  906
+        8     0.767                  957
+       16     0.770                  954
+ceiling with this checker: 0.769`,
+          walkthrough: [
+            { lines: [4, 6], note: "Three illustrative settings: each attempt is right 40% of the time, the self-check catches 80% of wrong attempts, and one attempt costs 500 thinking tokens." },
+            { lines: [8, 14], note: "The think loop. A correct attempt always passes the check. A wrong attempt passes 20% of the time. The model stops at the first attempt that passes, or when the budget is used up." },
+            { lines: [16, 22], note: "Run 20,000 problems for each budget. Accuracy climbs from 0.40 to about 0.77, then stops climbing. Average tokens rise only a little, because most runs stop early." },
+            { lines: [24, 26], note: "The ceiling in closed form: correct answers divided by all answers that pass the check. With this checker it is 0.769, however long the model thinks." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `P_CATCH = 1.0`, a perfect self-check. Predict the ceiling and the accuracy at 16 tries before running.",
+          "Set `P_CATCH = 0.0`, a check that never notices errors. Predict the accuracy and the average tokens for every budget.",
+          "Set `P_SOLVE = 0.1`, a much harder problem, with `P_CATCH` back at `0.8`. Predict the ceiling from the formula on line 25, then run it.",
+        ] },
+        { type: 'check', question: "Accuracy stays near 0.77 even with 16 tries. Why does a bigger thinking budget not fix the remaining errors?", answer: "The limit is the check, not the budget. One in five wrong attempts passes the self-check and is returned as the answer, and once an answer passes, the model stops, so the extra tries are never used. Only a better way of verifying (tests, a calculator, a stricter checker) raises the ceiling." },
+        { type: 'check', question: "The budget doubles from 8 to 16 tries, but average thinking tokens stay at about 955. Why?", answer: "The budget is a cap, not a spend. Each attempt passes the check with probability 0.4 + 0.6 × 0.2 = 0.52, so a run needs about 2 attempts on average and almost never reaches 8. Raising the cap changes almost nothing. The tiny difference between 957 and 954 is sampling noise." },
       ],
     },
     {

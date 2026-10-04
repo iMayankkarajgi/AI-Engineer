@@ -1,6 +1,6 @@
 export default {
   id: 'reinforcement-learning-from-human-feedback-rlhf',
-  minutes: 22,
+  minutes: 27,
   hook: 'If people can easily tell which of two answers is better but cannot write down a formula for “good answer”, how do we train a model to give better answers?',
   summary: 'RLHF (reinforcement learning from human feedback) aligns a language model with human preferences in three stages: supervised fine-tuning on good examples, training a reward model on human comparisons, and reinforcement learning (usually PPO) to maximise that reward. A KL penalty keeps the model close to its starting point so it does not exploit the reward model’s flaws, a failure called reward hacking.',
   sections: [
@@ -166,6 +166,79 @@ r_RM=1.5, log-ratio=-0.09, r_total=1.59`, walkthrough: [
           '**Consider simpler alternatives:** DPO for offline preference data, or verifiable rewards (tests, exact answers) where they exist.',
         ] },
         { type: 'callout', tone: 'example', title: 'Where RLHF is used', text: 'RLHF and its descendants are part of the post-training of most major chat assistants, typically alongside SFT and other preference methods. Exact recipes differ by organisation and are often only partly public. Outside chat, the same idea is used for summarisation, code assistants and image generation models tuned on human preferences.' },
+      ],
+    },
+    {
+      id: 'worked-example-one-prompt',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us follow **one customer message** through stages 2 and 3 with small numbers. The message: “My e-bike battery died after 20 minutes. What now?” All numbers are illustrative.' },
+        { type: 'steps', title: 'One prompt, from comparison to policy update', items: [
+          { title: 'A human compares two replies', text: 'Reply A gives the battery-swap steps. Reply B apologises three times and offers a refund we do not give. The labeler picks **A**.' },
+          { title: 'The untrained reward model disagrees', text: 'It scores A at 0.2 and B at 0.6. The loss is `−log σ(0.2 − 0.6) = −log σ(−0.4) ≈ −log 0.40 ≈ 0.91`. That is above 0.69, the loss of a coin flip, because the model ranked the pair the wrong way.' },
+          { title: 'The reward model learns', text: 'After training on many such pairs it scores A at 1.4 and B at 0.4. The loss for this pair falls to about 0.31. The reward model is now frozen.' },
+          { title: 'The policy writes a new reply', text: 'In stage 3 the policy writes reply C. The reward model gives it **1.2**. Its summed log-ratio against the reference model is **3.0**: the policy has made this reply somewhat more likely than the SFT model did.' },
+          { title: 'Subtract the KL penalty', text: 'With `β = 0.1`: `r_total = 1.2 − 0.1 × 3.0 = 0.9`.' },
+          { title: 'Compare with what was expected', text: 'The value model expected 0.5 for this prompt. The advantage is `0.9 − 0.5 = +0.4`: better than expected. PPO raises the probability of reply C’s tokens, within its clip range.' },
+        ] },
+        { type: 'p', text: 'Now a second reply to the same prompt, to see the penalty bite:' },
+        { type: 'table', caption: 'Two replies to the same prompt (illustrative, β = 0.1, expected value 0.5)', head: ['Reply', 'RM score', 'Log-ratio', 'r_total', 'Advantage', 'Effect'], rows: [
+          ['C: steps to swap the battery', '1.2', '3.0', '0.9', '+0.4', 'Made more likely'],
+          ['D: very long, warm, vague', '1.6', '14.0', '0.2', '−0.3', 'Made less likely'],
+        ] },
+        { type: 'p', text: 'Reply D has the *higher* reward-model score, yet it is pushed down. It sits far from what the reference model would write, and the penalty of `0.1 × 14.0 = 1.4` outweighs its lead. This is the KL term doing its job: a high score earned far from familiar ground is treated with suspicion.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'Earlier we computed where the policy *ends up* for a given β. Now we will watch it get there. We simulate stage 3 as a training loop over four possible replies. The reward model has one flaw: it overrates long, flattering replies. We track what the reward model sees and, since this is a simulation, the true quality it cannot see.' },
+        { type: 'code', lang: 'python', title: 'practice_rlhf_loop.py', code: `import numpy as np
+
+replies = ["short correct", "detailed correct", "long flattering", "wrong"]
+pi_ref = np.array([0.40, 0.30, 0.20, 0.10])    # frozen SFT model
+rm_score = np.array([1.0, 1.5, 2.5, -1.0])     # reward model (overrates flattery)
+true_quality = np.array([1.0, 1.5, 0.2, -1.0]) # what people really think
+beta = 0.5
+
+def softmax(z):
+    e = np.exp(z - z.max())
+    return e / e.sum()
+
+logits = np.log(pi_ref)                        # the policy starts as the SFT copy
+print("step  RM reward  true quality     KL  P(long flattering)")
+for step in range(0, 201):
+    pi = softmax(logits)
+    kl = max(0.0, float(np.sum(pi * np.log(pi / pi_ref))))
+    if step in (0, 10, 50, 200):
+        print(f"{step:>4}  {pi @ rm_score:9.2f}  {pi @ true_quality:12.2f}  {kl:5.2f}  {pi[2]:18.2f}")
+    # Reward each reply gets: RM score minus the KL penalty term
+    r_total = rm_score - beta * np.log(pi / pi_ref)
+    advantage = r_total - pi @ r_total         # better or worse than average?
+    logits += 0.2 * pi * advantage             # policy-gradient step
+
+print("final policy:", dict(zip(replies, softmax(logits).round(2).tolist())))`, output: `step  RM reward  true quality     KL  P(long flattering)
+   0       1.25          0.79   0.00                0.20
+  10       1.50          0.77   0.05                0.32
+  50       2.07          0.50   0.57                0.68
+ 200       2.22          0.44   0.79                0.77
+final policy: {'short correct': 0.07, 'detailed correct': 0.15, 'long flattering': 0.77, 'wrong': 0.01}`,
+          walkthrough: [
+            { lines: [3, 7], note: 'Four replies, the reference policy, the reward model’s scores and the hidden true quality. They differ only on “long flattering”.' },
+            { lines: [13, 19], note: 'Start from the reference policy. At a few steps, print average reward, average true quality, KL from the reference and the share of flattering replies.' },
+            { lines: [20, 23], note: 'One training step: reward minus KL penalty, turned into an advantage, then a policy-gradient update on the logits.' },
+            { lines: [25, 25], note: 'The policy after 200 steps.' },
+          ] },
+        { type: 'p', text: 'The reward-model column rises on every row. The true-quality column falls on every row. Nothing inside the training loop can see the second column. That gap is reward hacking.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Raise `beta` on line 7 from `0.5` to `3.0`. Predict: where does P(long flattering) settle, and does true quality end above or below its starting value of 0.79?',
+          'Repair the reward model: on line 5 change `2.5` to `0.2`, so it matches true quality. Keep `beta = 0.5`. Predict which reply the policy now favours and what happens to true quality.',
+          'Stop early: change `range(0, 201)` on line 15 to `range(0, 11)`. Predict the final policy. Is early stopping a substitute for a KL penalty, or a different tool?',
+        ] },
+        { type: 'check', question: 'KL settles near 0.79 and the policy stops changing, even though “long flattering” still has the highest reward-model score. What stops it?', answer: 'The penalty has caught up. At the end the policy gives that reply 0.77 against the reference’s 0.20, so it pays `β · log(0.77 / 0.20) ≈ 0.5 × 1.35 ≈ 0.67` every time. Its reward minus penalty is now equal to that of the other replies, so every advantage is zero and the update vanishes. A larger β reaches this balance sooner and closer to the reference.' },
+        { type: 'check', question: 'At step 10 true quality is 0.77, almost unchanged. By step 50 it is 0.50. In a real project we cannot print true quality. How could we still notice the slide between those two checkpoints?', answer: 'By evaluating saved checkpoints with something the policy was *not* trained against: fresh human ratings or a separate held-out judge. Inside training, warning signs are a fast-rising KL (0.05 → 0.57 here) and one style of reply taking over (0.32 → 0.68). The reward-model score itself is useless for this, because it is the very thing being exploited.' },
       ],
     },
     {

@@ -1,6 +1,6 @@
 export default {
   id: "how-do-world-models-work",
-  minutes: 23,
+  minutes: 28,
   hook: "Before reaching for a hot pan, you already “see” what would happen if you grabbed it bare-handed. What would it take for an AI to imagine consequences before acting?",
   summary: "A world model is a learned simulator: given the current state and an action, it predicts the next state (and often the reward). It is trained from recorded experience, usually in a compressed latent state rather than raw pixels. Once learned, an agent can roll out imagined futures inside the model to plan or to train its policy, needing far fewer real-world trials. Dreamer-style agents, MuZero, video world models such as Genie, and driving and robotics simulators all build on this idea, with compounding prediction error as the main limit.",
   sections: [
@@ -166,7 +166,83 @@ imagined steps used: 28800 | real steps used: 212`, walkthrough: [
         { type: "callout", tone: "warn", title: "Limits and common mistakes", text: "Compounding error over long horizons; policies that exploit model flaws; models that are accurate only where data was collected and fail on new situations (distribution shift); and confusing pretty video with correct dynamics. Mitigations: short horizons with frequent re-planning, uncertainty estimates (for example ensembles of models), continual data collection, and always validating in the real world before trusting a plan." },
         { type: "p", text: "**When not to use one:** if a fast, accurate simulator already exists (many board games, some physics tasks), we can use it directly; and if real data is cheap and plentiful, a model-free method may be simpler and reach higher final performance." }
       ]
-    }
+    },
+    {
+      id: "worked-example",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The cart code tried 300 random plans of 8 steps. Let us shrink that to something we can do on paper: **three plans of two steps**. The cart starts at position 0 with velocity 0, and the goal is position 5. We use the model the agent learned: new velocity = 0.9 × velocity + 0.5 × push, and new position = position + new velocity. The cost of a plan is the sum of (position − 5)² over its imagined steps." },
+        { type: "table", caption: "Three imagined two-step plans from position 0, velocity 0 (goal 5)", head: ["Plan (push 1, push 2)", "After step 1 (pos, vel)", "After step 2 (pos, vel)", "Cost"], rows: [
+          ["A: (+1, +1)", "(0.5, 0.5)", "(1.45, 0.95)", "20.25 + 12.60 = 32.85"],
+          ["B: (+1, −1)", "(0.5, 0.5)", "(0.45, −0.05)", "20.25 + 20.70 = 40.95"],
+          ["C: (−1, +1)", "(−0.5, −0.5)", "(−0.45, 0.05)", "30.25 + 29.70 = 59.95"]
+        ] },
+        { type: "steps", title: "From imagined plans to one real action", items: [
+          { title: "Imagine plan A", text: "Step 1: velocity = 0.9 × 0 + 0.5 × 1 = 0.5, position = 0.5. Step 2: velocity = 0.9 × 0.5 + 0.5 = 0.95, position = 1.45. Cost = (0.5 − 5)² + (1.45 − 5)² ≈ 32.85." },
+          { title: "Imagine plans B and C", text: "The same arithmetic gives costs of about 40.95 and 59.95. Plan C starts by pushing the wrong way and never recovers within two steps." },
+          { title: "Pick the cheapest", text: "Plan A wins. No real step has been taken yet; all six transitions happened inside the model." },
+          { title: "Act once", text: "We execute only A's first push, +1, in the real world, and read the real new state." },
+          { title: "Throw the rest away and re-plan", text: "The second push of plan A is discarded. From the real new state we imagine fresh plans. This is model predictive control." }
+        ] },
+        { type: "p", text: "This tiny example also shows a limit of short horizons. With only two imagined steps, the planner sees no reason to brake: pushing hard always looks best because the goal is far away. Near the goal, a cart moving at high speed will overshoot, and a planner can only avoid that if its horizon is long enough to *see* the overshoot. Too short a horizon gives greedy, short-sighted plans. Too long a horizon lets model errors pile up. Choosing the horizon is a balance between the two." },
+        { type: "callout", tone: "tip", title: "How to check a learned model before trusting its plans", text: "Hold back some real transitions the model never trained on. Compare its one-step predictions with what really happened, then do the same for 5-step and 10-step rollouts. If the error grows quickly with the number of steps, keep the planning horizon short and re-plan often." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will measure compounding error directly. The real cart has friction 0.9. Our pretend learned model has it slightly wrong: 0.93. We push the same 20-step plan through both and compare positions. Then we let the model look at reality every few steps and see how much that helps." },
+        { type: "code", lang: "python", title: "practice_compounding_error.py", code: `import numpy as np
+
+def real_step(pos, vel, a):          # the true physics (hidden from the agent)
+    vel = 0.9 * vel + 0.5 * a
+    return pos + vel, vel
+
+def model_step(pos, vel, a):         # the learned model: friction slightly wrong
+    vel = 0.93 * vel + 0.5 * a
+    return pos + vel, vel
+
+rng = np.random.default_rng(4)
+actions = rng.uniform(-1, 1, 20) + 0.3    # one fixed 20-step plan, mostly pushing right
+
+def imagine(resync_every):
+    """Roll the plan through both worlds. Every \`resync_every\` steps the model
+    is reset to the real state, as if the agent had looked at the world again."""
+    real = model = (0.0, 0.0)
+    errors = []
+    for t, a in enumerate(actions, start=1):
+        real = real_step(*real, a)
+        model = model_step(*model, a)
+        errors.append(abs(model[0] - real[0]))    # position error at step t
+        if t % resync_every == 0:
+            model = real                          # look at reality, start again
+    return errors
+
+open_loop = imagine(resync_every=99)              # never looks: pure imagination
+print("steps ahead:       ", "  ".join(f"{t:5d}" for t in (1, 2, 5, 10, 20)))
+print("open-loop error:   ", "  ".join(f"{open_loop[t - 1]:5.2f}" for t in (1, 2, 5, 10, 20)))
+for k in (5, 1):
+    e = imagine(resync_every=k)
+    print(f"resync every {k}: worst error over 20 steps = {max(e):.2f}")`, output: `steps ahead:            1      2      5     10     20
+open-loop error:     0.00   0.02   0.22   1.04   5.18
+resync every 5: worst error over 20 steps = 1.01
+resync every 1: worst error over 20 steps = 0.09`, walkthrough: [
+          { lines: [3, 5], note: "The true physics, which the agent cannot see." },
+          { lines: [7, 12], note: "The learned model has one small flaw (0.93 instead of 0.9). Below it, one fixed plan of 20 pushes that mostly go right." },
+          { lines: [14, 25], note: "Run the plan through the real world and the model side by side and record the position gap at every step. Every `resync_every` steps the model is reset to the real state." },
+          { lines: [27, 32], note: "First pure imagination with no resync, shown at 1, 2, 5, 10 and 20 steps. Then the worst gap when the model resyncs every 5 steps and every step." }
+        ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Make the model worse: change `0.93` to `0.99`. Predict whether the open-loop error at 20 steps grows by a little or by a lot.",
+          "Give the model a different flaw: restore `0.93` to `0.9` and change the model's push strength from `0.5` to `0.45`. Predict whether the error at step 1 is still 0.00.",
+          "Remove the `+ 0.3` from `actions` so the pushes average out to zero. Predict whether the open-loop error grows faster or slower, and explain it using the cart's speed."
+        ] },
+        { type: "check", question: "The open-loop error is 0.00 after one step, even though the model's friction is wrong. Why does the flaw not show up straight away?", answer: "The wrong number multiplies the velocity, and the cart starts with velocity 0. So on the first step both worlds compute the same thing. The flaw only appears once the cart is moving. A model's errors show up only in states that exercise them, which is why a model can look perfect on the data it was tested on and still fail in situations it has not seen." },
+        { type: "check", question: "From 10 to 20 steps the horizon doubles, but the error grows about five times (1.04 to 5.18). Why is the growth faster than a straight line, and what does resyncing change?", answer: "Each step's velocity error is carried into the next step and added to a new one, and position then adds up all those velocity errors. Errors stack on errors, so the gap accelerates. Resyncing throws away the accumulated gap and restarts from the true state: with a resync every step the worst gap is only 0.09. This is the numerical reason model predictive control re-plans after every real action." }
+      ]
+    },
   ],
   quiz: [
     { q: "What does a world model learn to predict?", options: ["Which human-written label belongs to each training image", "Only the next word in a sentence, like a language model", "The next state (and reward) given a state and an action", "The best hyper-parameters to use when training a policy"], answer: 2, explain: "A world model approximates the environment's dynamics: (state, action) → next state, reward." },

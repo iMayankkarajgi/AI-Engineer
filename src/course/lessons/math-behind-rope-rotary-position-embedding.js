@@ -1,6 +1,6 @@
 export default {
   id: 'math-behind-rope-rotary-position-embedding',
-  minutes: 22,
+  minutes: 27,
   hook: 'Attention on its own cannot tell "dog bites man" from "man bites dog". How do modern LLMs know word order, using nothing but a rotation?',
   summary: 'RoPE (Rotary Position Embedding) encodes position by rotating each query and key vector by an angle proportional to the token\'s position, using different rotation speeds for different pairs of dimensions. Because rotating both vectors and then taking a dot product only depends on the difference of their angles, the attention score automatically depends on the relative distance between tokens. It adds no parameters, keeps vector lengths unchanged, and is used by most open LLMs today.',
   sections: [
@@ -174,6 +174,84 @@ norm before/after: 1.8627 1.8627`,
         ], verdict: 'RoPE became the default because it gives clean relative-position behaviour for free and fits existing attention code.' },
         { type: 'callout', tone: 'example', title: 'Real-world use: stretching context windows', text: 'RoPE is used by Llama, Mistral, Qwen, Gemma, GPT-NeoX and PaLM, among others. Because positions are just angles, a model trained on 4K tokens can be adapted to longer contexts by changing how angles are computed: **position interpolation** squeezes new positions into the trained angle range, while **NTK-aware scaling** and **YaRN** adjust frequencies unevenly so fast pairs keep local detail. Raising the base (as Llama 3 did, with 500,000) slows all rotations so long distances stay distinguishable. These methods usually need some fine-tuning on long text to work well.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Rotating V as well as Q and K (RoPE only touches Q and K). Mixing the two pairing conventions between a checkpoint and your inference code, which silently scrambles positions. Assuming a RoPE model works beyond its trained length without scaling: quality usually collapses. And forgetting to apply the correct absolute position to each new token when using a KV cache, since cached keys were rotated with their own positions.' },
+      ],
+    },
+    {
+      id: "complex-number-view",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "There is a second way to write RoPE that makes the proof one line long. Treat each pair (a, b) as a single **complex number** a + bi. Rotating the pair by an angle φ is then just a multiplication by e^(iφ) = cos φ + i·sin φ. Quick check with the earlier example: (1 + 0i) × (cos 90° + i·sin 90°) = i, which is the point (0, 1)." },
+        { type: "p", text: "The dot product has a complex form too. For two pairs written as complex numbers z and w, the dot product is the real part of z × w̄, where w̄ flips the sign of the imaginary part of w." },
+        { type: "steps", title: "One pair, with q = (1, 2) and k = (3, −1)", items: [
+          { title: "Write them as complex numbers", text: "q = 1 + 2i and k = 3 − i, so k̄ = 3 + i." },
+          { title: "Multiply once", text: "q × k̄ = (1 + 2i)(3 + i) = 3 + i + 6i + 2i² = 1 + 7i. The real part, 1, is the ordinary dot product: 1·3 + 2·(−1) = 1." },
+          { title: "Add the positions", text: "Query at position m, key at position n: (q·e^(imθ)) × conj(k·e^(inθ)) = q × k̄ × e^(i(m−n)θ). The two absolute angles merge into one difference." },
+          { title: "Plug in numbers", text: "With 30° per position, query at 1 and key at 3, the difference is −60°. e^(−i60°) = 0.5 − 0.866i." },
+          { title: "Take the real part", text: "(1 + 7i)(0.5 − 0.866i) has real part 0.5 + 7 × 0.866 ≈ 6.56. That is the RoPE score for this pair at this distance." },
+        ] },
+        { type: "p", text: "Look at what happened to the 7. In a plain dot product the imaginary part of q × k̄ is thrown away. With RoPE, the score for one pair is A·cos(Δ) + B·sin(Δ), where A + Bi = q × k̄ and Δ is the angle for the distance. So each pair contributes a **wave in distance**, and the learned q and k set its height and its shift. That is how a head can learn to prefer “two tokens back” over “the same token”." },
+        { type: "table", caption: "Wavelengths for the lesson's 8-dimensional example (base 10,000): 2π / θᵢ positions per full turn.", head: ["Pair", "θᵢ (radians per position)", "Full turn every", "Good at telling apart"], rows: [
+          ["0", "1", "≈ 6.3 positions", "Neighbouring tokens"],
+          ["1", "0.1", "≈ 62.8 positions", "Positions within a sentence or two"],
+          ["2", "0.01", "≈ 628 positions", "Paragraph-scale distances"],
+          ["3", "0.001", "≈ 6,283 positions", "Document-scale distances"],
+        ] },
+        { type: "p", text: "The slowest pairs matter for long inputs. If a model only ever trains on a few thousand tokens, a pair with a wavelength longer than that never completes a turn during training. Longer inputs then push it to angles it has not met before. This is one common explanation for why RoPE models degrade past their trained length, and why the scaling methods above work by squeezing or slowing the angles." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will write RoPE for a single pair using Python's built-in complex numbers, with no numpy and no rotation matrix. We check that the score depends only on the distance, try the shortcut of rotating just one vector, and print the wavelength of each pair." },
+        { type: "code", lang: "python", title: "practice_rope_complex.py", code: `import cmath
+import math
+
+def rotate(pair, pos, theta):
+    # Treat the pair (a, b) as the complex number a + bi.
+    # Multiplying by e^(i * angle) rotates it by that angle.
+    return complex(*pair) * cmath.exp(1j * pos * theta)
+
+def dot(z1, z2):
+    # Dot product of two 2-D vectors written as complex numbers
+    return (z1 * z2.conjugate()).real
+
+q, k = (1.0, 2.0), (3.0, -1.0)
+theta = math.radians(30)          # 30 degrees per position
+
+print("no rotation      :", round(dot(complex(*q), complex(*k)), 4))
+for m, n in [(1, 3), (4, 6), (100, 102)]:
+    score = dot(rotate(q, m, theta), rotate(k, n, theta))
+    print(f"query at {m:3d}, key at {n:3d}: score = {score:.4f}")
+
+# Shortcut: leave q alone and rotate k by the distance only
+print("rotate k by 2 only:", round(dot(complex(*q), rotate(k, 2, theta)), 4))
+
+# Wavelength: positions needed for one pair to turn a full circle
+for i, th in enumerate([1.0, 0.1, 0.01, 0.001]):
+    print(f"pair {i}: theta = {th:<5} full turn every {2 * math.pi / th:7.1f} positions")`, output: `no rotation      : 1.0
+query at   1, key at   3: score = 6.5622
+query at   4, key at   6: score = 6.5622
+query at 100, key at 102: score = 6.5622
+rotate k by 2 only: 6.5622
+pair 0: theta = 1.0   full turn every     6.3 positions
+pair 1: theta = 0.1   full turn every    62.8 positions
+pair 2: theta = 0.01  full turn every   628.3 positions
+pair 3: theta = 0.001 full turn every  6283.2 positions`,
+          walkthrough: [
+            { lines: [4, 7], note: "The whole of RoPE for one pair: turn (a, b) into a + bi and multiply by e^(i·pos·θ)." },
+            { lines: [9, 11], note: "The dot product of two pairs, written as the real part of z₁ times the conjugate of z₂." },
+            { lines: [13, 19], note: "Three query/key placements, all with the key 2 positions after the query. The score is 6.5622 every time, and it differs from the unrotated dot product of 1.0." },
+            { lines: [21, 26], note: "Rotating only k by the distance gives the same 6.5622. Then the wavelengths: 2π divided by each frequency." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Swap the placements so the key comes *before* the query: use `[(3, 1), (6, 4), (102, 100)]`. Predict first: is the score still 6.5622?",
+          "Set `q, k = (1.0, 0.0), (1.0, 0.0)`. Predict the score at distance 2 from the lesson's small numeric example.",
+          "Change the angle to `math.radians(90)`. Using q × k̄ = 1 + 7i, predict the score for a key 2 positions after the query.",
+        ] },
+        { type: "check", question: "Without rotation the score of this pair is 1.0. At a distance of 2 it is 6.56. Rotation never changes a vector's length, so how can the score get *bigger*?", answer: "A dot product depends on lengths and on the angle between the vectors. q = (1, 2) and k = (3, −1) start almost at right angles, which is why the plain score is small. Turning one of them by 60° relative to the other brings them close to parallel, so the same lengths give a much larger score. A model can learn q and k that line up best at a chosen distance, and that is a head that prefers a certain offset." },
+        { type: "check", question: "Pair 3 needs about 6,283 positions for a full turn. A model is trained only on inputs of up to 2,048 tokens. Roughly what share of that pair's circle did training cover, and why does it matter?", answer: "About one third (2,048 / 6,283 ≈ 0.33). For that pair, any distance beyond 2,048 lands on an angle the model never saw during training, so its behaviour there is untested. That is why feeding a much longer input tends to hurt quality, and why context-extension methods rescale positions or frequencies to bring the angles back into the familiar range." },
       ],
     },
   ],

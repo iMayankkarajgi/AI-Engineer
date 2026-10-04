@@ -1,6 +1,6 @@
 export default {
   id: 'agentic-rag',
-  minutes: 22,
+  minutes: 27,
   hook: 'Standard RAG searches once and hopes for the best. What if the system could notice the first search was not enough, and decide what to look up next?',
   summary: 'Agentic RAG puts an LLM agent in charge of retrieval. Instead of one fixed "retrieve then answer" step, the agent reasons about the question, chooses which tool or source to query, reads the results, judges whether they are enough, and loops (rewriting queries, searching again, calling other tools) until it can answer. It handles multi-step and multi-source questions far better than standard RAG, at the cost of more latency, more tokens and less predictability.',
   sections: [
@@ -162,6 +162,81 @@ step 4: ANSWER -> covered until 2027-03-10: yes`,
           verdict: 'Start with standard (or hybrid + reranker) RAG. Add agentic behaviour where evaluation shows questions that need multiple steps or sources.' },
         { type: 'p', text: '**Use agentic RAG when** questions need several lookups that depend on each other, answers span several sources (documents plus databases or APIs), queries are vague and benefit from rewriting, or wrong answers are costly enough that a self-check step pays for itself. **Prefer standard RAG when** most questions are answered by one passage, latency must stay low, traffic is high and cost-sensitive, or you need strictly predictable behaviour.' },
         { type: 'chart', kind: 'bar', title: 'Typical relative cost per question', yLabel: 'LLM calls', labels: ['Standard RAG', 'Agentic, simple question', 'Agentic, multi-hop question'], series: [ { name: 'LLM calls', values: [1, 2, 6] } ], caption: 'Illustrative counts. Agentic systems spend more on hard questions and, with routing, can spend as little as standard RAG on easy ones.' },
+      ],
+    },
+    {
+      id: 'common-mistakes-in-practice',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'Agentic systems fail in a way that one-pass RAG does not: small errors **multiply**. Suppose each step (pick a tool, write a query, read the result) goes right 90% of the time, and suppose the steps are independent. That is a simplification, but it shows the shape of the problem.' },
+        { type: 'chart', kind: 'bar', title: 'Chance that every step goes right, at 90% per step', yLabel: 'Probability', labels: ['1 step', '3 steps', '5 steps', '8 steps'], series: [ { name: 'All steps right', values: [0.9, 0.73, 0.59, 0.43] } ], caption: 'Illustrative: 0.9ⁿ for n steps, assuming independent steps and no recovery. Real agents can recover from a bad step if something checks the result.' },
+        { type: 'p', text: 'An 8-step chain gets everything right less than half the time unless something catches mistakes. There are two levers. Use **fewer steps**: route simple questions to a short path and give the agent tools that return what it needs in one call. And add **checks** that turn a silent error into a retry, such as grading each retrieved result before using it.' },
+        { type: 'p', text: 'To find out which lever we need, we save every run as a trace and read the failing ones. Most bad traces show one of a few patterns.' },
+        { type: 'table', caption: 'Reading an agent trace.', head: ['Pattern in the trace', 'What it means', 'Fix'], rows: [
+          ['Same tool, same query, several times', 'The agent does not notice that nothing changed', 'Keep past attempts in the notes; block identical repeats; cap the steps'],
+          ['Wrong tool first, right tool later', 'Tool descriptions are vague or overlap', 'Say what each tool is for and what it is not for'],
+          ['Right fact retrieved, missing from the answer', 'The fact is buried in long raw tool output', 'Condense each observation into a short note'],
+          ['Answer states a fact found in no tool result', 'The model answered from memory', 'Require a source for every fact; check the answer against the notes'],
+          ['Stops after the first weak result', 'No sufficiency check', 'Add a grading step before answering'],
+        ] },
+        { type: 'p', text: 'When we evaluate, we score two things separately: was the final answer right, and was the path reasonable (number of steps, cost, tools used)? A right answer reached in 14 steps is still a problem to fix.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The earlier code showed decomposition. Now we build the **self-check** pattern: retrieve, grade the result, and if it fails, rewrite the query or switch to another source. As before, simple functions stand in for the LLM: the plan of attempts is written out by hand, and the grader just checks that the chunk mentions the terms a useful answer must contain.' },
+        { type: 'code', lang: 'python', title: 'practice_corrective_retrieval.py', code: `# Two sources. The knowledge base has no AirLite battery page; the spec sheets do.
+KB = ["ProBook batteries are covered for 12 months.",
+      "Laptops can be returned within 30 days if unopened.",
+      "Battery care: avoid heat and keep the charge between 20 and 80 percent."]
+SPECS = ["AirLite 13 weighs 1.1 kg and has a 13 inch screen.",
+         "AirLite batteries are covered for 24 months."]
+
+def search(source, query):                    # retrieval tool: best word overlap
+    q = set(query.lower().replace("?", "").split())
+    return max(source, key=lambda d: len(q & set(d.lower().replace(".", "").split())))
+
+def grade(chunk, must_have):                  # stand-in for an LLM relevance check
+    return all(term in chunk.lower() for term in must_have)
+
+question = "How long is the AirLite battery covered?"
+must_have = ["airlite", "covered"]            # what a useful chunk has to mention
+plan = [("kb", KB, question),                               # 1: first try
+        ("kb", KB, "AirLite batteries warranty covered"),   # 2: rewritten query
+        ("specs", SPECS, "AirLite batteries covered")]      # 3: another source
+MAX_STEPS = 4
+for step, (name, source, query) in enumerate(plan[:MAX_STEPS], start=1):
+    chunk = search(source, query)
+    ok = grade(chunk, must_have)
+    print(f"step {step}: search {name} with {query!r}")
+    print(f"        got {chunk!r} -> {'PASS' if ok else 'FAIL, try again'}")
+    if ok:
+        print("answer from:", chunk)
+        break
+else:
+    print("no good evidence found: say so instead of guessing")`, output: `step 1: search kb with 'How long is the AirLite battery covered?'
+        got 'Battery care: avoid heat and keep the charge between 20 and 80 percent.' -> FAIL, try again
+step 2: search kb with 'AirLite batteries warranty covered'
+        got 'ProBook batteries are covered for 12 months.' -> FAIL, try again
+step 3: search specs with 'AirLite batteries covered'
+        got 'AirLite batteries are covered for 24 months.' -> PASS
+answer from: AirLite batteries are covered for 24 months.`,
+          walkthrough: [
+            { lines: [1, 6], note: 'Two sources. The knowledge base talks about ProBook batteries and battery care, but only the spec sheets cover the AirLite battery.' },
+            { lines: [8, 13], note: 'The retrieval tool returns the entry sharing the most words with the query. The grader passes a chunk only if it mentions every must-have term.' },
+            { lines: [15, 20], note: 'The question, what a useful chunk must mention, and the attempts in order: the raw question, a rewritten query, then another source. A step cap guards against endless loops.' },
+            { lines: [21, 30], note: 'The loop: search, grade, and stop at the first chunk that passes. If no attempt passes, say so instead of guessing.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Set `MAX_STEPS = 2`. Predict the last line of the output, and decide whether that is a good or a bad outcome for the user.',
+          'Remove `"airlite"` from `must_have`, so the grader only asks for "covered". Predict at which step the loop now stops, and what answer the customer would get.',
+          'Add the sentence `"AirLite batteries are covered for 24 months."` to the end of `KB`. Predict at which step the search now passes: step 1 or step 2?',
+        ] },
+        { type: 'check', question: 'Step 2 reworded the query but searched the same source again, and failed again. What should a good agent conclude from two failures in the same place?', answer: 'That the source probably does not hold the fact, so rewording a third time is wasted effort. The useful move is to change the source or tool. An agent that can only rewrite queries will loop on the same index until the step limit ends it.' },
+        { type: 'check', question: 'The chunk found in step 2, "ProBook batteries are covered for 12 months", is about batteries and about coverage. Why is it still right for the grader to fail it?', answer: 'Being on topic is not the same as answering the question. The chunk is about a different product. If the agent accepted it, the customer would be told "12 months" with full confidence, which is wrong for an AirLite. The grader checks for the specific thing the question is about, and that is what stops wrong-product evidence.' },
       ],
     },
     {

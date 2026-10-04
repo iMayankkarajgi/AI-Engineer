@@ -1,6 +1,6 @@
 export default {
   id: 'llm-routing',
-  minutes: 19,
+  minutes: 24,
   hook: 'Why pay a top-tier model to answer "How do I reset my password?" a million times a day?',
   summary: 'LLM routing puts a small decision layer, the router, in front of several language models and sends each query to the cheapest model that can answer it well. Routers can use rules, a trained classifier, embeddings, or a cascade that tries a small model first and escalates when its answer looks weak. Done well, routing cuts cost and latency sharply while keeping quality close to always using the biggest model.',
   sections: [
@@ -168,6 +168,80 @@ always large        100.0%    100.00    0.914
           '**Inconsistent tone across models.** Users notice style changes. Fix: shared system prompts and output format checks across models.',
         ] },
         { type: 'check', question: 'Our router saved 60% on cost, but human escalations rose from 3% to 9%, mostly on billing questions. What should we change first?', answer: 'Lower the threshold for billing-type queries (or add a rule sending billing disputes to the large model), and retrain the classifier with these misrouted examples labelled as hard. The router is misjudging a category; we should fix routing, not drop it.' },
+      ],
+    },
+    {
+      id: "worked-cascade",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The simulation above studied a router that predicts difficulty *before* calling a model. A **cascade** decides *after* seeing the small model's answer, so its result depends on how good the checker is. Let us work one through by hand with 1,000 support queries, using the same **illustrative** prices as before: $0.0002 for the small model and $0.01 for the large one." },
+        { type: "steps", title: "1,000 queries through a cascade", items: [
+          { title: "The small model answers everything", text: "Cost: 1,000 × $0.0002 = **$0.20**. Suppose 870 answers are good and 130 are weak, close to the 'always small' quality in the simulation." },
+          { title: "The checker looks at each answer", text: "Our checker catches 80% of weak answers and wrongly flags 10% of good ones. Weak and caught: 0.8 × 130 = **104**. Good but flagged: 0.1 × 870 = **87**." },
+          { title: "Escalate the flagged ones", text: "104 + 87 = **191** queries go to the large model. Cost: 191 × $0.01 = **$1.91**." },
+          { title: "Total bill", text: "$0.20 + $1.91 = **$2.11**, against $10.00 for sending all 1,000 to the large model. We pay about 21%." },
+          { title: "What slipped through", text: "130 − 104 = **26** weak answers were accepted and reached users. That is the quality price of an imperfect checker." },
+          { title: "What was wasted", text: "The 87 false alarms cost $0.87, about 41% of the bill, to redo answers that were already fine. And those users waited for two models." },
+        ] },
+        { type: "matrix", title: "What the checker did with 1,000 small-model answers", rows: ["Answer was good", "Answer was weak"], cols: ["Accepted", "Escalated"], values: [[783, 87], [26, 104]], format: "int", caption: "Illustrative, from the steps above. The two off-diagonal cells are the checker's mistakes: 87 needless escalations (wasted money and time) and 26 weak answers that slipped through (lost quality)." },
+        { type: "p", text: "A checker therefore has two separate dials. Its **catch rate** protects quality. Its **false-alarm rate** protects cost and latency. When a cascade disappoints, fill in this 2 × 2 table from a labelled sample before changing anything else: it tells us which dial is broken. A unit test for generated code scores well on both. 'Ask the same small model if it is sure' often scores poorly on both." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will simulate a cascade over 10,000 queries. Every query goes to the small model first; a checker with a chosen catch rate and false-alarm rate decides whether to escalate. We try four checkers and compare cost, quality and the average number of model calls per query." },
+        { type: "code", lang: "python", title: "practice_cascade.py", code: `# Simulate a CASCADE: small model first, a checker decides whether to escalate.
+import numpy as np
+rng = np.random.default_rng(3)
+
+N = 10_000
+difficulty = rng.beta(2, 5, N)                   # most queries are easy
+COST_SMALL, COST_LARGE = 0.0002, 0.01            # $ per query (illustrative)
+
+# Did each model actually answer well? (same toy quality curves as the lesson)
+small_ok = rng.random(N) < 1 - 1.2 * difficulty**2
+large_ok = rng.random(N) < 1 - 0.3 * difficulty
+
+def cascade(catch, false_alarm):
+    """catch: share of bad small answers the checker flags.
+    false_alarm: share of good small answers it flags by mistake."""
+    flag_prob = np.where(small_ok, false_alarm, catch)
+    escalate = rng.random(N) < flag_prob
+    good = np.where(escalate, large_ok, small_ok).mean()
+    cost = N * COST_SMALL + escalate.sum() * COST_LARGE
+    calls = 1 + escalate.mean()                  # average LLM calls per query
+    return escalate.mean(), cost, good, calls
+
+print(f"always small : cost $ {N * COST_SMALL:6.2f}  good {small_ok.mean():.3f}")
+print(f"always large : cost $ {N * COST_LARGE:6.2f}  good {large_ok.mean():.3f}")
+print("checker (catch, false alarm)   escalated  cost($)   good  calls/query")
+for name, catch, fa in [("perfect   (1.0, 0.0)", 1.0, 0.0),
+                        ("good      (0.8, 0.1)", 0.8, 0.1),
+                        ("jumpy     (0.8, 0.5)", 0.8, 0.5),
+                        ("lazy      (0.2, 0.0)", 0.2, 0.0)]:
+    share, cost, good, calls = cascade(catch, fa)
+    print(f"{name:28s} {share:9.1%} {cost:8.2f} {good:7.3f} {calls:8.2f}")`, output: `always small : cost $   2.00  good 0.874
+always large : cost $ 100.00  good 0.914
+checker (catch, false alarm)   escalated  cost($)   good  calls/query
+perfect   (1.0, 0.0)             12.6%    14.62   0.984     1.13
+good      (0.8, 0.1)             18.8%    20.78   0.956     1.19
+jumpy     (0.8, 0.5)             53.9%    55.88   0.926     1.54
+lazy      (0.2, 0.0)              2.9%     4.90   0.899     1.03`,
+          walkthrough: [
+            { lines: [5, 11], note: "The same toy world as the lesson's router: mostly easy queries, a cheap small model and a costly large one. This time we roll the dice once per query to decide whether each model's answer is actually good." },
+            { lines: [13, 21], note: "The cascade. A weak small answer is flagged with probability `catch`; a good one with probability `false_alarm`. Flagged queries take the large model's answer and pay for both calls." },
+            { lines: [23, 31], note: "Four checkers. The good one gets higher quality than always-large for about a fifth of the cost. The jumpy one has the same catch rate but escalates half of the good answers, so cost nearly triples and quality falls. The lazy one is cheap but lets most weak answers through. One caution: in this toy the two models make their mistakes independently, so each often rescues a query the other would fail. Real models tend to fail on the same hard queries, so expect a smaller quality gain." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `COST_SMALL = 0.005`, so the small model is only half the price of the large one. Predict the cost of the 'good' and the 'jumpy' cascade. Can a cascade cost more than always using the large model?",
+          "Change the traffic to mostly hard queries with `rng.beta(5, 2, N)`. Predict what happens to the share escalated, and whether the cascade still saves much.",
+          "Add a checker `(\"paranoid  (1.0, 1.0)\", 1.0, 1.0)` that flags everything. Predict its cost and its quality before running. Which simpler strategy is it equal to, and at what extra price?",
+        ] },
+        { type: "check", question: "The 'good' and the 'jumpy' checker both catch 80% of weak answers. Why is quality lower with the jumpy one (0.926 against 0.956), when it escalates far more queries to the stronger model?", answer: "Because most of its extra escalations are false alarms on answers that were already good. Each of those replaces a known-good answer with a fresh attempt by the large model, which is strong but not perfect, so some good answers turn into bad ones. Escalating more is not automatically safer: escalating the wrong queries costs money and can even cost quality." },
+        { type: "check", question: "Suppose the small model answers in 0.5 s and the large one in 2 s (illustrative), and the cascade escalates 19% of queries. What is the average wait, and who is worse off than under 'always large'?", answer: "Every query waits 0.5 s, and 19% wait another 2 s: 0.5 + 0.19 × 2 = 0.88 s on average, far below 2 s. But the escalated users wait 2.5 s, which is longer than if we had gone straight to the large model. Those are usually the users with the hardest problems. If that tail matters, a predictive router (one call, decided up front) or showing the first answer while the second is prepared is the better design." },
       ],
     },
   ],

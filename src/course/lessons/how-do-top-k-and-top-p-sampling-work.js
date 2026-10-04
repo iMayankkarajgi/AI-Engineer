@@ -1,6 +1,6 @@
 export default {
   id: 'how-do-top-k-and-top-p-sampling-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'Always picking the most likely word makes a chatbot dull and repetitive, but picking from all 100,000 words lets in nonsense. How do we keep the good choices and cut the junk?',
   summary: 'Top-k and top-p are filters applied to the next-token probabilities before sampling. Top-k keeps a fixed number of the most likely tokens; top-p (nucleus sampling) keeps the smallest set of top tokens whose probabilities add up to at least p. Both throw away the long tail of unlikely tokens and renormalize the rest. Top-p adapts to how confident the model is, which is why it is the more common default; both are usually combined with temperature.',
   sections: [
@@ -174,6 +174,88 @@ flat, p=0.9  kept 7 -> Paris:0.18 Lyon:0.16 France:0.15 the:0.14 Nice:0.13 a:0.1
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Setting top-p = 1.0 and thinking you have filtered something (p = 1 keeps every token). Setting k = 1 and expecting variety (it is greedy decoding). Cranking temperature high and relying on top-p to clean up: the flatter distribution makes the nucleus huge. Tuning temperature, top-k and top-p all at once without testing; change one at a time. And remembering that some APIs expose only some of these parameters.' },
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'Most LLM APIs and open-source inference servers expose `temperature` and `top_p`, and many also accept `top_k`. A support bot might run with low temperature and top-p 0.9 for steady answers, while a "suggest 5 taglines" feature uses higher temperature and top-p 0.95 to get genuinely different options.' },
+      ],
+    },
+    {
+      id: 'combined-pipeline-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'We have used each filter alone. In practice they run one after another, and each one changes the input of the next. Let us chain two of them on our hotel example: first top-k with `k = 5`, then top-p with `p = 0.9`.' },
+        { type: 'steps', title: 'Top-k = 5, then top-p = 0.9', items: [
+          { title: 'Top-k keeps five', text: 'Paris 0.50, Lyon 0.15, France 0.12, the 0.08, Nice 0.06. Their total is 0.91.' },
+          { title: 'Renormalize', text: 'Divide by 0.91: Paris 0.549, Lyon 0.165, France 0.132, the 0.088, Nice 0.066.' },
+          { title: 'Running total for top-p', text: 'On the **new** numbers: 0.549 → 0.714 → 0.846 → 0.934. The total passes 0.9 at the 4th token.' },
+          { title: 'Top-p keeps four', text: 'Paris, Lyon, France and "the". "Nice" is dropped, even though top-k had let it through.' },
+          { title: 'Renormalize again and sample', text: 'Divide by 0.934: Paris 0.588, Lyon 0.176, France 0.141, the 0.094.' },
+        ] },
+        { type: 'p', text: 'Compare this with top-p = 0.9 alone, which kept **five** tokens in our earlier code. The chain keeps only four. Top-k removed some probability, renormalizing made every survivor a little bigger, and so the running total reached 0.9 one token sooner. Filters are not independent: the second one sees the output of the first.' },
+        { type: 'p', text: 'Temperature sits even earlier in the chain, so it changes everything after it. Here is the size of the `p = 0.9` nucleus for the same eight tokens when we apply a temperature first:' },
+        { type: 'chart', kind: 'bar', title: 'Tokens kept by top-p = 0.9 after applying a temperature', yLabel: 'Tokens in the nucleus', labels: ['T = 0.5', 'T = 0.7', 'T = 1.0', 'T = 1.5', 'T = 2.0'], series: [
+          { name: 'Nucleus size', values: [2, 4, 5, 6, 7] },
+        ], caption: 'Computed from the illustrative probabilities of the hotel example. The same p keeps 2 tokens when the distribution is sharp and 7 of the 8 when it is flat.' },
+        { type: 'p', text: 'Finally, the lesson mentioned **min-p**. It keeps every token whose probability is at least a fraction of the top token\'s probability. With min-p = 0.1 and Paris at 0.50, the bar is 0.05. The table compares the three filters on the three distributions from our code:' },
+        { type: 'table', caption: 'Number of tokens kept (out of 8), computed from the lesson\'s three distributions', head: ['Distribution', 'Top-k, k = 3', 'Top-p, p = 0.9', 'Min-p, 0.1'], rows: [
+          ['Hotel example (top token 0.50)', '3', '5', '6'],
+          ['Confident (top token 0.92)', '3', '1', '1'],
+          ['Flat (top token 0.16)', '3', '7', '8'],
+        ] },
+        { type: 'p', text: 'Top-k never moves. Top-p and min-p both shrink when the model is sure and widen when it is not, but they measure "sure" differently: top-p looks at the total mass, min-p looks at the gap to the leader.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We give the long tail real size and measure the damage. Our vocabulary has 8 sensible tokens and 200 junk tokens that each have a tiny probability. We draw 10,000 tokens under six settings and count how many draws are junk.' },
+        { type: 'code', lang: 'python', title: 'practice_tail_filter.py', code: `import numpy as np
+
+rng = np.random.default_rng(3)
+# 8 sensible tokens hold 94% of the probability; 200 junk tokens share the last 6%
+head = np.array([0.47, 0.14, 0.11, 0.075, 0.056, 0.047, 0.028, 0.014])
+tail = np.full(200, 0.0003)
+probs = np.concatenate([head, tail])          # already sorted high -> low
+is_junk = np.arange(len(probs)) >= len(head)
+
+def truncate(p, k=None, top_p=None):
+    """Keep the top k tokens, then the nucleus reaching top_p, then renormalize."""
+    p = p.copy()
+    if k is not None:
+        p[k:] = 0.0                           # works because p is sorted
+        p = p / p.sum()
+    if top_p is not None:
+        cum = np.cumsum(p)
+        n = np.searchsorted(cum, top_p) + 1   # smallest set reaching top_p
+        p[n:] = 0.0
+        p = p / p.sum()
+    return p
+
+settings = [("pure sampling", {}), ("top-k = 50", {"k": 50}), ("top-k = 5", {"k": 5}),
+            ("top-p = 0.9", {"top_p": 0.9}), ("top-p = 0.99", {"top_p": 0.99}),
+            ("k = 50 then p = 0.9", {"k": 50, "top_p": 0.9})]
+
+print("setting               kept   junk draws in 10,000")
+for name, kwargs in settings:
+    p = truncate(probs, **kwargs)
+    draws = rng.choice(len(p), size=10_000, p=p)
+    print(f"{name:20s} {np.count_nonzero(p):5d}   {int(is_junk[draws].sum()):6d}")`, output: `setting               kept   junk draws in 10,000
+pure sampling          208      625
+top-k = 50              50      128
+top-k = 5                5        0
+top-p = 0.9              7        0
+top-p = 0.99           175      501
+k = 50 then p = 0.9      6        0`, walkthrough: [
+          { lines: [4, 8], note: 'An illustrative vocabulary. Each junk token has a probability of only 0.03%, but 200 of them together hold 6%.' },
+          { lines: [10, 21], note: 'One function for the whole chain: top-k first, then top-p on the renormalized result. Either filter can be switched off by leaving it as `None`.' },
+          { lines: [23, 31], note: 'Six settings, 10,000 draws each. Pure sampling picks junk 625 times, close to the 6% we built in. Top-k = 50 still lets 42 junk tokens in. Top-p = 0.9 keeps 7 sensible tokens and no junk. Top-p = 0.99 is almost as bad as no filter.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Spread the same 6% over more junk tokens: `tail = np.full(2000, 0.00003)`. Predict the junk draws for "pure sampling" and for "top-k = 50". Which one changes a lot, and why?',
+          'Add a setting `("top-p = 0.95", {"top_p": 0.95})`. The sensible tokens hold 94%. Predict whether junk gets in, and roughly how many tokens are kept.',
+          'Apply a temperature of 1.5 before truncating: after building `probs`, add `probs = probs ** (1 / 1.5)` and `probs = probs / probs.sum()`. Predict whether "top-p = 0.9" still gives zero junk draws.',
+        ] },
+        { type: 'check', question: 'Top-p = 0.9 alone kept 7 tokens. Adding top-k = 50 in front of it kept only 6. Top-k = 50 on its own keeps 50 tokens, so how can it make the result smaller?', answer: 'Top-k = 50 removes 158 junk tokens, about 4.7% of the probability. Renormalizing divides every survivor by about 0.953, so each one grows a little. The first six sensible tokens sum to 0.898 before, just short of 0.9, and to about 0.943 after, which passes 0.9. The nucleus closes one token earlier. Every filter changes the numbers the next filter sees.' },
+        { type: 'check', question: 'Top-p = 0.99 let 501 junk draws through, while top-p = 0.9 let none. The two settings look close. Why is the result so different here?', answer: 'Because the sensible tokens hold only 94% of the probability. A nucleus of 0.9 fits inside that 94%, so it never touches the tail. A nucleus of 0.99 cannot be filled by sensible tokens alone: it must take another 5% from the tail, which means 167 junk tokens. What matters is not how close p is to 1, but whether p is above or below the share held by the plausible tokens at that step.' },
       ],
     },
   ],

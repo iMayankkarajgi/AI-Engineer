@@ -1,6 +1,6 @@
 export default {
   id: 'jev-and-system-one-models-explained',
-  minutes: 21,
+  minutes: 26,
   hook: 'Why pay a chatbot to write a paragraph when all you needed was "yes, 92% sure"?',
   summary: 'A System One model is a model built only to make fast, typed decisions (pick an option, give a score, answer yes or no) with a probability attached, instead of generating free text. Jev, released by TypeSafe in September 2026, is the first model marketed under that name; it is trained with what TypeSafe calls Reinforcement Learning for Calibrated Decisions (RLCD) so that its stated confidence matches how often it is right. Because its output can only be one of the answers we define, it cannot invent text, though it can still choose the wrong option, so it suits high-volume classification, routing, scoring and guardrails, while LLMs remain the tool for writing and reasoning.',
   sections: [
@@ -177,6 +177,79 @@ auto-decided 23% of cases, accuracy there = 90.6%; the rest go to a human or an 
         ] },
         { type: 'callout', tone: 'example', title: 'The shop, decided', text: 'Jev (or a similar System One model) labels department, urgency and legal risk for all 2 million messages. Confident routine cases are routed instantly; low-confidence or high-risk ones go to an LLM that drafts a reply for a human agent to approve. The LLM now handles a small fraction of the traffic.' },
         { type: 'viz', name: 'llm-routing', caption: 'Routing by difficulty: cheap fast decisions for most traffic, a bigger model for the hard cases.' },
+      ],
+    },
+    {
+      id: 'worked-example-choosing-a-threshold',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "Our shop auto-routes a message when the department confidence is above a threshold. Where should that threshold sit? We cannot reason it out; we have to read it from our own logged decisions. Below is an illustrative log of 1,000 labelled messages, grouped by the confidence of the decision model. These numbers are made up for the exercise and are not measurements of any product." },
+        { type: 'table', caption: "1,000 logged decisions grouped by confidence (illustrative)", head: ['Confidence bin', 'Cases', 'Correct', 'Accuracy in bin'], rows: [
+          ['0.90 – 1.00', '500', '480', '96%'],
+          ['0.75 – 0.90', '250', '205', '82%'],
+          ['0.50 – 0.75', '150', '93', '62%'],
+          ['below 0.50', '100', '40', '40%'],
+        ] },
+        { type: 'steps', title: "From the log to a threshold", items: [
+          { title: "Check calibration first", text: "In each bin, accuracy sits inside or close to the confidence range (96% in the 0.90–1.00 bin, 82% in the 0.75–0.90 bin). The confidence can be trusted, so thresholds make sense." },
+          { title: "Try threshold 0.90", text: "We automate the top bin: 500 cases, of which 20 are wrong. Error rate among automated cases: 4.0%. The other 500 go to review." },
+          { title: "Try threshold 0.75", text: "We automate 750 cases with 20 + 45 = 65 wrong: 8.7%. Only 250 go to review." },
+          { title: "Try threshold 0.50", text: "We automate 900 cases with 65 + 57 = 122 wrong: 13.6%. Only 100 go to review." },
+          { title: "Choose by cost", text: "If a wrong route is cheap to fix and review is expensive, 0.75 may be best. For the legal-threat question, where a miss is costly, we would pick the strict end." },
+        ] },
+        { type: 'p', text: "Two cautions. One threshold does not fit every question: each decision has its own error cost, so each needs its own row in this kind of analysis. And the log goes stale: when the kind of messages changes, accuracy per bin can drift, so the table must be rebuilt from fresh labelled samples." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will build the calling pattern of a typed decision in plain Python: a fixed list of options, one probability per option, and code that branches on the confidence. The scorer is a toy keyword counter that we wrote for this exercise. It is not how Jev or any real model works inside; only the shape of the input and output is the point." },
+        { type: 'code', lang: 'python', title: 'practice_typed_decision.py', code: `import math
+
+OPTIONS = ["billing", "shipping", "returns", "technical"]
+KEYWORDS = {"billing": ["charge", "invoice", "refund"],
+            "shipping": ["parcel", "delivery", "late"],
+            "returns": ["return", "send back"],
+            "technical": ["error", "crash", "login"]}
+
+def choice(message):
+    # toy scorer (not a real model): count keyword hits per option,
+    # then softmax turns the scores into one probability per option
+    scores = [1.2 * sum(k in message.lower() for k in KEYWORDS[o]) for o in OPTIONS]
+    exps = [math.exp(s) for s in scores]
+    return {o: e / sum(exps) for o, e in zip(OPTIONS, exps)}
+
+def decide(message, threshold=0.75):
+    probs = choice(message)
+    top = max(probs, key=probs.get)          # always one of OPTIONS, never new text
+    action = "auto-route" if probs[top] >= threshold else "escalate"
+    return top, probs[top], action
+
+messages = ["I was charged twice, please fix my invoice",
+            "The app shows an error at login",
+            "My parcel is late and I want a refund",
+            "Hello, I have a question"]
+for m in messages:
+    top, p, action = decide(m)
+    print(f"{top:9s} p={p:.2f} {action:10s} <- {m}")`, output: `billing   p=0.79 auto-route <- I was charged twice, please fix my invoice
+technical p=0.79 auto-route <- The app shows an error at login
+shipping  p=0.67 escalate   <- My parcel is late and I want a refund
+billing   p=0.25 escalate   <- Hello, I have a question`,
+          walkthrough: [
+            { lines: [3, 7], note: "The typed question: four allowed options, defined once. The keyword lists belong to our toy scorer only." },
+            { lines: [9, 14], note: "The stand-in for the model. It gives each option a score and applies softmax, so the result is always one probability per option, summing to 1." },
+            { lines: [16, 20], note: "Our code decides. Take the most probable option, then branch: at or above the threshold we route automatically, below it we escalate." },
+            { lines: [22, 28], note: "Four messages. Two are clear and get routed. The third mixes shipping and billing words, so its confidence is 0.67 and it escalates. The last has no evidence at all." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Lower the threshold to `0.6`. Predict which of the four messages changes its action, and whether that is a change we would want.",
+          "Add `\"refund\"` to the keyword list of `returns`. Predict the new top option and confidence for the third message.",
+          "Change the multiplier `1.2` to `3.0`. Predict what happens to the confidences and to which option wins for each message.",
+        ] },
+        { type: 'check', question: "The last message returns “billing” with p = 0.25. The answer is a valid option. Why is escalating still the right move?", answer: "All four options are tied at 0.25, so the model has no evidence and “billing” is just the first in the list. A valid answer is not the same as an informed one. The confidence is what tells our code that this case should go to a person or a larger model." },
+        { type: 'check', question: "Raising the multiplier from 1.2 to 3.0 pushes every top probability up but never changes which option wins. Which property got worse, and how would we notice?", answer: "Calibration. The scorer is exactly as accurate as before but now claims much higher confidence, so more cases pass the threshold, including the mixed one. We would notice by grouping labelled decisions by confidence, as in the worked example: accuracy in the high-confidence bins would fall below the stated confidence." },
       ],
     },
   ],

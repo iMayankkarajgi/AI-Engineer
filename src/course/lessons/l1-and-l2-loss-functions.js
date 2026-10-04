@@ -1,6 +1,6 @@
 export default {
   id: 'l1-and-l2-loss-functions',
-  minutes: 16,
+  minutes: 21,
   hook: 'One late delivery out of six can make up 99.7% of a model\'s loss, or only 89% of it, depending on a single choice: do we take the absolute value of the error, or square it?',
   summary: 'A loss function turns prediction errors into one number that training tries to minimise. L1 loss (mean absolute error) averages |error| and treats every unit of error equally, so it is robust to outliers and aims at the median. L2 loss (mean squared error) averages error², punishing big errors much more, so it is smooth and easy to optimise but sensitive to outliers and aims at the mean. Pick based on how much big errors should matter and how much you trust your data.',
   sections: [
@@ -157,6 +157,82 @@ error 56.0: L1 gradient = 1, L2 gradient = 112`, walkthrough: [
           '**Assuming L1 has no downsides.** Its gradient does not shrink near the optimum, and the median ignores how far the extreme values are, which is wrong if extremes are what matter.',
           '**Using a regression loss for classification.** For class probabilities, use log loss or cross-entropy (Lesson 2.3 and Module 3).',
         ] },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'So far we scored one model with two losses. A sharper test is to score **two models** and ask which one wins. The answer can flip depending on the loss. Here are two made-up delivery-time models, each tested on the same four deliveries.' },
+        { type: 'table', caption: 'Illustrative errors in minutes on four deliveries', head: ['Model', 'Error 1', 'Error 2', 'Error 3', 'Error 4', 'Character'], rows: [
+          ['Model A', '3', '3', '3', '3', 'Always a little off'],
+          ['Model B', '0', '0', '0', '10', 'Usually perfect, once badly off'],
+        ] },
+        { type: 'steps', title: 'Scoring both models by hand', items: [
+          { title: 'MAE of model A', text: '(3 + 3 + 3 + 3) / 4 = 3.0 minutes.' },
+          { title: 'MAE of model B', text: '(0 + 0 + 0 + 10) / 4 = 2.5 minutes. Under L1, **B wins**.' },
+          { title: 'MSE of model A', text: '(9 + 9 + 9 + 9) / 4 = 9.0.' },
+          { title: 'MSE of model B', text: '(0 + 0 + 0 + 100) / 4 = 25.0. Under L2, **A wins**, and by a wide margin.' },
+          { title: 'Back to minutes', text: 'RMSE is √9 = 3.0 for A and √25 = 5.0 for B. For A, RMSE equals MAE because all its errors are the same size. For B, RMSE is twice its MAE.' },
+        ] },
+        { type: 'chart', kind: 'bar', title: 'Same two models, two different winners', yLabel: 'Loss (lower is better)', labels: ['MAE', 'MSE'], series: [
+          { name: 'Model A', values: [3, 9] },
+          { name: 'Model B', values: [2.5, 25] },
+        ], caption: 'Computed from the four illustrative errors above. MAE prefers B; MSE prefers A.' },
+        { type: 'p', text: 'Neither metric is wrong. They answer different questions. MAE asks "how far off are we in total?" and treats the 10-minute miss as worth ten 1-minute misses. MSE asks "how bad are our worst misses?" and treats it as worth a hundred.' },
+        { type: 'callout', tone: 'tip', title: 'A quick diagnostic: compare RMSE with MAE', text: 'RMSE can never be smaller than MAE. When the two are close, the errors are all of similar size. When RMSE is much larger than MAE, a few big errors are hiding behind a decent average. That gap is a cheap signal to go and look at the worst cases before trusting either number.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'This time we do not just measure with each loss, we **train** with it. We fit a one-number model, `minutes = w × km`, by gradient descent three times: with the L2 gradient, the L1 gradient and the Huber gradient. Five deliveries follow the rule of 5 minutes per km exactly. One got stuck in traffic.' },
+        { type: 'code', lang: 'python', title: 'practice_train_with_losses.py', code: `import numpy as np
+
+# Delivery distance (km) and time (minutes). The rule is 5 minutes per km,
+# but the last delivery got stuck in traffic: 60 minutes instead of 30.
+km = np.array([1, 2, 3, 4, 5, 6], dtype=float)
+minutes = np.array([5, 10, 15, 20, 25, 60], dtype=float)
+
+def grad_l2(e):                 # slope of e^2: grows with the error
+    return 2 * e
+
+def grad_l1(e):                 # slope of |e|: always +1 or -1
+    return np.sign(e)
+
+def grad_huber(e, delta=2.0):   # like L2 for small errors, like L1 for big ones
+    return np.clip(e, -delta, delta)
+
+def train(grad, steps=4000):
+    """Fit minutes = w * km by gradient descent with a shrinking step size."""
+    w = 0.0
+    for t in range(steps):
+        e = w * km - minutes                 # prediction minus truth
+        lr = 0.02 / (1 + 0.01 * t)           # step size decays over time
+        w -= lr * (grad(e) * km).mean()      # chain rule: d(error)/dw = km
+    return w
+
+for name, grad in (("L2", grad_l2), ("L1", grad_l1), ("Huber", grad_huber)):
+    w = train(grad)
+    e = np.round(w * km - minutes, 2) + 0.0   # final errors, tidy for printing
+    print(f"{name:5s}  w = {w:.2f} min/km   error on normal 5 km trip = {e[4]:+5.2f}"
+          f"   error on traffic trip = {e[5]:+6.2f}")`, output: `L2     w = 6.98 min/km   error on normal 5 km trip = +9.89   error on traffic trip = -18.13
+L1     w = 5.00 min/km   error on normal 5 km trip = +0.00   error on traffic trip = -30.00
+Huber  w = 5.22 min/km   error on normal 5 km trip = +1.09   error on traffic trip = -28.69`, walkthrough: [
+          { lines: [5, 6], note: 'Six deliveries. The first five take exactly 5 minutes per km. The last one took 60 minutes instead of 30.' },
+          { lines: [8, 15], note: 'The three gradients. L2 pushes in proportion to the error. L1 pushes with a fixed strength of 1. Huber follows L2 up to an error of δ = 2 and is capped after that.' },
+          { lines: [17, 24], note: 'Plain gradient descent on `w`. Only the gradient function changes between runs. The step size shrinks slowly so that every run can settle.' },
+          { lines: [26, 30], note: 'Train once per loss and print the learned minutes per km, plus the error on a normal 5 km trip and on the traffic trip.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Remove the outlier: change `60` to `30`. Predict the three values of `w` before you run it.',
+          'Change Huber\'s `delta=2.0` to `delta=40.0`, then to `delta=0.1`. Predict which of the other two results it moves towards each time.',
+          'Use a fixed step size: replace the `lr = ...` line with `lr = 0.02`, and print `w` with four decimals. Predict which loss no longer lands exactly on its answer, and why.',
+        ] },
+        { type: 'check', question: 'The L1 model leaves a 30-minute error on the traffic trip, the largest of the three. Does that make it the worst model here?', answer: 'Not necessarily. It is exactly right on all five normal trips, because it settles on the rate that most of the data agrees on. The L2 model cuts the traffic error to about 18 minutes, but pays for it by being almost 10 minutes too high on a normal 5 km trip. If traffic jams are rare events we do not want to model, L1 is the better fit. If big misses are very costly, we may prefer L2 or Huber.' },
+        { type: 'check', question: 'Why does the training loop shrink the step size over time, and which loss needs that most?', answer: 'L1 needs it most. Its gradient is always +1 or −1 per example, however close we are, so with a fixed step size `w` keeps hopping back and forth around the best value instead of settling. The L2 gradient shrinks by itself as the errors shrink, so it slows down naturally even with a fixed step size.' },
       ],
     },
   ],

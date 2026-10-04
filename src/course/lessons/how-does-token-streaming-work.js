@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-token-streaming-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'A long chatbot answer can take 20 seconds to generate, yet the first words appear almost instantly. How does text travel to your screen while the model is still writing it?',
   summary: 'LLMs generate one token at a time, so a server can send each token as soon as it exists instead of waiting for the full answer. Most LLM APIs do this with Server-Sent Events (SSE): one long-lived HTTP response with content type text/event-stream, in which each token arrives as a small "data:" event followed by a blank line, and a final marker (such as data: [DONE]) ends the stream. Streaming does not make generation faster; it makes the wait feel much shorter by cutting time to first token.',
   sections: [
@@ -168,6 +168,91 @@ blocking  : nothing on screen until 540 ms`,
         { type: 'callout', tone: 'example', title: 'Where you see it', text: 'Chat interfaces stream nearly every answer. Major LLM APIs offer a streaming mode based on SSE, and their SDKs expose it as an iterator or event callbacks. Coding assistants stream code into the editor; agent frameworks stream both text and tool-call arguments so they can show progress. Some real-time voice APIs use WebSockets or WebRTC instead, because audio flows in both directions.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'A reverse proxy or server framework **buffering** the response, so tokens arrive in one burst at the end (for example, Nginx proxy buffering must be disabled for SSE routes). Parsing each network chunk as one event, which breaks when an event is split across chunks or two arrive together. Calling JSON.parse on the [DONE] line. Rendering partial markdown or code blocks naively, which makes the screen flicker. Forgetting that **moderation and validation** of the full answer can only happen at the end, so a streamed answer may already be visible before a check fails.' },
         { type: 'p', text: '**When not to stream:** back-end jobs where no human is watching (batch summarization, data extraction into a database) gain nothing from streaming and are simpler as one complete response. If you must validate the entire output (for example strict JSON for another program) before anyone sees it, you may also prefer to wait for the full response.' },
+      ],
+    },
+    {
+      id: 'split-chunks-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'We said a client must keep a buffer "because network chunks can split an event in half". Let us watch that happen. The server writes three events, but the network is free to cut the bytes anywhere. Suppose they reach the client in three arrivals. We write ⏎ for a newline, so ⏎⏎ is the blank line that ends an event.' },
+        { type: 'table', caption: 'Three network arrivals carrying three SSE events', head: ['Arrival', 'Bytes that arrive', 'Complete events in the buffer', 'Left in the buffer'], rows: [
+          ['1', 'data: {"delta": "Yo', 'None: no blank line yet', 'data: {"delta": "Yo'],
+          ['2', 'ur"}⏎⏎data: {"delta": " order"}⏎⏎da', 'Two: "Your" and " order"', 'da'],
+          ['3', 'ta: [DONE]⏎⏎', 'One: the end marker', '(empty)'],
+        ] },
+        { type: 'steps', title: 'What the client does at each arrival', items: [
+          { title: 'Arrival 1: wait', text: 'The buffer holds half an event. Its JSON is cut off in the middle of a string, so parsing it now would fail. There is no blank line, so the client does nothing yet.' },
+          { title: 'Arrival 2: append, then split', text: 'The new bytes are added to the buffer. Now it contains two blank lines, so two full events can be cut off the front.' },
+          { title: 'Render both', text: 'The client parses each one and appends "Your" and then " order" to the screen. One arrival produced two tokens.' },
+          { title: 'Keep the rest', text: 'The two letters `da` are the start of the next event. They stay in the buffer.' },
+          { title: 'Arrival 3: finish', text: 'The buffer becomes `data: [DONE]` plus a blank line. The client sees the end marker and marks the answer as complete.' },
+        ] },
+        { type: 'p', text: 'The rule is: **arrivals and events are unrelated**. One arrival can hold no complete event, exactly one, or several. Only blank lines mark event borders.' },
+        { type: 'p', text: 'The same problem exists one level lower, for single characters. The network carries bytes, and in UTF-8 many characters need more than one byte: "é" takes two, most emoji take four. A cut can land between those bytes. If the client turns each arrival into text on its own, the first half is not a valid character: it either raises an error or shows up as a "�" on screen. The fix has the same shape as the event buffer: an **incremental decoder** that holds back an incomplete character until its remaining bytes arrive.' },
+        { type: 'callout', tone: 'tip', title: 'How to spot these bugs', text: 'They hide on a fast local connection, where each event usually arrives whole. Test your parser by cutting a recorded stream into tiny pieces, even one byte at a time. A correct client gives the same text for every cut.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We write a stream reader that survives any cut. We build the bytes of a real-looking stream (with a heartbeat comment and a non-ASCII word), slice them into pieces of different sizes, and check that the client rebuilds the same answer every time. Then we cut the connection early.' },
+        { type: 'code', lang: 'python', title: 'practice_sse_chunks.py', code: `import codecs
+import json
+
+BLANK = "\\n\\n"                                   # a blank line ends an SSE event
+tokens = ["Your", " café", " order", " ships", "."]
+events = [": ping"] + ["data: " + json.dumps({"delta": t}, ensure_ascii=False)
+                       for t in tokens] + ["data: [DONE]"]
+wire = (BLANK.join(events) + BLANK).encode("utf-8")   # the bytes on the network
+
+def cut(data, size):
+    """Pretend the network delivers the bytes in pieces of 'size' bytes."""
+    return [data[i:i + size] for i in range(0, len(data), size)]
+
+def read_stream(chunks):
+    decoder = codecs.getincrementaldecoder("utf-8")()  # remembers half characters
+    buffer, text, done = "", "", False
+    for chunk in chunks:
+        buffer += decoder.decode(chunk)
+        while BLANK in buffer:                   # handle complete events only
+            event, buffer = buffer.split(BLANK, 1)
+            if event.startswith(":"):            # a comment line: heartbeat
+                continue
+            data = event.removeprefix("data: ")
+            if data == "[DONE]":
+                done = True
+            else:
+                text += json.loads(data)["delta"]   # append the delta
+    return text, done
+
+for size in (1000, 16, 5):
+    chunks = cut(wire, size)
+    text, done = read_stream(chunks)
+    print(f"{len(chunks):2d} chunks of up to {size:4d} bytes -> {text!r} complete={done}")
+
+text, done = read_stream(cut(wire[:70], 16))     # connection drops after 70 bytes
+print(f"dropped after 70 bytes       -> {text!r} complete={done}")
+
+broken = [c for c in cut(wire, 5) if b"\\xc3" in c[-1:]]   # chunk ending mid-character
+print("a chunk that ends inside 'é':", broken[0])`, output: ` 1 chunks of up to 1000 bytes -> 'Your café order ships.' complete=True
+10 chunks of up to   16 bytes -> 'Your café order ships.' complete=True
+30 chunks of up to    5 bytes -> 'Your café order ships.' complete=True
+dropped after 70 bytes       -> 'Your café' complete=False
+a chunk that ends inside 'é': b' caf\\xc3'`, walkthrough: [
+          { lines: [4, 8], note: 'The server side. One heartbeat comment, five token events and the end marker, joined by blank lines and encoded to bytes. This is everything that travels over the network.' },
+          { lines: [14, 18], note: 'The client keeps two pieces of state: an incremental decoder for half-received characters and a text buffer for half-received events.' },
+          { lines: [19, 28], note: 'Only complete events leave the buffer. Comment lines are skipped, the end marker sets `done`, and every other event is parsed and its delta appended.' },
+          { lines: [30, 39], note: 'One big chunk, 10 chunks or 30 chunks give the same text. A stream cut after 70 bytes gives a partial text and `complete=False`. The last line shows a real 5-byte chunk that ends on the first byte of "é".' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Replace `decoder.decode(chunk)` with `chunk.decode("utf-8")`, which decodes every chunk on its own. Predict what the 1000-byte run prints and what happens in the 5-byte run. Use the last line of the output as a hint.',
+          'Change `while BLANK in buffer:` to `if BLANK in buffer:`, so at most one event is handled per chunk. Predict what the 1000-byte run prints now.',
+          'Change the drop point from `wire[:70]` to `wire[:40]`. Predict the text and the `complete` flag before running.',
+        ] },
+        { type: 'check', question: 'When the stream was cut after 70 bytes, part of the " order" event had already arrived. Why does the client show only \'Your café\' and nothing at all from that half-received event?', answer: 'Because the client only acts on **complete** events. The bytes of the " order" event are in the buffer, but no blank line has closed that event, and half of a JSON object cannot be parsed. So the fragment stays in the buffer and never reaches the screen. The client shows exactly the tokens it fully received, and `complete=False` tells the app that the end marker never came.' },
+        { type: 'check', question: 'Chunk sizes of 1000, 16 and 5 bytes all give the same text. What does that tell us about network chunks and SSE events, and which two pieces of state make it possible?', answer: 'It tells us the two are unrelated: the network may cut the byte stream anywhere, and the meaning is carried only by the bytes themselves, with blank lines as event borders. Two small memories make the client independent of the cuts: the **event buffer**, which holds text until a blank line completes an event, and the **incremental decoder**, which holds bytes until a multi-byte character is complete.' },
       ],
     },
   ],

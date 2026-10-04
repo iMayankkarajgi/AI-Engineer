@@ -1,6 +1,6 @@
 export default {
   id: "how-does-langgraph-work",
-  minutes: 23,
+  minutes: 28,
   hook: "How do we build an agent that can loop, branch, remember a customer across sessions and pause for a manager's approval, without it turning into a tangle of if-statements?",
   summary: "LangGraph is an open-source library from the LangChain team for building agents as graphs. We define a typed state, nodes that update it, and edges (fixed or conditional) that decide what runs next; cycles are allowed, so agent loops are natural. A checkpointer saves the state after every step per conversation thread, which gives memory, crash recovery, time travel and human-in-the-loop pauses. It is graph engineering, packaged as a library.",
   sections: [
@@ -223,6 +223,71 @@ def refund(state):
         ], verdict: "Start with the simplest option that works; move to a custom LangGraph graph when you need explicit control flow, durable state or human approvals." },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Forgetting a reducer and silently overwriting a list; using one shared thread id; putting giant blobs (whole PDFs) in state so every checkpoint is huge; and building a 30-node graph for a job a single prompt could do." },
         { type: "callout", tone: "example", title: "Real-world use", text: "Teams use LangGraph for customer-support agents with escalation, research agents with plan-search-write loops, document-processing pipelines with validation and review, and supervisor setups where one node routes work to specialist sub-agents." }
+      ]
+    },
+    {
+      id: "tracing-state-step-by-step",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The merge rule decides everything a node can see, so let us trace it by hand on the mini version from this lesson. The state has one field, `messages`, with an append reducer. The user asks “where is order 42”." },
+        { type: "table", caption: "Thread t1, first turn: what each step returns, and the state after the merge", head: ["Step", "Who ran", "Update returned", "Messages after merge"], rows: [["0", "input", "`user: where is order 42`", "1"], ["1", "agent", "`tool_call:get_order_status:42`", "2"], ["2", "tools", "`tool:shipped`", "3"], ["3", "agent", "`ai: Your order is shipped.`", "4"]] },
+        { type: "p", text: "Each node returned one message, not the whole list. The reducer did the appending. After step 3 the conditional edge finds no tool call and routes to END, and 4 messages are saved under `t1`. The second turn loads those 4 and adds 4 more, which is the 8 in the output." },
+        { type: "steps", title: "The same run with the default rule, replace", items: [{ title: "Input arrives", text: "`messages` is replaced by the new input: 1 message. No harm yet." }, { title: "agent runs", text: "It returns the tool call. `messages` now holds only the tool call. The user's question is gone." }, { title: "tools runs", text: "It reads the last message, runs the tool and returns the result. Only `tool:shipped` is left." }, { title: "agent runs again", text: "Our fake model looks only at the last message, so it still answers. A real model would see a tool result with no question in front of it." }, { title: "Second turn", text: "Loading the thread gives 1 message, not 4. The conversation memory is one line long." }] },
+        { type: "p", text: "Nothing crashed in that replay. This is why a missing reducer is hard to notice: the graph runs, and the damage is a model that quietly lacks context. When a list field in a saved state looks too short, check its reducer first." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build two ideas in plain Python: the merge rule with a reducer, and a pause that waits for a human. A refund over 200 stops the run before it is issued. The state is saved under a thread id, and a later call that carries the human's answer picks up where the run stopped. This is a sketch of the mechanism, not LangGraph's real API." },
+        { type: "code", lang: "python", title: "practice_pause_resume.py", code: `import operator    # a plain-Python sketch of the ideas, not the real LangGraph API
+
+REDUCERS = {"notes": operator.add}            # no entry = replace (the default)
+
+def merge(state, update):
+    # new_state[field] = reducer(old_state[field], update[field])
+    new = dict(state)
+    for field, value in update.items():
+        new[field] = REDUCERS[field](state[field], value) if field in REDUCERS else value
+    return new
+
+def lookup(state): return {"notes": ["order 42 costs 250"], "amount": 250}
+def refund(state):
+    if state["amount"] > 200 and state["approval"] is None:
+        return "PAUSE"                        # like an interrupt: wait for a human
+    ok = state["amount"] <= 200 or state["approval"] == "approve"
+    return {"notes": ["refund issued" if ok else "refund declined"], "status": "done"}
+
+NODES = [("lookup", lookup), ("refund", refund)]
+saved = {}                                    # thread id -> (next node index, state)
+EMPTY = {"notes": [], "amount": 0, "approval": None, "status": "open"}
+
+def invoke(thread_id, resume=None):
+    index, state = saved.get(thread_id, (0, EMPTY))
+    if resume is not None:
+        state = merge(state, {"approval": resume})    # the human's answer is an update
+    while index < len(NODES):
+        name, fn = NODES[index]
+        update = fn(state)
+        if update == "PAUSE":
+            saved[thread_id] = (index, state)         # checkpoint, then stop
+            return f"paused at {name}: approve refund of {state['amount']}?"
+        state, index = merge(state, update), index + 1
+        saved[thread_id] = (index, state)             # checkpoint after every step
+    return f"{state['status']}: {state['notes']}"
+
+print(invoke("customer-1"))
+print(invoke("customer-1", resume="approve"))
+print(invoke("customer-2"))
+print(invoke("customer-2", resume="no"))`, output: `paused at refund: approve refund of 250?
+done: ['order 42 costs 250', 'refund issued']
+paused at refund: approve refund of 250?
+done: ['order 42 costs 250', 'refund declined']`, walkthrough: [{ lines: [3, 10], note: "The merge rule from the lesson: a field with a reducer is combined (here, lists are added); any other field is replaced." }, { lines: [12, 17], note: "Two nodes. `refund` returns a pause signal when the amount is over 200 and no approval is in the state yet." }, { lines: [23, 35], note: "The runtime: load the thread's saved position and state, merge a human answer if there is one, run nodes, and save after every step." }, { lines: [37, 40], note: "Two threads. Each pauses, then resumes with a different human answer." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Remove `\"notes\"` from `REDUCERS`. Predict the final `notes` list for customer-1.", "Change the amount in `lookup` to 150. Predict what the first call prints. Does the run pause at all?", "Call `invoke(\"customer-1\")` twice in a row with no `resume`. Predict the second result. Why is it safe to ask twice?"] },
+        { type: "check", question: "When we resume, our `invoke` runs the `refund` node again from its first line; it does not jump into the middle of the function. Why does the refund still come out right, and what should we keep out of the lines before the pause?", answer: "On the second run `approval` is in the state, so the node skips the pause and finishes. This works because everything before the pause is a pure check. If the node did something with an outside effect before pausing, such as sending an email, that action would happen twice. Keep side effects after the pause, or make them safe to repeat." },
+        { type: "check", question: "customer-1 and customer-2 paused with the same question and then got different endings. Where did each run keep its place while it waited? What would happen if both used one thread id?", answer: "In `saved`, under its own thread id: the index of the next node plus the full state. That entry is the only thing that links the second call to the first. With a shared thread id, the second customer's run would overwrite the first one's saved state, and one manager's answer could be applied to the other customer's refund. Each conversation needs its own thread id." }
       ]
     }
   ],

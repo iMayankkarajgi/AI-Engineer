@@ -1,6 +1,6 @@
 export default {
   id: 'how-do-attention-sinks-work',
-  minutes: 19,
+  minutes: 24,
   hook: 'Why does a chatbot suddenly start writing gibberish the moment we delete the first few, seemingly useless, tokens of a long conversation?',
   summary: 'Trained LLMs dump a large share of their attention onto the first few tokens, even when those tokens mean nothing; these tokens are called attention sinks. If a streaming system evicts them to save memory, the attention distribution shifts and the model breaks down. Keeping a handful of sink tokens plus a sliding window of recent tokens (the StreamingLLM recipe), or giving the model a dedicated learned sink, lets it run stably over very long streams.',
   sections: [
@@ -157,6 +157,68 @@ cache after 20 tokens: [0, 1, 2, 3, 16, 17, 18, 19]`,
           '**Architecture design:** learned sinks and related gating ideas are now part of how some new models are built.',
         ] },
         { type: 'check', question: 'Our car assistant uses window-only eviction and starts producing nonsense after about 8,000 tokens, which equals the window size. What is the most likely cause and the cheapest fix?', answer: 'At 8,000 tokens the first tokens are being evicted, so the attention sink disappears and the softmax distribution shifts. The cheapest fix is StreamingLLM-style caching: always keep the first ~4 tokens plus the rolling window.' },
+      ],
+    },
+    {
+      id: 'learned-sink-by-the-numbers',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: "We said a learned sink is an extra score that joins the softmax but has no value attached. Let us see with small numbers what that does, and then look at the second detail that keeps streaming stable: position re-indexing." },
+        { type: 'formula', expr: 'wⱼ = exp(sⱼ) / (exp(b) + ∑ₖ exp(sₖ))     output = ∑ⱼ wⱼ · vⱼ', where: [ ['b', 'the learned sink logit of this head'], ['sⱼ', 'score of the query against real token j'], ['wⱼ', 'weight on real token j; these weights now sum to less than 1'] ], caption: 'Softmax with a sink logit. The share exp(b) / (…) goes to nobody and adds nothing to the output.' },
+        { type: 'steps', title: "One head, four tokens, nothing relevant", items: [
+          { title: "Scores", text: "The four real tokens score 0.1, 0.2, 0.0 and 0.1 (illustrative). Their exponentials are about 1.11, 1.22, 1.00 and 1.11, which add up to 4.43." },
+          { title: "Without a sink", text: "The weights must sum to 1, so each token gets roughly a quarter. The head is forced to average four irrelevant values." },
+          { title: "With a sink logit of 3.0", text: "exp(3.0) ≈ 20.09 joins the denominator: 4.43 + 20.09 = 24.52. The real tokens together get 4.43 / 24.52 ≈ 0.18. The other 0.82 goes to the sink and contributes nothing." },
+          { title: "When something matters", text: "If one token scores 5.0, exp(5.0) ≈ 148 dwarfs the sink's 20, so most of the weight goes to that token. The sink only wins when nothing else does." },
+        ] },
+        { type: 'table', caption: "Position re-indexing in a StreamingLLM-style cache after 20 tokens (4 sinks + window of 4)", head: ['Kept tokens', 'Original position in the text', 'Position the model is given'], rows: [
+          ['Sink tokens', '0, 1, 2, 3', '0, 1, 2, 3'],
+          ['Window tokens', '16, 17, 18, 19', '4, 5, 6, 7'],
+        ] },
+        { type: 'p', text: "Without re-indexing, the window tokens would carry positions that keep growing, eventually past anything seen in training. A common bug in home-made streaming caches is to keep the sinks but forget this step: output stays fine for a while, then drifts once positions exceed the training length." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will write a tiny attention head with an optional learned sink logit and compare two situations: a query with nothing relevant in the context, and a query with one clear match." },
+        { type: 'code', lang: 'python', title: 'practice_learned_sink.py', code: `import math
+
+def attend(scores, values, sink_logit=None):
+    # softmax over the scores; an optional sink logit joins the denominator
+    # but has no value attached, so weight sent there adds nothing to the output
+    exps = [math.exp(s) for s in scores]
+    denom = sum(exps) + (math.exp(sink_logit) if sink_logit is not None else 0.0)
+    w = [e / denom for e in exps]
+    out = sum(wi * vi for wi, vi in zip(w, values))
+    return w, out
+
+values = [1.0, -1.0, 2.0, 0.5]                    # illustrative value numbers
+cases = {"nothing relevant": [0.1, 0.2, 0.0, 0.1],
+         "one clear match": [0.1, 0.2, 5.0, 0.1]}
+
+for name, scores in cases.items():
+    for label, sink in [("no sink", None), ("sink logit 3.0", 3.0)]:
+        w, out = attend(scores, values, sink)
+        print(f"{name:17s} {label:15s} weight on real tokens={sum(w):.2f} "
+              f"largest={max(w):.2f} output={out:+.2f}")`, output: `nothing relevant  no sink         weight on real tokens=1.00 largest=0.28 output=+0.55
+nothing relevant  sink logit 3.0  weight on real tokens=0.18 largest=0.05 output=+0.10
+one clear match   no sink         weight on real tokens=1.00 largest=0.98 output=+1.96
+one clear match   sink logit 3.0  weight on real tokens=0.88 largest=0.86 output=+1.73`,
+          walkthrough: [
+            { lines: [3, 10], note: "Attention for one query. The only change from ordinary softmax is line 7: if a sink logit is given, its exponential is added to the denominator. It has no value, so it never appears in the output sum." },
+            { lines: [12, 14], note: "Four value numbers and two score patterns: all scores low, or one score much higher than the rest." },
+            { lines: [16, 20], note: "Run both patterns with and without the sink. With nothing relevant, the sink takes 82% of the weight and the output shrinks from +0.55 to +0.10. With a clear match, the real token still gets 86%." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set the sink logit to `0.0`. That is the “softmax plus one” idea, since exp(0) = 1. Predict the weight on real tokens in the “nothing relevant” case.",
+          "Set the sink logit to `6.0`. Predict what happens to the “one clear match” case. Is a stronger sink always better?",
+          "Change the matching score from `5.0` to `8.0` and keep the sink at `3.0`. Predict how much weight the sink still takes.",
+        ] },
+        { type: 'check', question: "With nothing relevant, the output is +0.55 without a sink and +0.10 with one. Why is +0.10 closer to what the head should produce?", answer: "When no token is relevant, the best contribution is close to nothing. Without a sink, the weights must still sum to 1, so the head averages four unrelated values and injects noise (+0.55). The sink lets most of the weight go to a slot with no value, so the head stays nearly silent." },
+        { type: 'check', question: "A learned sink logit is a parameter of the head, not a token in the cache. Why does that make cache eviction safer than in a model that uses its first token as the sink?", answer: "A first-token sink lives in the KV cache, so a window policy can evict it and shift every weight. A sink logit is part of the model's weights: it is present in every softmax no matter which tokens are cached, so trimming the cache cannot remove it." },
       ],
     },
   ],

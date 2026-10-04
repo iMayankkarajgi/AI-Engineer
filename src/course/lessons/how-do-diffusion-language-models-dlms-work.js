@@ -1,6 +1,6 @@
 export default {
   id: 'how-do-diffusion-language-models-dlms-work',
-  minutes: 22,
+  minutes: 27,
   hook: 'What if a language model wrote a whole paragraph at once, like a photo coming into focus, instead of one word after another?',
   summary: 'A Diffusion Language Model (DLM) generates text by starting from a sequence of blank (masked) tokens and repeatedly filling in and refining many positions in parallel, instead of predicting one next token at a time. It is trained by randomly masking parts of real text (the forward process) and learning to predict the hidden tokens (the reverse process). DLMs promise faster generation and bidirectional context, but still face quality, tooling and efficiency challenges compared with autoregressive LLMs.',
   sections: [
@@ -200,6 +200,76 @@ reverse step 4: the cat sat on the warm mat today
           { when: '2025–2026', title: 'Scaling and hybrids', text: 'Larger open DLMs, models adapted from AR checkpoints, block diffusion and faster samplers.' },
         ] },
         { type: 'callout', tone: 'example', title: 'Where DLMs are used today', text: 'The clearest commercial use so far is fast code generation and editing, where latency matters and infilling is natural. For general chat and deep reasoning, autoregressive models still dominate as of 2026, and this area is moving quickly.' },
+      ],
+    },
+    {
+      id: 'worked-example-step-budget',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "Is a diffusion model faster or slower for a given answer? Let us count for an output of 256 tokens. We use a simple unit: one **position-pass** is one token position going through the network once. The counts are illustrative and ignore the prompt." },
+        { type: 'table', caption: "Work to produce 256 tokens (illustrative count)", head: ['Setup', 'Rounds, one after another', 'Positions per round', 'Total position-passes', 'Tokens committed per round'], rows: [
+          ['Autoregressive with a KV cache', '256', '1', '256', '1'],
+          ['Diffusion, 256 steps', '256', '256', '65,536', '1'],
+          ['Diffusion, 32 steps', '32', '256', '8,192', '8'],
+          ['Diffusion, 8 steps', '8', '256', '2,048', '32'],
+        ] },
+        { type: 'steps', title: "Reading the table", items: [
+          { title: "Total work", text: "Every diffusion row does more arithmetic than the autoregressive row, because each step re-processes all 256 positions." },
+          { title: "Waiting time", text: "Rounds run one after another, but the positions inside a round run in parallel on a GPU. With 32 steps there are 32 rounds to wait for instead of 256." },
+          { title: "The speed-up", text: "If a round over 256 positions takes about as long as a round over 1 position, 32 steps is roughly 8 times faster. If the wide round is much slower, the gain shrinks." },
+          { title: "The price", text: "At 8 steps, 32 tokens are fixed per round without seeing each other's final choice. That is where quality drops." },
+        ] },
+        { type: 'p', text: "We can put a number on that last risk. Suppose two neighbouring blanks must spell a city, and the model thinks New York has probability 0.5, Los Angeles 0.3 and San Diego 0.2 (illustrative). Filled in one step, each blank is sampled on its own. The pair matches only when both happen to pick the same city: 0.5² + 0.3² + 0.2² = 0.38. So 62% of the time we get a name like “New Diego”. Filled in two steps, the second blank sees the first, and the mismatch disappears." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will measure the parallel decoding error ourselves. Two masked positions must form a city name. We fill them in one step (each on its own) and in two steps (the second sees the first), 10,000 times each, and count the invalid names." },
+        { type: 'code', lang: 'python', title: 'practice_parallel_error.py', code: `import random
+random.seed(1)
+
+# Joint distribution of a two-token city name (illustrative probabilities)
+cities = {("New", "York"): 0.5, ("Los", "Angeles"): 0.3, ("San", "Diego"): 0.2}
+first = {a: p for (a, _), p in cities.items()}     # what token 1 looks like alone
+second = {b: p for (_, b), p in cities.items()}    # what token 2 looks like alone
+
+def pick(dist):
+    return random.choices(list(dist), weights=list(dist.values()))[0]
+
+def one_step():
+    # both masks filled in the same step: each token is sampled on its own
+    return pick(first), pick(second)
+
+def two_steps():
+    # step 1 commits token 1; step 2 sees it and picks the matching token 2
+    a = pick(first)
+    return a, next(b for (x, b) in cities if x == a)
+
+n = 10_000
+for name, sampler in [("1 step (parallel)", one_step), ("2 steps", two_steps)]:
+    outs = [sampler() for _ in range(n)]
+    bad = [o for o in outs if o not in cities]
+    example = " ".join(bad[0]) if bad else "none"
+    print(f"{name:18s} invalid names: {len(bad) / n:.1%}  example: {example}")
+print("theory for 1 step:", f"{1 - sum(p * p for p in cities.values()):.1%}")`, output: `1 step (parallel)  invalid names: 62.3%  example: New Diego
+2 steps            invalid names: 0.0%  example: none
+theory for 1 step: 62.0%`,
+          walkthrough: [
+            { lines: [4, 7], note: "The true distribution is over pairs of tokens. From it we derive what each position looks like on its own: the first token is New, Los or San; the second is York, Angeles or Diego, with the same probabilities." },
+            { lines: [9, 14], note: "One step: both positions are sampled independently from their own distributions. Each choice is reasonable alone, but nothing ties them together." },
+            { lines: [16, 19], note: "Two steps: commit the first token, then choose the second given the first. The dependency is respected." },
+            { lines: [21, 27], note: "Sample 10,000 names each way. One step gives 62.3% invalid names, matching the 62% we computed by hand. Two steps give none." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Change the probabilities to `0.9`, `0.05` and `0.05`. Predict the invalid rate for the one-step sampler with the formula on the last line, then run it.",
+          "Add a fourth city, `(\"Las\", \"Vegas\")`, and give all four a probability of `0.25`. Predict the new invalid rate.",
+          "Rewrite `two_steps` so it commits the second token first and then picks the matching first token. Predict the invalid rate. Does the order matter for a model that sees both directions?",
+        ] },
+        { type: 'check', question: "With probabilities 0.9, 0.05 and 0.05, the one-step invalid rate falls to about 18.5%. What does this say about when it is safe to commit many tokens in one step?", answer: "It is safe when the model is already confident. If one option dominates, independent choices almost always agree, so little is lost. When several options are equally likely, independent choices clash. That is why samplers commit the most confident positions first and leave uncertain ones for later steps." },
+        { type: 'check', question: "In the table, diffusion with 32 steps does 8,192 position-passes while cached autoregressive decoding does 256, yet the diffusion model can finish first. How?", answer: "Finishing time depends on how many rounds must run one after another, not only on total arithmetic. The 256 positions of a round are processed in parallel on the GPU, so the model waits for 32 rounds instead of 256. It does more work but less waiting. The advantage disappears if each wide round is much slower than a one-token round." },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: "how-do-rnns-and-transformers-differ",
-  minutes: 20,
+  minutes: 25,
   hook: "Why did almost the whole field switch from RNNs to Transformers within a few years of 2017, and are RNN ideas really gone?",
   summary: "Both RNNs and Transformers process sequences such as text. An RNN reads one token at a time and squeezes everything it has seen into a single memory vector, which makes it slow to train and forgetful over long distances. A Transformer uses self-attention to let every token look directly at every other token in parallel, which trains much faster on GPUs and handles long-range context well, at the cost of compute that grows with the square of the sequence length.",
   sections: [
@@ -149,6 +149,76 @@ RNN: sequential steps grow with n; attention: one parallel step`,
         ] },
         { type: "callout", tone: "warn", title: "Common misconception", text: "“Transformers have no limits on context.” They have a maximum context length, and attention cost grows with the square of the length. Many efficiency tricks (sliding-window attention, KV-cache compression, hybrids with recurrent layers) exist precisely because of this." },
         { type: "check", question: "Our team must process 1-million-step sensor logs on a small edge device with very little memory. Why might a recurrent or state-space model beat a standard Transformer here?", answer: "A standard Transformer would need attention over a million positions (n² growth) and a growing KV cache, which a small device cannot hold. A recurrent or state-space model carries a fixed-size state, so memory stays constant no matter how long the log is." },
+      ],
+    },
+    {
+      id: "counting-the-work",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "“Linear versus quadratic” is easy to say and easy to misjudge. Let us count. For a sequence of n tokens, one RNN layer does n updates, one after another. One attention layer computes a score for every pair of tokens, so n × n scores, all in one parallel step. If we stored those scores naively as 4-byte numbers, the table below shows the memory for a single head in a single layer." },
+        { type: "table", caption: "Simple counts, not measurements. Real systems avoid storing the full score table, but the amount of work still grows the same way.", head: ["Tokens (n)", "RNN steps in a row", "Attention scores (n²)", "Score table at 4 bytes each"], rows: [
+          ["10", "10", "100", "400 bytes"],
+          ["100", "100", "10,000", "40 KB"],
+          ["1,000", "1,000", "1,000,000", "4 MB"],
+          ["10,000", "10,000", "100,000,000", "400 MB"],
+          ["100,000", "100,000", "10,000,000,000", "40 GB"],
+        ] },
+        { type: "p", text: "So which one is faster? It depends on which cost hurts more: total arithmetic, or waiting in line." },
+        { type: "steps", title: "How to reason about speed", items: [
+          { title: "Count total work", text: "At n = 1,000 the attention layer does a million scores while the RNN does a thousand updates. Attention does far more arithmetic." },
+          { title: "Count the waiting", text: "The RNN's thousand updates must run in order. Update 1,000 cannot start before update 999 ends. Attention's million scores have no order, so a GPU can do them side by side." },
+          { title: "Short and medium inputs", text: "Here parallel hardware wins. The Transformer finishes a training pass sooner even though it does more arithmetic." },
+          { title: "Very long inputs", text: "Multiply n by 10 and attention work grows by 100. At some length, memory runs out before patience does. That is where linear-time designs become attractive again." },
+        ] },
+        { type: "callout", tone: "note", title: "Depth is different too", text: "In an RNN, the number of steps between the first and last token grows with n. In a Transformer, it is fixed by the number of layers, whatever the length. A short chain of steps is easier to train through, and that is a second reason gradients behave better." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the smallest RNN possible, with one number as its memory, and watch a single early signal fade. We also track the gradient: how much the last memory would change if we nudged the first one." },
+        { type: "code", lang: "python", title: "practice_tiny_rnn.py", code: `import math
+
+def run_rnn(inputs, w_x, w_h):
+    # A one-number RNN: new memory = tanh(w_x * input + w_h * old memory)
+    h, trace, grad = 0.0, [], 1.0
+    for t, x in enumerate(inputs):
+        h = math.tanh(w_x * x + w_h * h)
+        trace.append(h)
+        if t > 0:
+            grad *= w_h * (1 - h * h)   # d(h_t)/d(h_t-1), chained step by step
+    return trace, grad
+
+# The only signal is at step 1. Every later input is 0.
+inputs = [1.0] + [0.0] * 9
+
+for w_h in [0.5, 0.9, 1.5]:
+    trace, grad = run_rnn(inputs, w_x=1.0, w_h=w_h)
+    shown = " ".join(f"{h:.3f}" for h in trace[:4])
+    print(f"w_h={w_h}: memory {shown} ... last={trace[-1]:.4f}  grad={grad:.1e}")
+
+# Attention has no chain: the last token reads the first one directly.
+# With equal scores, 10 tokens share the weight evenly, whatever the distance.
+n = len(inputs)
+print(f"attention: token {n} reads token 1 in one hop, weight {1 / n:.2f}")`, output: `w_h=0.5: memory 0.762 0.363 0.180 0.090 ... last=0.0014  grad=1.6e-03
+w_h=0.9: memory 0.762 0.595 0.490 0.414 ... last=0.1892  grad=1.0e-01
+w_h=1.5: memory 0.762 0.815 0.840 0.851 ... last=0.8585  grad=3.5e-04
+attention: token 10 reads token 1 in one hop, weight 0.10`,
+          walkthrough: [
+            { lines: [3, 11], note: "The whole RNN: one weight for the input, one for the old memory, and tanh. `grad` multiplies the per-step factor w_h × (1 − h²), which is how backpropagation through time chains the steps." },
+            { lines: [13, 14], note: "Ten inputs. Only the first carries a signal, so anything left in memory at the end came from step 1." },
+            { lines: [16, 19], note: "Try three recurrent weights. With 0.5 the memory roughly halves each step. With 0.9 it fades slowly. With 1.5 it settles near 0.86, but the gradient is still tiny." },
+            { lines: [21, 24], note: "The attention contrast: no chain at all. The last token reaches the first in one hop, at any distance." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `[0.0] * 9` to `[0.0] * 49`. Predict first: what happens to `last` and `grad` for `w_h=0.9`?",
+          "Change the first input from `1.0` to `-1.0`. Predict the sign of `last` for `w_h=1.5`, and say what that tells us the memory is storing.",
+          "Add `1.0` to the list of `w_h` values. Predict: does the memory fade faster or slower than with 0.9, and does it ever reach exactly 0?",
+        ] },
+        { type: "check", question: "With `w_h=1.5` the memory does not fade: it ends at 0.8585. Yet the gradient is 3.5e-04, smaller than for 0.5. How can the memory be strong while the learning signal is weak?", answer: "tanh is saturated. Near 0.86 the curve is flat, so a small nudge to an earlier memory barely changes the later ones: each step's factor 1.5 × (1 − h²) is well below 1. The RNN holds on to a value, but training cannot easily adjust how it got there. Remembering and being trainable are two different things." },
+        { type: "check", question: "The attention line prints a weight of 0.10 for token 1. That is small. Why is this still a better position than the RNN with `w_h=0.5`, whose memory ended at 0.0014?", answer: "The 0.10 is only the untrained starting point: equal scores spread weight evenly over 10 tokens. Training can raise that one score directly and move the weight close to 1, because the link is a single step. The RNN's 0.0014 is the result of nine shrinking steps in a row, and the same chain shrinks the gradient that would be needed to fix it." },
       ],
     },
     {

@@ -1,6 +1,6 @@
 export default {
   id: 'ai-engineering-interview-prep',
-  minutes: 35,
+  minutes: 40,
   hook: 'You understand the material. Can you explain KV caching in 60 seconds, estimate the cost of a chatbot on a whiteboard, and design a RAG system while someone asks "why?" after every box you draw?',
   summary: 'AI engineering interviews usually combine coding, fundamentals questions, an AI system design round, a deep dive on your past projects, and behavioural questions. Concept answers land best when they follow a short structure: definition, problem it solves, how it works, trade-offs, example. The system design round rewards a clear process: clarify requirements, estimate, sketch the pipeline, go deep on retrieval, evaluation, safety, latency and cost. This lesson gives model answers from every module, a fully worked design of a RAG support assistant, and a 30-day revision plan.',
   sections: [
@@ -254,6 +254,78 @@ MRR = 0.625`, walkthrough: [
           ['Week 3', 'Compare LoRA vs full fine-tuning, RLHF vs DPO, and build and evaluate a small RAG pipeline'],
           ['Week 4', 'Run a 45-minute system design with estimates, evaluation, safety and cost, and tell three project stories with numbers'],
         ] },
+      ],
+    },
+    {
+      id: 'worked-debugging',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Besides "design X", many loops include a **debugging question**: "Our support bot\'s answer quality dropped last week. How would you find out why?" There is no diagram to draw. The interviewer wants to see a method. The strongest move is to refuse to guess, and to split the failures by pipeline stage first.' },
+        { type: 'steps', title: 'A method you can say out loud', items: [
+          { title: 'Pin down the symptom', text: '"Which metric dropped, by how much, and since when? Thumbs-down rate, escalations, or the offline eval?" A vague complaint becomes a number and a date.' },
+          { title: 'Ask what changed', text: '"What shipped around that date? A prompt edit, a model version, a re-index, a new document source, a traffic shift?" Most regressions follow a change.' },
+          { title: 'Collect failing examples', text: 'Pull a sample of bad answers, say 100, with their full traces: rewritten query, retrieved chunks, prompt, tool calls and final answer.' },
+          { title: 'Triage by stage', text: 'For each one ask in order: was the right chunk retrieved? If yes, did the answer use it correctly? If the question was out of scope, did the bot abstain?' },
+          { title: 'Fix the biggest bucket', text: 'Work on the stage that explains the most failures. Do not start with the stage that is most fun to fix.' },
+          { title: 'Prove it and guard it', text: 'Re-run the offline eval, check that nothing else got worse, and add the failing cases to the regression set.' },
+        ] },
+        { type: 'chart', kind: 'hbar', title: 'Triage of 100 failed answers', xLabel: 'Failures', labels: ['Right chunk not retrieved', 'Chunk retrieved, answer wrong', 'Out of scope, should have abstained', 'Tool call failed or timed out'], series: [ { name: 'Count', values: [55, 25, 12, 8] } ], caption: 'Illustrative numbers for the worked example. More than half of the failures happen before the LLM writes a word.' },
+        { type: 'p', text: 'With these numbers the conclusion writes itself: 55 of 100 failures are retrieval misses, so changing the generation prompt or the model cannot fix more than 45. We would look at the retrieval stage first. Did the re-index drop documents? Did a new chunk size split answers in half? Are the missed questions full of product codes that vector search handles badly?' },
+        { type: 'table', caption: 'Each bucket points to a different fix', head: ['Bucket', 'First things to check', 'Typical fix'], rows: [
+          ['Right chunk not retrieved', 'Index freshness, chunking, query rewrite, filters', 'Hybrid search, better chunks, fix the ingest'],
+          ['Chunk retrieved, answer wrong', 'Too many distracting chunks, unclear instructions, conflicting documents', 'Rerank and keep fewer chunks, tighten the prompt, show document dates'],
+          ['Should have abstained', 'Score threshold, out-of-scope examples in the eval set', 'Abstain below a rerank score, add a handoff path'],
+          ['Tool failure', 'Timeouts, error handling, argument validation', 'Retries with limits, clear error messages back to the model'],
+        ] },
+        { type: 'callout', tone: 'tip', title: 'A sentence worth memorising', text: '"Before I change anything, I would measure where the failures are, because a fix aimed at the wrong stage cannot help." Said early, it tells the interviewer you debug with evidence.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will write the triage step as code, the kind of small utility a coding round might ask for. Ten test questions come with recorded results. For each one we decide which stage failed, and we repeat this for three settings of k, the number of retrieved chunks placed in the prompt. Watch how the *mix* of failures shifts as k grows.' },
+        { type: 'code', lang: 'python', title: 'practice_failure_triage.py', code: `# Failure triage for a RAG bot: WHICH stage broke each wrong answer?
+# Ten test questions with recorded results (illustrative data).
+#   gold_rank: position of the correct chunk in the search results (None = never found)
+#   max_k:     the answer is right only if the model reads at most this many chunks
+#              (0 = it misreads the chunk even alone; 9 = extra chunks never distract it)
+RESULTS = [(1, 9), (1, 9), (2, 9), (1, 3), (3, 9),
+           (4, 9), (None, 9), (2, 0), (5, 9), (1, 3)]
+CHUNK_TOKENS = 400
+
+def triage(gold_rank, max_k, k):
+    """Classify one question when the top k chunks are put in the prompt."""
+    if gold_rank is None or gold_rank > k:
+        return "retrieval miss"        # the right chunk never reached the model
+    if k > max_k:
+        return "generation error"      # it was there, but the answer is still wrong
+    return "correct"
+
+print(" k  correct  retrieval miss  generation error  recall@k  context tokens")
+for k in (1, 3, 5):
+    counts = {"correct": 0, "retrieval miss": 0, "generation error": 0}
+    for gold_rank, max_k in RESULTS:
+        counts[triage(gold_rank, max_k, k)] += 1
+    recall = 1 - counts["retrieval miss"] / len(RESULTS)
+    print(f"{k:2d}  {counts['correct']:7d}  {counts['retrieval miss']:14d}  "
+          f"{counts['generation error']:16d}  {recall:8.2f}  {k * CHUNK_TOKENS:14,d}")`, output: ` k  correct  retrieval miss  generation error  recall@k  context tokens
+ 1        4               6                 0      0.40             400
+ 3        6               3                 1      0.70           1,200
+ 5        6               1                 3      0.90           2,000`, walkthrough: [
+          { lines: [6, 8], note: 'The recorded results. Each question has the rank of its correct chunk and the largest number of chunks the model can read before it gets the answer wrong.' },
+          { lines: [10, 16], note: 'The triage rule, checked in pipeline order. First: did the right chunk reach the model? Only then: did the model answer correctly with it?' },
+          { lines: [19, 22], note: 'For k = 1, 3 and 5, classify all ten questions and count each outcome.' },
+          { lines: [23, 25], note: 'Print the counts, the retrieval recall@k, and the context tokens that k chunks cost on every request.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add `10` to the list of k values. Predict the number of correct answers and the recall before you run it. Is the best recall also the best system?',
+          'Simulate adding a reranker that keeps distracting chunks out: change both `(1, 3)` entries to `(1, 9)`. Predict the new "correct" count at k = 5.',
+          'Simulate better retrieval instead: change `(None, 9)` to `(2, 9)` and `(5, 9)` to `(2, 9)`. Predict which k gains the most, and compare with the reranker change. Which fix would you ship first at k = 3?',
+        ] },
+        { type: 'check', question: 'k = 3 and k = 5 both get 6 of 10 correct. Are the two systems equally good, and would the same fix help both?', answer: 'No. At k = 3 the main problem is retrieval: 3 misses and 1 generation error, so better search is the next step. At k = 5 retrieval is nearly solved (recall 0.90) but 3 answers go wrong because extra chunks distract the model, so reranking or a tighter prompt is the next step. k = 5 also costs 2,000 context tokens per request instead of 1,200. The same accuracy can hide very different failure mixes, which is why we triage before fixing.' },
+        { type: 'check', question: 'At k = 1 the recall is 0.40 and there are zero generation errors. A teammate concludes "the LLM is perfect, only search is broken". What is wrong with that conclusion?', answer: 'The model was only tested on the 4 questions where the right chunk arrived, and with a single chunk there was nothing to distract it. End-to-end accuracy can never be higher than retrieval recall, so the generator\'s weaknesses stay hidden until retrieval improves. At k = 5 the same model makes 3 generation errors. We can only judge a later stage on the cases the earlier stage passed through.' },
       ],
     },
     {

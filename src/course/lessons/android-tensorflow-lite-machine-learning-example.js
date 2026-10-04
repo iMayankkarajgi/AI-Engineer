@@ -1,6 +1,6 @@
 export default {
   id: 'android-tensorflow-lite-machine-learning-example',
-  minutes: 20,
+  minutes: 25,
   hook: 'How does a model trained in Python end up recognising a hand-drawn digit inside an Android app, with no internet at all?',
   summary: 'TensorFlow Lite (now also called LiteRT) is a runtime for running trained models on phones and small devices. We train a model in Python, convert it to a compact .tflite file (usually quantised to 8-bit integers), bundle it in the app\'s assets, load it with an Interpreter in Kotlin, and call run() on preprocessed input. We also simulate int8 inference in numpy to see why the quantised model is 4× smaller yet gives almost the same answers.',
   sections: [
@@ -204,6 +204,93 @@ image 0 -> class 9 with prob 0.708`,
           ['Effort', 'Medium to high', 'Low', 'Low to medium'],
         ], verdict: 'Try ML Kit when it already solves your task; use TFLite/LiteRT when you need your own model on the device; use the cloud when the model is too big.' },
         { type: 'p', text: 'Other runtimes such as ONNX Runtime Mobile and PyTorch\'s ExecuTorch fill the same role for models trained in PyTorch. The workflow is the same shape: train, export to a mobile format, bundle, load, run.' },
+      ],
+    },
+    {
+      id: "worked-zero-point",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The numpy simulation used the simple, symmetric scheme with zero point 0. Activations use the other scheme from the formula: a scale **and** a zero point. Let us quantise one activation by hand. Suppose the representative dataset showed that a layer's outputs always lie between 0 and 6 (the example range mentioned earlier for values after a ReLU)." },
+        { type: "steps", title: "Quantising an activation in the range [0, 6]", items: [
+          { title: "Find the scale", text: "int8 has 256 levels, so 255 steps cover the range: scale = (6 − 0) / 255 ≈ **0.02353**." },
+          { title: "Find the zero point", text: "We want the lowest real value, 0.0, to land on the lowest integer, −128. So the integer that stands for 0.0 is **zero_point = −128**." },
+          { title: "Quantise 1.5", text: "q = round(1.5 / 0.02353) + (−128) = 64 − 128 = **−64**." },
+          { title: "Decode it", text: "real ≈ 0.02353 × (−64 − (−128)) = 0.02353 × 64 ≈ **1.506**. The error is 0.006, at most half a step." },
+          { title: "A value outside the range", text: "7.2 would need q = 306 − 128 = 178, which does not fit in int8. It is clamped to 127 and decodes to 6.0. Everything above 6 looks the same to the model. This is **saturation**." },
+          { title: "Why not symmetric here?", text: "A symmetric scheme covers [−6, 6], so half of its levels stand for negative values that never occur after a ReLU. Its step is 6 / 127 ≈ 0.0472, twice as coarse as 0.0235." },
+        ] },
+        { type: "table", caption: "The same [0, 6] activations under both schemes", head: ["", "Symmetric (zero point 0)", "Asymmetric (zero point −128)"], rows: [
+          ["Real range covered", "−6 to 6", "0 to 6"],
+          ["Levels that can actually occur", "128 of 256", "All 256"],
+          ["Step size (scale)", "≈ 0.0472", "≈ 0.0235"],
+          ["Largest rounding error", "≈ 0.024", "≈ 0.012"],
+        ] },
+        { type: "p", text: "The same arithmetic explains two failures. If the representative samples are not typical, the recorded range is too narrow and real inputs saturate. And if a tensor contains one extreme value, the scale must stretch to reach it, so every ordinary value is rounded on a much coarser grid. Both show up as an accuracy drop after conversion with no error message, which is why we compare the converted model with the original on a test set." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will write the scale-and-zero-point scheme ourselves in numpy. First we repeat the hand calculation, then we measure how much better the asymmetric scheme is on [0, 6] activations, and finally we watch one outlier weight spoil the precision of a thousand normal ones." },
+        { type: "code", lang: "python", title: "practice_zero_point.py", code: `import numpy as np
+rng = np.random.default_rng(4)
+
+def asym_params(lo, hi):
+    """Scale and zero point that map the real range [lo, hi] onto int8."""
+    scale = (hi - lo) / 255
+    zero_point = int(round(-128 - lo / scale))
+    return scale, zero_point
+
+def quantize(x, scale, zero_point):
+    return np.clip(np.round(x / scale) + zero_point, -128, 127).astype(np.int8)
+
+def dequantize(q, scale, zero_point):
+    return scale * (q.astype(np.float32) - zero_point)
+
+# 1) One activation by hand, for a layer whose outputs lie in [0, 6]
+scale, zp = asym_params(0.0, 6.0)
+for real in (0.0, 1.5, 6.0, 7.2):
+    q = quantize(np.array(real), scale, zp)
+    print(f"real {real:3.1f} -> q = {int(q):4d} -> back to "
+          f"{float(dequantize(q, scale, zp)):.3f}")
+print(f"scale = {scale:.5f}, zero point = {zp}")
+
+# 2) Same activations, symmetric vs asymmetric: which wastes fewer levels?
+acts = rng.uniform(0, 6, size=5000).astype(np.float32)
+sym_scale = 6.0 / 127                            # symmetric covers [-6, 6]
+err_sym = np.abs(dequantize(quantize(acts, sym_scale, 0), sym_scale, 0) - acts)
+err_asym = np.abs(dequantize(quantize(acts, scale, zp), scale, zp) - acts)
+print(f"mean error  symmetric: {err_sym.mean():.4f}   asymmetric: {err_asym.mean():.4f}")
+
+# 3) One outlier weight stretches the scale for everyone else
+w = rng.normal(0, 0.2, size=1000).astype(np.float32)
+for label, weights in [("no outlier", w), ("one weight = 8.0", np.append(w, 8.0))]:
+    s = np.abs(weights).max() / 127
+    err = np.abs(dequantize(quantize(weights, s, 0), s, 0) - weights)[:1000]
+    print(f"{label:17s}: scale {s:.4f}, mean error {err.mean():.4f}, "
+          f"levels used by normal weights: {len(np.unique(quantize(w, s, 0)))}")`, output: `real 0.0 -> q = -128 -> back to 0.000
+real 1.5 -> q =  -64 -> back to 1.506
+real 6.0 -> q =  127 -> back to 6.000
+real 7.2 -> q =  127 -> back to 6.000
+scale = 0.02353, zero point = -128
+mean error  symmetric: 0.0118   asymmetric: 0.0058
+no outlier       : scale 0.0049, mean error 0.0013, levels used by normal weights: 187
+one weight = 8.0 : scale 0.0630, mean error 0.0161, levels used by normal weights: 21`,
+          walkthrough: [
+            { lines: [4, 14], note: "Three small functions straight from the lesson's formula: choose a scale and zero point for a real range, quantise with rounding and clamping, and decode back to real units." },
+            { lines: [17, 22], note: "The hand example. 0.0 becomes −128, 1.5 becomes −64 and decodes to 1.506, and 7.2 saturates at 127, which decodes to 6.0." },
+            { lines: [25, 29], note: "5,000 activations between 0 and 6. The asymmetric scheme's mean error (0.0058) is about half the symmetric one's (0.0118), because it does not spend levels on negative values." },
+            { lines: [32, 37], note: "A thousand normal weights use 187 different integer levels. Add a single weight of 8.0 and the scale grows from 0.0049 to 0.0630: the same thousand weights are now squeezed into 21 levels and their error grows about 12 times." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Call `asym_params(-2.0, 6.0)` in part 1. Predict the new scale and, more interesting, the zero point: which integer now stands for 0.0?",
+          "In part 2, draw the activations from `rng.uniform(-6, 6, ...)` but leave both schemes as they are. Predict which scheme now has the larger error, and why.",
+          "In part 3, change the outlier from `8.0` to `0.8`. Predict roughly how many levels the normal weights use now.",
+        ] },
+        { type: "check", question: "Our representative dataset holds only faint, thin digits, so the converter records a maximum activation of 3.0 for some layer. In real use, bold drawings produce values up to 6. What happens, and how do we fix it?", answer: "The scale and zero point are set for the range [0, 3], so every activation above 3 is clamped to the top integer and decodes to 3.0. The layer can no longer tell 'strong' from 'very strong', and accuracy drops on bold drawings, with no error raised. The fix is a representative dataset that covers the real variety of inputs, so the recorded ranges match what the app will see." },
+        { type: "check", question: "In the outlier run, the weight 8.0 itself is stored almost perfectly. So why does it hurt the model?", answer: "Because one scale is shared by the whole tensor. To reach 8.0 with 127 steps, each step must be about 0.063, but the ordinary weights are mostly within ±0.6, so they now fall on only 21 distinct values instead of 187. Their rounding error grows about twelve-fold, and there are a thousand of them. This is also why a separate scale per output channel helps: an outlier then only coarsens its own channel." },
       ],
     },
     {

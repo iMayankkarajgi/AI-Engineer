@@ -1,6 +1,6 @@
 export default {
   id: "react-agent",
-  minutes: 19,
+  minutes: 24,
   hook: "What happens if we make an agent write down its reasoning before every action, and read the result before its next thought?",
   summary: "A ReAct agent (Reasoning + Acting) interleaves three kinds of lines: a Thought that reasons about what to do, an Action that calls a tool, and an Observation with the tool's result. The cycle repeats until the agent writes a Final Answer. Reasoning keeps actions purposeful, and observations keep reasoning grounded in real data, which reduces hallucination compared with reasoning alone.",
   sections: [
@@ -236,6 +236,100 @@ prompt now has 15 lines`,
         { type: "callout", tone: "warn", title: "A visible thought is not a guarantee", text: "A Thought explains the model's stated reason, which is very helpful for debugging, but it is not proof of how the model really decided. Never treat a convincing Thought as verification; check the actual observations." },
         { type: "p", text: "**When not to use ReAct.** If the steps are known in advance, a fixed workflow is cheaper. If a task has many steps that can be planned up front (or run in parallel), Plan-and-Execute may be faster and cheaper, because ReAct makes one model call per step and re-sends the growing scratchpad each time." },
         { type: "p", text: "**Quick summary.** ReAct alternates Thought, Action and Observation until a Final Answer. Reasoning guides actions; observations ground reasoning. It is a specific, transparent design within the broad family of AI agents, and the pattern most tool-calling agents follow today. Use stop sequences, robust parsing, step limits, and keep observations compact." }
+      ]
+    },
+    {
+      id: "worked-example-recovery",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The Eiffel Tower trace was a clean run: every search worked first time. Real runs are messier. Let us follow one where a search comes back empty, and count what each model call has to read. The question is: “How tall is the tower in Paris that opened in 1889?”" },
+        { type: "steps", title: "A run with one bad observation",
+          items: [
+            { title: "Call 1: a first guess at the query", text: "Thought: “I should search for the tower.” Action: `search`, Action Input: `Paris tower 1889`. Our code appends: Observation: Not found." },
+            { title: "Call 2: the Thought reacts", text: "The model reads the empty result. Thought: “No page with that title. The 1889 tower in Paris is the Eiffel Tower, so I will search by name.” Action Input: `Eiffel Tower`. Observation: The Eiffel Tower is 330 metres tall." },
+            { title: "Call 3: finish", text: "Thought: “I have the height.” Final Answer: about 330 metres." }
+          ] },
+        { type: "p", text: "The Thought in call 2 is where ReAct earns its cost. An act-only agent would see “Not found” and have no written place to work out *why* and what to try instead. Here the reasoning turns a dead end into a better query." },
+        { type: "p", text: "Now the cost side. In the text format each full step adds four lines to the scratchpad: Thought, Action, Action Input, Observation. The scratchpad starts with one line, the question." },
+        { type: "table", caption: "Scratchpad lines the model reads on each call (counted from the format, not measured)",
+          head: ["Model call", "Lines already in the scratchpad", "Why"],
+          rows: [
+            ["1", "1", "Only the question"],
+            ["2", "5", "Question + one full step"],
+            ["3", "9", "Question + two full steps"],
+            ["k", "1 + 4 × (k − 1)", "Each earlier step added four lines"]
+          ] },
+        { type: "p", text: "The failed search is not free: its four lines stay in the scratchpad and are re-read by every later call. One dead end is cheap. Five dead ends add 20 lines that every later call must carry, which is one reason to keep observations short and to stop runs that are going nowhere. (The fixed prompt template is also sent each time; we left it out of the count because it does not grow.)" }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will run a ReAct loop against a model that makes two slips: it names a tool that does not exist, and then it searches for a word the shop does not have. This time the scripted model is a function that reads the scratchpad, so it reacts to each observation the way a real model would. Our job is the loop: parse, run, and turn every slip into an Observation." },
+        { type: "code", lang: "python", title: "practice_react_recovery.py", code: `import re
+# ReAct with a model that slips up: the loop turns each slip into an Observation.
+PRICES = {"notebook": 4, "pen": 2}
+TOOLS = {"price": lambda item: str(PRICES.get(item, "Not found.")),
+         "calculate": lambda e: str(eval(e, {"__builtins__": {}}))}
+PATTERN = re.compile(r"Action: (\\w+)\\s*\\nAction Input: (.+)")
+
+def fake_model(pad):
+    """Scripted LLM: picks its next lines by reading the last scratchpad line."""
+    last = pad.strip().splitlines()[-1]
+    if last.startswith("Question"):          # slip 1: a tool that does not exist
+        return "Thought: I need the notebook price.\\nAction: lookup\\nAction Input: notebook"
+    if "Error" in last:                      # slip 2: plural word, not in the shop
+        return "Thought: The tool is called price.\\nAction: price\\nAction Input: notebooks"
+    if "Not found" in last:
+        return "Thought: Try the singular word.\\nAction: price\\nAction Input: notebook"
+    if last.endswith(": 4"):
+        return "Thought: Now the pen.\\nAction: price\\nAction Input: pen"
+    if last.endswith(": 2"):
+        return "Thought: Add it up.\\nAction: calculate\\nAction Input: 3 * 4 + 2 * 2"
+    return "Thought: I have the total.\\nFinal Answer: 16 in total."
+
+pad, slips = "Question: What do 3 notebooks and 2 pens cost?\\n", 0
+for step in range(1, 9):                     # at most 8 model calls
+    text = fake_model(pad)
+    pad += text + "\\n"
+    if "Final Answer:" in text:
+        print(f"{step}. FINAL:", text.split("Final Answer:")[1].strip())
+        break
+    m = PATTERN.search(text)
+    if not m or m.group(1) not in TOOLS:     # bad format or unknown tool
+        obs = "Error: unknown action. Use one of: " + ", ".join(TOOLS)
+    else:
+        obs = TOOLS[m.group(1)](m.group(2).strip())
+    slips += obs.startswith(("Error", "Not found"))
+    pad += f"Observation: {obs}\\n"           # only our code writes this line
+    print(f"{step}. {text.splitlines()[0]}\\n   -> Observation: {obs}")
+print("model calls:", step, "| slips recovered:", slips)`, output: `1. Thought: I need the notebook price.
+   -> Observation: Error: unknown action. Use one of: price, calculate
+2. Thought: The tool is called price.
+   -> Observation: Not found.
+3. Thought: Try the singular word.
+   -> Observation: 4
+4. Thought: Now the pen.
+   -> Observation: 2
+5. Thought: Add it up.
+   -> Observation: 16
+6. FINAL: 16 in total.
+model calls: 6 | slips recovered: 2`,
+          walkthrough: [
+            { lines: [3, 6], note: "Two tools and the parser. `price` returns “Not found.” for an unknown item instead of raising an error." },
+            { lines: [8, 21], note: "The scripted model. It looks only at the last line of the scratchpad and decides what to write next. The first two branches are the slips; the next branch is the recovery." },
+            { lines: [30, 34], note: "The safety net. If the text does not parse, or the tool name is unknown, we build an error Observation that lists the valid tools." },
+            { lines: [35, 38], note: "Count the slips, append the Observation ourselves, and print the trace. The last line reports how many model calls the run needed." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `range(1, 9)` to `range(1, 4)`. Predict the last line of the trace and whether a Final Answer is printed. What does the summary line say then?",
+          "Change the error text to just `\"Error.\"` (keep the word Error). The scripted model still recovers, but think about a real model: what information did it lose, and how might call 2 go wrong?",
+          "Make the `price` tool forgiving: look up `item.rstrip(\"s\")` instead of `item`. Predict the new number of model calls and slips before you run it."
+        ] },
+        { type: "check", question: "The run needed 6 model calls, but a perfect run needs only 4 (two prices, one sum, one final answer). Using the 1 + 4 × (k − 1) rule from the worked example, how many scratchpad lines does the last call read in each case?", answer: "The last call is call 6 in our run: 1 + 4 × 5 = 21 lines. In a perfect run it is call 4: 1 + 4 × 3 = 13 lines. The two slips added 8 lines that every later call had to re-read. Slips cost twice: an extra model call each, and a longer scratchpad for the rest of the run." },
+        { type: "check", question: "In step 1 the model wrote a well-formed Action for a tool called `lookup`. Why do we send back an error Observation rather than quietly running `price`, the closest match?", answer: "Guessing what the model meant hides the mistake and can run the wrong tool, which is risky when tools have side effects. An explicit error keeps the transcript honest: the model sees what went wrong and what the valid choices are, and the fix shows up in its next Thought. It also keeps the rule simple: our code only runs tools that are named exactly." }
       ]
     }
   ],

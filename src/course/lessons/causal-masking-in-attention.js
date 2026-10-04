@@ -1,6 +1,6 @@
 export default {
   id: 'causal-masking-in-attention',
-  minutes: 18,
+  minutes: 23,
   hook: 'If a model is trained to predict the next word, but its attention can see the whole sentence, what stops it from simply peeking at the answer?',
   summary: 'A causal mask blocks every token from attending to tokens that come after it. We set the scores above the diagonal of the attention matrix to −∞ before softmax, so those weights become exactly 0. This lets a decoder-only LLM train on every position of a sentence in parallel without cheating, and makes training match how text is generated at inference time: one token at a time, left to right.',
   sections: [
@@ -159,6 +159,85 @@ causal=True: outputs that changed -> ['down']`,
         { type: 'p', text: 'In real batches, the causal mask is often **combined** with a **padding mask**: shorter sequences are padded with filler tokens to a common length, and those filler positions must also be hidden. The two masks are simply combined so a position is blocked if either mask blocks it.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Masking after softmax instead of before (rows stop summing to 1 and the future leaks through the denominator). Using k=0 and masking the diagonal (NaN rows). Using a huge negative number like −1e9 in float16, which overflows; use −∞ or the dtype\'s minimum value. Forgetting the mask when writing custom attention, which shows up as a training loss that drops suspiciously fast and a model that generates nonsense.' },
         { type: 'p', text: '**When not to use it:** if the task is understanding a complete input (classifying a support ticket, producing an embedding for search), a causal mask throws away useful right-hand context. Bidirectional encoders are usually a better fit there. And note what causal masking does *not* do: it does not tell the model *where* tokens are. Position information comes from separate mechanisms such as RoPE, covered in a later lesson.' },
+      ],
+    },
+    {
+      id: "causal-plus-padding",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "We said the causal mask is often combined with a padding mask. Let us see exactly how, on one short sentence. “The cat sat” has 3 tokens, but its batch needs length 5, so two filler tokens are added on the right. Two rules now apply at once: a token may not look at the future, and nobody may look at filler." },
+        { type: "steps", title: "Building the combined mask", items: [
+          { title: "Causal part", text: "Block every cell above the diagonal. This depends only on the length, 5." },
+          { title: "Padding part", text: "Block every *column* that belongs to a filler token. This depends on the data: here columns 4 and 5." },
+          { title: "Combine", text: "A cell is blocked if either rule blocks it. In code this is a logical OR of two true/false tables." },
+          { title: "Softmax", text: "Blocked cells get −∞ and end up with weight 0. Each row shares its weight among what is left." },
+          { title: "Mask the loss too", text: "The filler positions still produce a prediction. We leave those out of the loss, so the model is never trained to predict filler." },
+        ] },
+        { type: "matrix", title: "Combined causal + padding weights for “The cat sat” padded to 5", rows: ["The", "cat", "sat", "<pad>", "<pad>"], cols: ["The", "cat", "sat", "<pad>", "<pad>"], values: [[1, null, null, null, null], [0.5, 0.5, null, null, null], [0.33, 0.33, 0.33, null, null], [0.33, 0.33, 0.33, null, null], [0.33, 0.33, 0.33, null, null]], format: "pct", caption: "Illustrative: all scores are set equal, so the weights show only the masks. Empty cells are blocked. The two filler columns are empty in every row." },
+        { type: "p", text: "Notice a subtle point. With filler on the **right**, the three real tokens already could not see it: it lies in their future, so the causal mask hides it. The padding mask only changes the filler rows. The part that truly protects training here is leaving filler out of the loss." },
+        { type: "callout", tone: "warn", title: "Where padding goes wrong", text: "Put the filler on the **left** and the picture changes. The first row is a filler token that may see only itself, and itself is blocked. The whole row is −∞, softmax divides 0 by 0, and the result is NaN. One NaN then spreads through every later layer. If a model suddenly outputs NaN only for batches with mixed lengths, a fully blocked row is the first thing to look for." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the combined mask for a padded sentence, turn it into attention weights, and then list for every position what it can see, what it must predict and whether that prediction counts in the loss." },
+        { type: "code", lang: "python", title: "practice_causal_padding.py", code: `import numpy as np
+np.set_printoptions(precision=2, suppress=True)
+
+# One short sentence, padded to length 5 so it fits in a batch
+tokens = ["The", "cat", "sat", "<pad>", "<pad>"]
+T = len(tokens)
+is_pad = np.array([t == "<pad>" for t in tokens])
+
+causal = np.triu(np.ones((T, T), dtype=bool), k=1)   # True = future token
+padding = np.tile(is_pad, (T, 1))                    # True = filler column
+blocked = causal | padding                           # blocked if either says so
+print("blocked (1 = hidden):\\n", blocked.astype(int))
+
+# Equal scores everywhere, so the weights show only the effect of the masks
+scores = np.where(blocked, -np.inf, np.zeros((T, T)))
+e = np.exp(scores - scores.max(axis=1, keepdims=True))
+weights = e / e.sum(axis=1, keepdims=True)
+print("weights:\\n", weights)
+
+# Training targets: the input shifted left by one position
+targets = tokens[1:3] + ["<end>", "<pad>", "<pad>"]
+for i in range(T):
+    sees = [tokens[j] for j in range(T) if not blocked[i, j]]
+    in_loss = "yes" if targets[i] != "<pad>" else "no (ignored)"
+    print(f"{tokens[i]:5s} sees {str(sees):22s} predicts {targets[i]:5s} in loss: {in_loss}")`, output: `blocked (1 = hidden):
+ [[0 1 1 1 1]
+ [0 0 1 1 1]
+ [0 0 0 1 1]
+ [0 0 0 1 1]
+ [0 0 0 1 1]]
+weights:
+ [[1.   0.   0.   0.   0.  ]
+ [0.5  0.5  0.   0.   0.  ]
+ [0.33 0.33 0.33 0.   0.  ]
+ [0.33 0.33 0.33 0.   0.  ]
+ [0.33 0.33 0.33 0.   0.  ]]
+The   sees ['The']                predicts cat   in loss: yes
+cat   sees ['The', 'cat']         predicts sat   in loss: yes
+sat   sees ['The', 'cat', 'sat']  predicts <end> in loss: yes
+<pad> sees ['The', 'cat', 'sat']  predicts <pad> in loss: no (ignored)
+<pad> sees ['The', 'cat', 'sat']  predicts <pad> in loss: no (ignored)`,
+          walkthrough: [
+            { lines: [4, 7], note: "Three real tokens and two filler tokens. `is_pad` marks which positions are filler." },
+            { lines: [9, 12], note: "The causal table blocks the upper triangle. The padding table blocks whole columns. The `|` operator combines them: blocked if either one says so." },
+            { lines: [14, 18], note: "Give every cell the same score, set blocked cells to −∞ and run softmax. The weights now show the mask pattern and nothing else." },
+            { lines: [20, 25], note: "Targets are the input shifted left by one. The last real token predicts the end marker. Positions whose target is filler are skipped in the loss." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `blocked = causal | padding` to `blocked = causal`. Predict first: which rows of the weights change, and which stay exactly the same?",
+          "Change `k=1` to `k=2` in `np.triu`. Predict what “The” can now see, and why that ruins training.",
+          "Move the filler to the left: `tokens = [\"<pad>\", \"<pad>\", \"The\", \"cat\", \"sat\"]`. Predict the first row of the weights (ignore the target printout for this one).",
+        ] },
+        { type: "check", question: "The filler rows print weights of 0.33 over the three real tokens. So the model does real attention work for filler positions. Does this change anything for the real tokens, and is it free?", answer: "It changes nothing for the real tokens: no row may attend to a filler column, and the filler predictions are left out of the loss. But it is not free. Those rows still cost compute and memory in every layer. That is why training pipelines group sentences of similar length into the same batch, to keep filler small." },
+        { type: "check", question: "The position “sat” must predict `<end>`, and that prediction counts in the loss. What would the model fail to learn if we ignored it, the way we ignore filler?", answer: "It would never learn when to stop. The end marker is a real token with a real meaning: the text is complete. A model that was never trained to predict it would keep generating until it hits the length limit. Filler has no meaning and is skipped; the end marker must be learned." },
       ],
     },
   ],

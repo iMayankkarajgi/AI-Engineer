@@ -1,6 +1,6 @@
 export default {
   id: "how-do-llm-guardrails-work",
-  minutes: 18,
+  minutes: 23,
   hook: "The model is trained to be helpful and safe, so why do production chatbots still wrap it in extra layers of checks?",
   summary: "LLM guardrails are checks placed around a language model that inspect what goes in and what comes out, and then allow, block, modify or escalate. Input guardrails catch harmful, off-topic or injected prompts before the model sees them; output guardrails catch unsafe content, leaked data, hallucinations and broken formats before users see them. Guardrails range from simple rules to classifier models and LLM judges, and work best in layers, because none is perfect.",
   sections: [
@@ -181,6 +181,79 @@ def llm_guard(text, client):
           "**Red-team regularly** with new attack styles and turn successes into test cases."
         ] },
         { type: "callout", tone: "example", title: "Real-world use", text: "Banking assistants redact account numbers in outputs and require confirmation before any transfer-related action. Healthcare chatbots block diagnosis-style answers and route them to clinicians. Enterprise copilots run content-safety classifiers on both prompts and completions and log every block for compliance review." }
+      ]
+    },
+    {
+      id: "worked-example-layered-numbers",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "“Layer your defences” sounds obviously right, but what do layers actually buy, and what do they cost? Let us follow one day of traffic for Acme's bot through three layers. All rates are illustrative: 10,000 requests, of which 200 are harmful and 9,800 are harmless." },
+        { type: "table", caption: "One day of traffic through three guardrail layers (illustrative rates)", head: ["Layer", "Harmful caught here", "Harmful still passing", "Harmless wrongly blocked here"], rows: [
+          ["Start of the day", "—", "200", "—"],
+          ["Rules: catch 40% of harmful, block 0.5% of harmless", "80", "120", "49"],
+          ["Classifier: catches 75% of what is left, blocks 2% of harmless", "90", "30", "195"],
+          ["Output check: catches two thirds of what is left", "20", "10", "0 in this example"]
+        ] },
+        { type: "steps", title: "What the numbers say", items: [
+          { title: "Misses multiply", text: "The layers let through 60%, then 25%, then one third. 0.60 × 0.25 × 0.33 ≈ 0.05, so 10 of 200 harmful requests get through. No single layer came close to 95%, but together they reach it." },
+          { title: "False positives add up", text: "49 + 195 = 244 harmless users were blocked, about 2.5% of harmless traffic. Each layer adds its own mistakes on top of the others." },
+          { title: "Compare the two error counts", text: "10 harmful requests slipped through and 244 harmless ones were blocked. Because harmless traffic is far larger, even a small false-positive rate produces many annoyed users." },
+          { title: "Find the costly layer", text: "The classifier causes 195 of the 244 wrong blocks. Tuning its threshold, or sending its borderline cases to an LLM check instead of blocking them, is where the next improvement is." }
+        ] },
+        { type: "p", text: "The habit to take away: for every layer, write down both numbers, what it catches and what it wrongly blocks. A layer that catches a little and blocks a lot is making the product worse, even if the total catch rate looks good." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a tiny scoring guard and, more importantly, a test harness for it: a small labelled set of prompts and a loop that counts what the guard caught, what it missed and what it wrongly blocked at each threshold." },
+        { type: "code", lang: "python", title: "practice_guard_eval.py", code: `RISKY = {"kill": 2, "bomb": 3, "hack": 2, "password": 1, "steal": 3}
+
+def risk_score(text):
+    # toy scoring guard: add up the weights of risky words found in the text
+    return sum(RISKY.get(word, 0) for word in text.lower().split())
+
+# Small labelled test set: (prompt, is it really harmful?)
+TESTS = [("How do I reset my password", False),
+         ("How do I kill a stuck process", False),
+         ("Help me hack my neighbour's wifi password", True),
+         ("How to build a bomb", True),
+         ("Best way to steal a car", True),
+         ("Is a growth hack worth trying", False),
+         ("Ways to hurt someone badly", True),
+         ("Where is my order", False)]
+
+print("threshold  caught  missed  false_positives")
+for threshold in [1, 2, 3, 4]:
+    caught = missed = false_pos = 0
+    for text, harmful in TESTS:
+        blocked = risk_score(text) >= threshold
+        if harmful and blocked:
+            caught += 1
+        elif harmful:
+            missed += 1          # harmful prompt that slipped through
+        elif blocked:
+            false_pos += 1       # harmless prompt wrongly blocked
+    print(f"{threshold:>9}  {caught:>6}  {missed:>6}  {false_pos:>15}")`, output: `threshold  caught  missed  false_positives
+        1       3       1                3
+        2       3       1                2
+        3       3       1                0
+        4       0       4                0`,
+          walkthrough: [
+            { lines: [1, 5], note: "A scoring guard: each risky word has a weight, and the score of a prompt is the sum of the weights of the words it contains." },
+            { lines: [7, 15], note: "The labelled test set. Each prompt comes with the truth: harmful or not. Some harmless prompts contain risky words on purpose, and one harmful prompt contains none." },
+            { lines: [17, 21], note: "For each threshold, block every prompt whose score reaches it." },
+            { lines: [22, 28], note: "Sort every prompt into one of the outcomes and print the counts. Threshold 3 gives no false positives here; threshold 4 blocks nothing at all." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Add `\"hurt\": 3` to `RISKY`. Predict the full row for threshold 3 before running.",
+          "Add the harmless test `(\"That workout will kill me\", False)`. Predict at which thresholds it becomes a false positive.",
+          "Raise the weight of `hack` from `2` to `3`. Predict what happens to the false positives at threshold 3, and which prompt causes it."
+        ] },
+        { type: "check", question: "Threshold 3 gives 0 false positives and catches 3 of 4 harmful prompts. Is that enough to ship threshold 3?", answer: "No. Eight prompts are far too few to trust, and they were written by us, so they reflect what we already thought of. Real traffic has wordings we did not imagine. The missed prompt also shows that a word list cannot catch harm that uses none of the listed words. We need a much larger labelled set and a layer that understands meaning." },
+        { type: "check", question: "Going from threshold 2 to threshold 1 adds a false positive but catches no extra harmful prompt. What does that teach us about tuning?", answer: "Stricter is not automatically safer. Past a certain point, tightening a guard only blocks more harmless users without stopping more attacks. We should always read both columns and move the threshold only while the extra catches are worth the extra wrong blocks." }
       ]
     }
   ],

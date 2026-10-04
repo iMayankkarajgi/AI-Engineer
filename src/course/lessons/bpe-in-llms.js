@@ -1,6 +1,6 @@
 export default {
   id: "bpe-in-llms",
-  minutes: 20,
+  minutes: 25,
   hook: "How can a model with a fixed list of about 100,000 tokens read any word ever written, including typos, names and emoji it has never seen?",
   summary: "Before a language model can read text, a tokenizer cuts the text into tokens and maps each one to an integer ID. Byte Pair Encoding (BPE) builds that token list by starting from single characters (or bytes) and repeatedly merging the most frequent neighbouring pair, so common words become one token while rare words split into reusable pieces. To tokenize new text it replays the learned merges in order, which is why BPE never meets a truly unknown word.",
   sections: [
@@ -182,6 +182,85 @@ wider   -> ['w', 'i', 'd', 'e', 'r', '_']`,
           "**Tokenizer and model must match**: never feed IDs from one tokenizer into a model trained with another.",
           "**Glitch tokens**: rare strings that got their own token but almost never appeared in model training can trigger odd behaviour.",
         ] },
+      ],
+    },
+    {
+      id: "byte-level-details",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "Our hand example started from characters. Byte-level BPE starts one step lower, from **bytes**. Text on a computer is stored in an encoding called **UTF-8**, where each character becomes one to four bytes, and each byte is a number from 0 to 255. Plain English letters take one byte. Accented letters take two. Many Asian scripts take three per character, and most emoji take four." },
+        { type: "table", caption: "How many base tokens a text costs before any merge is applied.", head: ["Text", "Characters", "UTF-8 bytes", "Base tokens"], rows: [
+          ["low", "3", "108, 111, 119", "3"],
+          ["café", "4", "99, 97, 102, 195, 169", "5"],
+          ["日本", "2", "230, 151, 165, 230, 156, 172", "6"],
+          ["😀", "1", "240, 159, 152, 128", "4"],
+        ] },
+        { type: "p", text: "This gives a base vocabulary of exactly 256 entries that covers every possible text. Each merge then takes the next free ID: the first merge becomes 256, the second 257, and so on. GPT-2's 50,257 entries are 256 bytes, 50,000 merges and 1 special end-of-text token." },
+        { type: "steps", title: "The round trip, and where it can break", items: [
+          { title: "Encode", text: "Turn the text into bytes, then replay the merges in learned order. Each merge replaces two neighbouring IDs with one new ID." },
+          { title: "Decode", text: "Expand every ID back into the bytes it stands for, join the bytes, and read them as UTF-8. Encoding then decoding always returns the original text." },
+          { title: "Failure: a cut character", text: "A token can hold only *part* of a multi-byte character. If we decode a slice that ends in the middle of one, the bytes are not valid UTF-8." },
+          { title: "How to spot it", text: "The symptom is a decode error, or a replacement mark such as `�` flashing in streamed output. The fix is to hold back incomplete bytes until the next token completes the character." },
+        ] },
+        { type: "p", text: "The table also explains a cost we met earlier. A script that starts at three bytes per character needs many learned merges before it reaches one token per word. If the training corpus had little text in that script, those merges were never learned, and the text stays expensive." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a tiny byte-level tokenizer: look at the raw bytes of four strings, apply two merges that create token IDs 256 and 257, and decode the IDs back into text." },
+        { type: "code", lang: "python", title: "practice_byte_bpe.py", code: `# Byte-level BPE starts from UTF-8 bytes, so every string has a base encoding.
+# Samples: "low", "cafe" with an accent, a two-character Japanese word, an emoji.
+samples = ["low", "caf\\u00e9", "\\u65e5\\u672c", "\\U0001F600"]
+
+for text in samples:
+    ids = list(text.encode("utf-8"))   # base token IDs are the byte values 0-255
+    print(f"{ascii(text):14} chars={len(text)} bytes={len(ids)} ids={ids}")
+
+# Each learned merge gets the next free ID after the 256 byte values.
+merges = {(108, 111): 256, (256, 119): 257}   # 'l'+'o' -> 256, then 256+'w' -> 257
+
+def encode(text):
+    ids = list(text.encode("utf-8"))
+    for pair, new_id in merges.items():       # replay merges in learned order
+        out, i = [], 0
+        while i < len(ids):
+            if tuple(ids[i:i + 2]) == pair:
+                out.append(new_id); i += 2
+            else:
+                out.append(ids[i]); i += 1
+        ids = out
+    return ids
+
+def decode(ids):
+    table = {i: bytes([i]) for i in range(256)}
+    for (a, b), new_id in merges.items():     # a merged ID expands to its two parts
+        table[new_id] = table[a] + table[b]
+    return b"".join(table[i] for i in ids).decode("utf-8")
+
+ids = encode("slower")
+print("encode('slower') =", ids)
+print("decode back      =", decode(ids))`, output: `'low'          chars=3 bytes=3 ids=[108, 111, 119]
+'caf\\xe9'      chars=4 bytes=5 ids=[99, 97, 102, 195, 169]
+'\\u65e5\\u672c' chars=2 bytes=6 ids=[230, 151, 165, 230, 156, 172]
+'\\U0001f600'   chars=1 bytes=4 ids=[240, 159, 152, 128]
+encode('slower') = [115, 257, 101, 114]
+decode back      = slower`,
+          walkthrough: [
+            { lines: [3, 7], note: "Encode each sample as UTF-8 and list its byte values. `ascii()` prints non-English characters as escape codes so the output is safe on any terminal." },
+            { lines: [9, 10], note: "Two merge rules, stored as pair → new ID. The second rule uses ID 256, which only exists after the first rule has run." },
+            { lines: [12, 22], note: "Encoding: start from bytes, then for each merge in order, scan left to right and replace every matching pair with the new ID." },
+            { lines: [24, 32], note: "Decoding: build a table from ID to bytes (merged IDs are their two parts glued together), join, and read as UTF-8. “slower” comes back intact from 4 tokens." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `encode(\"slower\")` to `encode(\"lowlow\")`. Predict first: how many IDs come out, and which ones?",
+          "Add a third merge `(101, 114): 258` (that is `e` + `r`). Predict the new IDs for “slower” before running.",
+          "Replace the last two prints with `print(decode([230, 151]))`. Predict what happens when we decode only two of the three bytes of a Japanese character.",
+        ] },
+        { type: "check", question: "Suppose we swap the two entries of `merges`, so `(256, 119)` is tried before `(108, 111)`. What does `encode(\"slower\")` return, and why?", answer: "It returns 5 IDs: [115, 256, 119, 101, 114]. When the `(256, 119)` rule runs first there is no 256 in the list yet, so nothing happens. Then `l` + `o` becomes 256, but the rule that would glue it to `w` has already passed. Later merges depend on earlier ones, so order is part of the tokenizer." },
+        { type: "check", question: "The emoji is 1 character but 4 base tokens, while “low” is 3 characters and 3 base tokens. In a real tokenizer a very common emoji often ends up as a single token. What made that happen?", answer: "Merges. That emoji's byte sequence appeared often enough in the training corpus that its bytes were merged step by step into one symbol. Nothing about emoji is special-cased: frequent byte sequences get short encodings, rare ones stay long." },
       ],
     },
   ],

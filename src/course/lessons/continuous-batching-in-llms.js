@@ -1,6 +1,6 @@
 export default {
   id: "continuous-batching-in-llms",
-  minutes: 21,
+  minutes: 26,
   hook: "Why should a user asking “What is 2+2?” have to wait for someone else's 1,000-word essay to finish before getting a GPU slot?",
   summary: "GPUs serve LLMs efficiently only when many requests share each forward pass, so servers batch requests. Static batching keeps a batch together until its longest request finishes, leaving slots idle and newcomers waiting. Continuous batching (iteration-level scheduling) makes batch decisions at every decode step: finished requests leave immediately and waiting ones join, keeping the GPU full and raising throughput several-fold on realistic traffic.",
   sections: [
@@ -134,6 +134,87 @@ continuous:  152 decode steps, slot utilisation 86.8%, 3.47 tokens/step`, walkth
         { type: "callout", tone: "note", title: "Memory is the real limit", text: "Admitting a request means reserving room for its growing KV cache. Without paged KV memory, fragmentation limits how many requests can join; this is why continuous batching and PagedAttention are usually deployed together. If memory runs out mid-generation, the scheduler must preempt a request (pause it and later recompute or swap its cache back)." },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Assuming bigger batches are always better: each step gets slower as the batch grows, so per-user token speed (TPOT) rises; set a maximum batch size to protect latency targets. Also, continuous batching does not make a single request faster when the server is idle; it improves throughput and queueing under load." },
         { type: "check", question: "Our server is nearly idle at night, with one request at a time. Will switching from static to continuous batching speed up those requests?", answer: "Not noticeably. With one request there is nothing to refill or interleave, so both schedulers behave the same. The gains appear under concurrent load with varied output lengths." }
+      ]
+    },
+    {
+      id: "worked-example-two-slots",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The simulation gave us totals. Let us now trace a batch small enough to follow by hand. The GPU has 2 slots. Four requests are waiting at the start: A needs 6 tokens, B needs 2, C needs 1 and D needs 3. That is 12 useful tokens in total." },
+        { type: "table", caption: "Which request each slot serves at each decode step (— means the slot is idle)", head: ["Step", "Static: slot 1", "Static: slot 2", "Continuous: slot 1", "Continuous: slot 2"], rows: [
+          ["1", "A", "B", "A", "B"],
+          ["2", "A", "B", "A", "B"],
+          ["3", "A", "—", "A", "C"],
+          ["4", "A", "—", "A", "D"],
+          ["5", "A", "—", "A", "D"],
+          ["6", "A", "—", "A", "D"],
+          ["7", "C", "D", "all done", "all done"],
+          ["8", "—", "D", "", ""],
+          ["9", "—", "D", "", ""]
+        ] },
+        { type: "steps", title: "Reading the table", items: [
+          { title: "Static, first batch", text: "A and B start together. B ends after step 2, but its slot stays idle for steps 3 to 6 because the batch is held until A ends." },
+          { title: "Static, second batch", text: "C and D can only start at step 7. C needs one token and then its slot idles for two more steps. Everything ends at step 9." },
+          { title: "Continuous", text: "When B leaves after step 2, C takes its slot at step 3. C leaves after one step and D takes the slot at step 4. Everything ends at step 6." },
+          { title: "Count the slot-steps", text: "Static used 9 steps × 2 slots = 18 slot-steps for 12 tokens: 67% utilisation. Continuous used 6 × 2 = 12 slot-steps for 12 tokens: 100%." },
+          { title: "Look at each user", text: "C finishes at step 7 under static batching and at step 3 under continuous batching. D finishes at step 9 instead of step 6. A and B see no change at all." }
+        ] },
+        { type: "p", text: "The last step shows who benefits: the requests that were **waiting**. A request that is already running gains nothing. This gives us a way to spot a scheduler that is not really continuous: if the queue is not empty and yet some slots are idle, requests are being held at a batch boundary." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier simulation counted total decode steps. Here we look at the same idea from the user's side. Requests now **arrive at different times**, and we measure how long each one waits before it gets a slot. The request list is made up and tiny, so we can check every number by hand." },
+        { type: "code", lang: "python", title: "practice_batch_waits.py", code: `# Per-request waiting time under static vs continuous batching.
+# Each request is (arrival step, output tokens). The numbers are made up.
+SLOTS = 2
+requests = [(0, 6), (0, 2), (1, 1), (2, 3), (3, 1), (4, 4)]
+
+def static(reqs):
+    t, start, finish = 0, {}, {}
+    for i in range(0, len(reqs), SLOTS):
+        group = range(i, min(i + SLOTS, len(reqs)))
+        t = max(t, max(reqs[j][0] for j in group))    # wait for the group to arrive
+        for j in group:
+            start[j], finish[j] = t, t + reqs[j][1]
+        t += max(reqs[j][1] for j in group)           # hold slots until the longest ends
+    return start, finish
+
+def continuous(reqs):
+    t, nxt, running, start, finish = 0, 0, {}, {}, {}
+    while len(finish) < len(reqs):
+        while nxt < len(reqs) and len(running) < SLOTS and reqs[nxt][0] <= t:
+            running[nxt], start[nxt] = reqs[nxt][1], t   # admit into a free slot
+            nxt += 1
+        t += 1                                        # one decode step for everyone
+        for j in list(running):
+            running[j] -= 1
+            if running[j] == 0:                       # finished: leave right away
+                del running[j]
+                finish[j] = t
+    return start, finish
+
+for name, fn in [("static", static), ("continuous", continuous)]:
+    start, finish = fn(requests)
+    waits = [start[j] - requests[j][0] for j in range(len(requests))]
+    print(f"{name:10s} wait before starting: {waits}  worst={max(waits)}  "
+          f"all done at step {max(finish.values())}")`, output: `static     wait before starting: [0, 0, 5, 4, 6, 5]  worst=6  all done at step 13
+continuous wait before starting: [0, 0, 1, 1, 3, 2]  worst=3  all done at step 10`, walkthrough: [
+          { lines: [1, 4], note: "Two slots and six requests. Each request has an arrival step and a number of output tokens." },
+          { lines: [6, 14], note: "Static batching: take requests two at a time, wait until both have arrived, and hold both slots until the longer one ends." },
+          { lines: [16, 28], note: "Continuous batching: before every step, admit arrived requests into free slots. After every step, finished requests leave." },
+          { lines: [30, 34], note: "For each scheduler, print how long every request waited for a slot, the worst wait, and when all the work was done." }
+        ] },
+        { type: "p", text: "The third request needs a single token. Under static batching it waits 5 steps for a slot; under continuous batching it waits 1. Now change it:" },
+        { type: "list", items: [
+          "Set `SLOTS = 3`. Predict the worst wait for each scheduler before you run it. Which one gains more from the extra slot?",
+          "Make every request the same length, for example 3 tokens, and keep the arrival times. Predict whether continuous batching still finishes earlier, and why.",
+          "Change the first request to `(0, 20)`. Predict what happens to the waits of the third and fourth requests under static batching, and whether continuous batching is affected in the same way."
+        ] },
+        { type: "check", question: "In the practice output, continuous batching still makes one request wait 3 steps. The scheduler is working correctly, so what is the wait telling us?", answer: "Both slots were busy with real work when that request arrived, so the wait comes from too little capacity, not from idle slots. Continuous batching removes waiting caused by held slots. It cannot remove waiting caused by having more work than slots." },
+        { type: "check", question: "Suppose all requests arrive at step 0 and every one needs exactly 4 tokens. How do the two schedulers compare?", answer: "They behave the same. Every request in a batch ends on the same step, so no slot ever sits idle waiting for a longer neighbour, and both schedulers start the next group at the same time. The gain from continuous batching comes from differences in length and arrival time." }
       ]
     },
     {

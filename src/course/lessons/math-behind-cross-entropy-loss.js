@@ -1,6 +1,6 @@
 export default {
   id: 'math-behind-cross-entropy-loss',
-  minutes: 20,
+  minutes: 25,
   hook: 'When a model says "70% cat" and the picture is a dog, how do we turn that into one number that tells training exactly how wrong it was, and in which direction to fix it?',
   summary: 'Cross-entropy loss measures how much probability a model gave to the correct answer: the loss is `−log(p_correct)`. Confident right answers cost almost nothing, and confident wrong answers cost a lot. It is the standard loss for classification and for training language models, and its gradient with respect to the logits is beautifully simple: `p − y`.',
   sections: [
@@ -144,6 +144,82 @@ per-token loss [0.693 1.609 0.105 2.996] mean 1.351 perplexity 3.86`, walkthroug
           { lines: [19, 27], note: 'The analytic gradient p − y matches a finite-difference estimate to 4 decimals.' },
           { lines: [29, 33], note: 'Four next-token predictions from a language model: per-token losses, their mean, and perplexity = exp(mean).' },
         ] },
+      ],
+    },
+    {
+      id: 'worked-training-steps',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'We know the gradient on the logits is `p − y`. Let us now *use* it and watch the dog example learn. To keep the arithmetic visible we update the three logits directly, as if they were the parameters, with learning rate `η = 1`: `z ← z − (p − y)`.' },
+        { type: 'steps', title: 'The first update by hand', items: [
+          { title: 'Start', text: 'Logits `z = [2.0, 1.0, 0.1]`, probabilities `p = [0.659, 0.242, 0.099]`, loss 1.417.' },
+          { title: 'Gradient', text: '`p − y = [0.659, −0.758, 0.099]`. Notice the three numbers add up to 0, because both `p` and `y` add up to 1.' },
+          { title: 'Update', text: '`z = [2.0 − 0.659, 1.0 + 0.758, 0.1 − 0.099] = [1.341, 1.758, 0.001]`. The dog logit rose by exactly as much as the other two fell together.' },
+          { title: 'New probabilities', text: 'Softmax of the new logits gives `p = [0.360, 0.546, 0.094]`. Dog is now the top class.' },
+          { title: 'New loss', text: '`−ln(0.546) = 0.605`, down from 1.417 after a single step.' },
+        ] },
+        { type: 'table', caption: 'Four updates on the dog example, η = 1 (computed exactly, rounded to 3 decimals)', head: ['Step', 'Logits [cat, dog, bird]', 'p(dog)', 'Loss'], rows: [
+          ['0', '[2.000, 1.000, 0.100]', '0.242', '1.417'],
+          ['1', '[1.341, 1.758, 0.001]', '0.546', '0.605'],
+          ['2', '[0.981, 2.212, −0.093]', '0.718', '0.331'],
+          ['3', '[0.771, 2.493, −0.165]', '0.801', '0.222'],
+          ['4', '[0.628, 2.693, −0.221]', '0.847', '0.167'],
+        ] },
+        { type: 'chart', kind: 'line', title: 'Loss on the dog example per update', xLabel: 'Update', yLabel: 'Cross-entropy loss', series: [
+          { name: 'Loss', points: [[0, 1.417], [1, 0.605], [2, 0.331], [3, 0.222], [4, 0.167]] },
+        ], caption: 'Exact values from the table. The first step is the biggest because the model was most wrong there.' },
+        { type: 'p', text: 'Three things to take from this. First, the steps shrink by themselves: as `p(dog)` approaches 1, `p − y` approaches 0. Second, the wrong classes are pushed down in proportion to their probability, so cat (0.659) loses much more than bird (0.099). Third, the loss never reaches exactly 0. To get `p(dog) = 1` the dog logit would have to be infinitely far ahead. A model trained for a very long time on data it can fit perfectly therefore keeps stretching its logits apart and can become **overconfident**. Watching the loss on held-out data is how we notice this.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The lesson said that computing softmax and log in two separate steps can break. Here we make it break on purpose. We write the loss twice, a naive version and a stable version that works in log space, and feed both some extreme logits.' },
+        { type: 'code', lang: 'python', title: 'practice_stable_cross_entropy.py', code: `import numpy as np
+
+def ce_naive(logits, target):
+    p = np.exp(logits) / np.exp(logits).sum()     # softmax first ...
+    return -np.log(p[target])                     # ... then log
+
+def ce_stable(logits, target):
+    m = logits.max()
+    log_sum = m + np.log(np.exp(logits - m).sum())  # log-sum-exp trick
+    return log_sum - logits[target]                 # equals -log p_target
+
+cases = [
+    ("small logits", [2.0, 1.0, 0.1], 1),
+    ("huge positive", [800.0, 0.0, -800.0], 0),
+    ("true class far behind", [0.0, -800.0, 3.0], 1),
+]
+
+with np.errstate(all="ignore"):                   # hide overflow warnings
+    for name, logits, target in cases:
+        z = np.array(logits)
+        print(f"{name:22s} naive={ce_naive(z, target):8.3f}  "
+              f"stable={ce_stable(z, target):8.3f}")
+
+# Sanity check: all-equal logits must give ln K for K classes
+for k in (2, 3, 10):
+    print(f"K={k:2d}  loss={ce_stable(np.zeros(k), 0):.3f}  ln K={np.log(k):.3f}")`, output: `small logits           naive=   1.417  stable=   1.417
+huge positive          naive=     nan  stable=   0.000
+true class far behind  naive=     inf  stable= 803.049
+K= 2  loss=0.693  ln K=0.693
+K= 3  loss=1.099  ln K=1.099
+K=10  loss=2.303  ln K=2.303`, walkthrough: [
+          { lines: [3, 5], note: 'The naive version: turn logits into probabilities, then take the log. It is correct on paper.' },
+          { lines: [7, 10], note: 'The stable version never builds the probabilities. Since `−log p = log(∑ eᶻ) − z_target`, we only need the log of the sum. Subtracting the largest logit `m` first means the biggest exponent is e⁰ = 1, so nothing can overflow.' },
+          { lines: [12, 22], note: 'Three tests. On ordinary logits both agree (1.417, our dog example). With a logit of 800 the naive version returns `nan`. When the true class is 800 behind, its probability rounds to 0 and the naive loss is `inf`.' },
+          { lines: [24, 26], note: 'A check we can always run: equal logits mean a uniform guess, and the loss must equal ln K.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'In the "small logits" case, add 100 to every logit: `[102.0, 101.0, 100.1]`. Predict the stable loss before running. Does shifting all logits by the same amount change the probabilities?',
+          'In the "huge positive" case, change the target from 0 to 2. Predict the stable loss (use `log_sum − z_target`) and what the naive version prints.',
+          'Multiply the small logits by 10: `[20.0, 10.0, 1.0]`, target still 1. Predict whether the loss goes up or down and roughly to what value. What does that say about scaling up the logits of a model that is wrong?',
+        ] },
+        { type: 'check', question: 'In the "huge positive" case the right answer is clearly a loss of about 0: the true class is far ahead. Why does the naive version return nan instead?', answer: '`np.exp(800)` is larger than the biggest number a 64-bit float can hold, so it becomes infinity. The softmax then divides infinity by infinity, which is undefined: `nan`. The maths is fine; the intermediate number is the problem. The stable version subtracts the max first, so it only ever computes e⁰ and smaller.' },
+        { type: 'check', question: 'In the third case the stable loss is 803.049, not 800. Where does the extra 3.049 come from?', answer: 'The loss is `log(∑ eᶻ) − z_target`. The sum is dominated by the largest logit, the bird at 3: `log(e³ + e⁰ + e⁻⁸⁰⁰) ≈ 3 + ln(1 + e⁻³) ≈ 3.049`. Then we subtract the true class logit, −800, giving 803.049. The loss measures how far the true class is behind the *whole pile* of scores, which is roughly the gap to the leader.' },
       ],
     },
     {

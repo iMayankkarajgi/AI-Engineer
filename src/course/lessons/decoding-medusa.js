@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-medusa',
-  minutes: 18,
+  minutes: 23,
   hook: 'What if a language model could guess its next three words by itself, with no second model to help, and still never change what it would have said?',
   summary: 'Medusa speeds up text generation by bolting a few small extra "heads" onto an existing LLM so that, in one forward pass, the model guesses several future tokens at once. A special tree-shaped attention mask lets the model check many of those guesses in the very next pass, and every guess that matches what the model would have produced anyway is kept for free.',
   sections: [
@@ -175,6 +175,85 @@ simulated tokens per step (top-1 chain): 1.9`, walkthrough: [
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'A team serving a single fine-tuned chat model at low batch sizes (a few users at a time) can train Medusa heads for a few GPU-hours and switch them on in a serving engine that supports them. Their users see answers stream out roughly twice as fast, with no second model to manage.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes and limits', text: 'Medusa helps most when the GPU is under-used (small batches). With large batches the GPU is already busy doing compute, so extra tree tokens are no longer free and the speedup shrinks or vanishes. Heads are tied to one exact model: after you fine-tune the model, retrain the heads. And do not assume "faster" means "identical": with typical acceptance the sampled text can differ statistically from plain sampling.' },
       ],
+    },
+    {
+      id: "one-step-traced-by-hand",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Let us trace one full Medusa step for our support chatbot with greedy decoding. The answer so far is “To reset your password,” and the LM head has just picked the next token: “click”. In the same pass, head 1 offered its top two guesses for the following position, “the” and “on”, and head 2 offered “link” and “Reset” for the position after that. The tokens are made up for illustration." },
+        { type: "steps", title: "Verifying a 6-node tree in one pass", items: [
+          { title: "Build the tree", text: "Two nodes at depth 1 (“the”, “on”) and four at depth 2 (“the→link”, “the→Reset”, “on→link”, “on→Reset”). Six nodes in total." },
+          { title: "Run one pass with the tree mask", text: "All six nodes go in together after “click”. At every node the model reports what it would write next, having seen only the real text and that node's ancestors." },
+          { title: "Check depth 1", text: "After “click” the model's own choice is “the”. The node “the” is accepted. The node “on” is rejected, and with it both nodes underneath." },
+          { title: "Check depth 2", text: "At the node “the” the model's own choice is “Reset”. So “the→Reset” is accepted and “the→link” is not." },
+          { title: "Take the model's own token", text: "At the node “the→Reset” the model has already computed its next choice, say “button”. We keep it. It is the one token every step is sure to give." },
+          { title: "Count", text: "This step added “the”, “Reset” and “button”: 3 tokens from one pass. Four of the six nodes were wasted work." }
+        ] },
+        { type: "table", caption: "The four paths through the tree and how far each one gets", head: ["Path", "Depth 1 matches?", "Depth 2 matches?", "Guesses accepted"], rows: [
+          ["the → link", "Yes", "No", "1"],
+          ["the → Reset", "Yes", "Yes", "2"],
+          ["on → link", "No", "(not checked)", "0"],
+          ["on → Reset", "No", "(not checked)", "0"]
+        ] },
+        { type: "p", text: "Now compare with a chain that keeps only each head's first guess: “the” then “link”. It would accept “the”, fail on “link”, and add the model's own token: 2 tokens instead of 3. The second guess of head 2 is what earned the extra token." },
+        { type: "p", text: "And the worst case? If the model's choice after “click” had been neither “the” nor “on”, all six nodes would be rejected. We would still get the model's own token, so the step yields 1 token, like plain decoding, after a slightly more expensive pass." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson said that choosing the tree is a balance. We will simulate that balance. Three heads each offer their top 1, top 2 or top 3 guesses, and we build the full tree of every combination. A guess at some depth counts if the true token is among that head's kept guesses. Each tree node makes the pass a little slower. All accuracies and costs are illustrative." },
+        { type: "code", lang: "python", title: "practice_tree_width.py", code: `# How wide should the candidate tree be? A toy simulation with 3 extra heads.
+import random
+random.seed(1)
+# Chance the true token is within a head's top-1, top-2, top-3 (illustrative).
+CUM = [[0.60, 0.75, 0.85], [0.40, 0.55, 0.65], [0.25, 0.36, 0.45]]
+NODE_COST = 0.02      # extra pass time per tree node, in passes (illustrative)
+STEPS = 20000
+
+def rank_of_truth(head):
+    # 1, 2 or 3 if the true token is the head's 1st, 2nd or 3rd guess, else 99
+    r = random.random()
+    for rank, c in enumerate(CUM[head], start=1):
+        if r < c:
+            return rank
+    return 99
+
+def run(width):
+    total = 0
+    for _ in range(STEPS):
+        tokens = 1                              # the model's own next token
+        for head in range(3):
+            if rank_of_truth(head) <= width:    # some branch holds the true token
+                tokens += 1
+            else:
+                break                           # deeper nodes on this path are wasted
+        total += tokens
+    nodes = width + width ** 2 + width ** 3     # full tree: every combination
+    per_step = total / STEPS
+    return nodes, per_step, per_step / (1 + nodes * NODE_COST)
+
+for width in (1, 2, 3):
+    nodes, per_step, speedup = run(width)
+    print(f"top-{width} per head: {nodes:2d} tree nodes, "
+          f"{per_step:.2f} tokens/step, speedup {speedup:.2f}x")`, output: `top-1 per head:  3 tree nodes, 1.90 tokens/step, speedup 1.80x
+top-2 per head: 14 tree nodes, 2.30 tokens/step, speedup 1.80x
+top-3 per head: 39 tree nodes, 2.66 tokens/step, speedup 1.49x`, walkthrough: [
+          { lines: [1, 7], note: "For each head, the chance that the true token is in its top 1, 2 or 3 guesses. These match the lesson's illustrative numbers, with a top-2 column added. Each tree node adds 2% to the pass time." },
+          { lines: [9, 15], note: "Draw where the true token sits in one head's ranked list: first, second, third, or not in the top 3 at all." },
+          { lines: [17, 26], note: "One decoding step: start with the model's own token, then go head by head and stop at the first head whose kept guesses miss the true token." },
+          { lines: [27, 29], note: "A full tree has width + width² + width³ nodes. Speedup is tokens per step divided by the cost of the slower pass." }
+        ] },
+        { type: "p", text: "Tokens per step rise with every extra guess per head, as the formula predicts (1.90, then about 2.30, then about 2.65). But the node count jumps from 3 to 14 to 39, and at top-3 the cost of the pass grows faster than the tokens it wins. Now change it:" },
+        { type: "list", items: [
+          "Set `NODE_COST = 0.005`, a GPU with plenty of spare compute. Predict which width now gives the best speedup.",
+          "Set `NODE_COST = 0.1`, a busy GPU with large batches. Predict whether any width beats 1.5×, and which width is now the worst.",
+          "Remove head 3: loop over `range(2)` and use `nodes = width + width ** 2`. Predict how many tokens per step the top-3 tree loses and whether its speedup goes up or down."
+        ] },
+        { type: "check", question: "In the worked example, four of the six tree nodes were computed and then thrown away. Is that a flaw we should fix?", answer: "No, it is the price of hedging. We cannot know in advance which branch the model will agree with, so we check several at once. When the GPU has spare compute, extra nodes in the same pass cost little. It becomes a real cost only when the GPU is already busy, which is why the gain shrinks at large batch sizes." },
+        { type: "check", question: "In the practice output, the top-3 tree has the most tokens per step and the lowest speedup. Why, and what does the lesson say real systems do instead of a full tree?", answer: "A full tree grows as width + width² + width³, so 39 nodes are verified to win less than one extra token per step over top-1. Most of those nodes sit under unlikely branches. Real systems use a fixed sparse tree with tens of nodes that spends them on the most likely branches." }
+      ]
     },
     {
       id: 'quick-summary',

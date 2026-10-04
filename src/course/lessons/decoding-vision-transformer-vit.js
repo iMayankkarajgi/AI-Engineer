@@ -1,6 +1,6 @@
 export default {
   id: "decoding-vision-transformer-vit",
-  minutes: 20,
+  minutes: 25,
   hook: "Transformers were built to read sentences — so how can the very same architecture look at a photo and say 'that is a cracked blender jar'?",
   summary: "A Vision Transformer (ViT) treats an image like a sentence: it cuts the image into small square patches, turns each patch into a vector (a 'visual word'), adds a special [CLS] token and position information, and runs the sequence through a standard Transformer encoder. The final [CLS] vector summarises the whole image and a small head turns it into class scores. ViTs need more data than CNNs to learn well, but they scale very well and are now the default image encoder inside most multimodal models.",
   sections: [
@@ -172,6 +172,91 @@ ViT-B/16 patches: 196 -> sequence length 197 | values per patch: 768`,
           verdict: "With small data or tight compute, a CNN (or a hybrid) is a safe choice. With large pre-training data — or when the vision features must feed a language model — ViT-style encoders are the modern default. Hybrids such as Swin (windowed attention) and ConvNeXt (a modernised CNN) blur the line." },
         { type: "check", question: "We have only 2,000 labelled support photos. Should we train a ViT from scratch?", answer: "No. With so little data a ViT from scratch will likely underperform because it lacks the CNN's built-in assumptions. Instead, fine-tune a ViT (or CNN) that was pre-trained on a large dataset — that brings the learned visual knowledge with it." },
         { type: "callout", tone: "example", title: "Where ViTs are used today", text: "ViT-style encoders are the image backbone in CLIP and in most vision-language chat models, which feed the patch vectors (after a projection) into an LLM. They are also used in image classification, as the encoder in segmentation and detection systems, in medical imaging research, and as the 'eyes' of robotics models." },
+      ],
+    },
+    {
+      id: "worked-parameter-count",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "A good way to check that we understand ViT is to count its parameters by hand and see whether we land near the ≈ 86M listed for ViT-Base. We only need the sizes already given: P = 16, C = 3, D = 768, MLP size 3,072, 12 layers, 197 tokens." },
+        { type: "steps", title: "Counting ViT-Base", items: [
+          { title: "Patch embedding", text: "E maps 768 flattened pixel values to D = 768, plus a bias: 768 × 768 + 768 = **590,592** parameters. It is shared by all 196 patches." },
+          { title: "[CLS] and positions", text: "[CLS] is one vector: 768. The position table has 197 rows: 197 × 768 = **151,296**. The whole input stage is 590,592 + 768 + 151,296 = 742,656." },
+          { title: "Attention in one layer", text: "Query, key, value and output projections are each 768 × 768 + 768 = 590,592. Four of them: **2,362,368**. The 12 heads split these matrices; they do not add parameters." },
+          { title: "MLP in one layer", text: "768 → 3,072 costs 768 × 3,072 + 3,072 = 2,362,368. 3,072 → 768 costs 3,072 × 768 + 768 = 2,360,064. Together: **4,722,432**." },
+          { title: "One whole layer", text: "Add two LayerNorms (2 × 768 numbers each = 3,072): 2,362,368 + 4,722,432 + 3,072 = **7,087,872**." },
+          { title: "Twelve layers plus the input stage", text: "12 × 7,087,872 = 85,054,464. Add the input stage and the final LayerNorm (1,536): about **85.8M** before the classification head. That matches the ≈ 86M in the table." },
+        ] },
+        { type: "table", caption: "Where ViT-Base's parameters live (computed above)", head: ["Part", "Parameters", "Share"], rows: [
+          ["Patch embedding + [CLS] + positions", "742,656", "under 1%"],
+          ["12 × attention", "28,348,416", "about 33%"],
+          ["12 × MLP", "56,669,184", "about 66%"],
+          ["LayerNorms", "38,400", "tiny"],
+        ] },
+        { type: "p", text: "Two things stand out. The part that is special to images, the input stage, is under 1% of the model; everything else is an ordinary Transformer encoder. And the MLP blocks hold about twice as many parameters as attention. Notice also what does **not** depend on image size: only the position table does. That is why fine-tuning at a higher resolution needs no new weights except interpolated positions, yet still costs far more compute, because the number of token pairs grows." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will cut a tiny numbered image into patches so we can see exactly which pixels land in which patch. Then we test the 'blind spot' from step 4: we shuffle the patches and check whether a one-head model notices, with and without position embeddings." },
+        { type: "code", lang: "python", title: "practice_patch_shuffle.py", code: `import numpy as np
+rng = np.random.default_rng(3)
+
+# A 4x4 one-channel "image" whose pixels are numbered 0..15, patch size 2.
+img = np.arange(16).reshape(4, 4)
+P = 2
+patches = img.reshape(2, P, 2, P).transpose(0, 2, 1, 3).reshape(-1, P * P)
+for i, p in enumerate(patches):
+    print(f"patch {i}: pixels {p}")
+
+D = 8
+E = rng.normal(scale=0.5, size=(P * P, D))       # shared patch embedding
+pos = rng.normal(scale=0.5, size=(4, D))         # one vector per position
+Wq, Wk, Wv = (rng.normal(scale=0.3, size=(D, D)) for _ in range(3))
+
+def image_vector(patch_rows, use_pos):
+    """Embed patches, run one attention head, average into one vector."""
+    x = (patch_rows / 15.0) @ E                  # scale pixels to 0..1
+    if use_pos:
+        x = x + pos                              # slot i always gets pos[i]
+    s = (x @ Wq) @ (x @ Wk).T / np.sqrt(D)
+    a = np.exp(s - s.max(1, keepdims=True)); a /= a.sum(1, keepdims=True)
+    return (x + a @ x @ Wv).mean(axis=0)         # mean-pool the tokens
+
+order = [3, 1, 0, 2]                             # scramble the patch order
+shuffled = patches[order]
+for use_pos in (False, True):
+    a = image_vector(patches, use_pos)
+    b = image_vector(shuffled, use_pos)
+    label = "with positions   " if use_pos else "without positions"
+    print(f"{label}: largest change after shuffling = {np.abs(a - b).max():.3f}")
+
+for size in (224, 384):
+    n = (size // 16) ** 2 + 1
+    print(f"{size}x{size} image -> {n} tokens -> {n * n:,} attention pairs")`, output: `patch 0: pixels [0 1 4 5]
+patch 1: pixels [2 3 6 7]
+patch 2: pixels [ 8  9 12 13]
+patch 3: pixels [10 11 14 15]
+without positions: largest change after shuffling = 0.000
+with positions   : largest change after shuffling = 0.042
+224x224 image -> 197 tokens -> 38,809 attention pairs
+384x384 image -> 577 tokens -> 332,929 attention pairs`,
+          walkthrough: [
+            { lines: [5, 9], note: "Pixels are numbered 0 to 15 in reading order. The reshape and transpose group them into four 2×2 patches. Patch 0 holds pixels 0, 1, 4, 5: the top-left corner." },
+            { lines: [16, 23], note: "A mini ViT: embed each patch, optionally add the position vector of its slot, run one unmasked attention head with a residual, then average the tokens into one image vector." },
+            { lines: [25, 31], note: "We reorder the patches and compare image vectors. Without positions the change is exactly 0: the model cannot tell the scrambled image from the original. With positions the vector changes." },
+            { lines: [33, 35], note: "Token and pair counts for two real input sizes. 384×384 has about 3× the tokens of 224×224 but about 8.6× the attention pairs." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `order` to `[0, 1, 2, 3]`. Predict both printed changes before running.",
+          "Multiply `pos` by 4 (use `scale=2.0`). Predict whether the 'with positions' change gets larger or smaller, and whether the 'without positions' line moves at all.",
+          "In the last loop, use `size // 8` instead of `size // 16`. Predict the token count for 224×224 first, then how many times the pair count grows.",
+        ] },
+        { type: "check", question: "The code pools by averaging all tokens. If we read a [CLS] token instead, and still used no position embeddings, would shuffling the patches change the [CLS] output?", answer: "No. [CLS] gathers information through attention, and attention treats the patches as a set: each patch contributes the same value with the same weight wherever it sits in the sequence. The readout method does not fix the blind spot; only position information does." },
+        { type: "check", question: "We switch ViT-Base from 16×16 to 8×8 patches on 224×224 images. Does the model get many more parameters? What does change?", answer: "Hardly. The patch embedding actually shrinks (8·8·3 = 192 inputs instead of 768), and the position table grows from 197 to 785 rows, which is small. The encoder layers are untouched. What explodes is compute and memory: 785 tokens means about 16× more attention pairs per layer." },
       ],
     },
     {

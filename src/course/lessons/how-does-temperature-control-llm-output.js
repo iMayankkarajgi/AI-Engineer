@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-temperature-control-llm-output',
-  minutes: 18,
+  minutes: 23,
   hook: 'Ask the same chatbot the same question twice and you may get two different answers. One small number, the temperature, decides how much that happens.',
   summary: 'An LLM produces a score (logit) for every possible next token; softmax turns those scores into probabilities and one token is sampled. Temperature divides the logits before softmax: below 1 it sharpens the distribution toward the top token (focused, repeatable output), above 1 it flattens it (varied, riskier output). Temperature 0 is treated as always picking the top token. Choosing it well depends on the task.',
   sections: [
@@ -157,6 +157,79 @@ T=0 (greedy) -> sunny
         { type: 'p', text: 'Ranges and defaults differ by provider: some APIs accept 0 to 2, others 0 to 1, and some reasoning-focused models fix or restrict temperature. Always check the documentation for the model you call.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Using high temperature to make answers "smarter" (it only makes them more random). Expecting T = 0 to guarantee identical output on every call. Turning temperature up to fix repetition when the real problem is the prompt. Tuning temperature and top-p aggressively at the same time, which makes the effect hard to reason about. And believing temperature changes the model\'s knowledge: it only reshapes the probabilities the model already produced.' },
         { type: 'check', question: 'Our support bot sometimes invents unusual shipping times in otherwise good answers. It runs at T = 1.3. What is a sensible first change?', answer: 'Lower the temperature (for example to about 0.3), so sampling sticks to the high-probability tokens. High temperature makes rare, wrong tokens much more likely. If invented facts persist at low temperature, the fix is better grounding (for example retrieval), not temperature.' },
+      ],
+    },
+    {
+      id: 'errors-add-up',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'So far we looked at **one** token. A real answer is hundreds of tokens, and each one is a fresh draw. A risk that looks tiny for one token grows quickly over a whole answer. Let us work it out for our nonsense word "purple".' },
+        { type: 'steps', title: 'From one token to a 100-token answer', items: [
+          { title: 'Chance per token', text: 'At T = 1 the probability of "purple" is about 0.0039, roughly 1 in 257.' },
+          { title: 'Chance of avoiding it once', text: '`1 − 0.0039 = 0.9961`.' },
+          { title: 'Avoiding it 100 times in a row', text: 'The draws are separate, so we multiply: `0.9961¹⁰⁰ ≈ 0.68`.' },
+          { title: 'Read the result', text: 'About 68% of 100-token answers are clean. The other 32% contain at least one "purple", although the per-token chance was under half a percent.' },
+          { title: 'Repeat for other temperatures', text: 'Only the first number changes. The table shows how fast the outcome moves.' },
+        ] },
+        { type: 'table', caption: 'Computed from the lesson\'s illustrative logits. For simplicity we pretend every position has this same distribution.', head: ['Temperature', 'P("purple") per token', 'Clean 100-token answers'], rows: [
+          ['0.5', '0.004%', '99.6%'],
+          ['0.7', '0.06%', '94.6%'],
+          ['1.0', '0.39%', '67.7%'],
+          ['1.5', '1.64%', '19.2%'],
+          ['3.0', '6.24%', '0.2%'],
+        ] },
+        { type: 'chart', kind: 'bar', title: 'Share of 100-token answers with no "purple" at all', yLabel: 'Clean answers', unit: '%', labels: ['T = 0.5', 'T = 0.7', 'T = 1.0', 'T = 1.5', 'T = 3.0'], series: [
+          { name: 'Clean answers', values: [99.6, 94.6, 67.7, 19.2, 0.2] },
+        ], caption: 'Same numbers as the table. A small move in temperature is a large move in how often a long answer goes wrong.' },
+        { type: 'p', text: 'This is why long outputs are more sensitive to temperature than short ones, and why a setting that looks fine on one-line answers can fail on long reports.' },
+        { type: 'p', text: 'There is also a second way to read the formula. Dividing logits by `T` is the same as raising each **probability** to the power `1/T` and rescaling so they sum to 1. With `T = 0.5` the power is 2, so we square: `0.577² = 0.333`, `0.212² = 0.045`, `0.129² = 0.017`, `0.078² = 0.006`. These add up to about 0.401, and `0.333 / 0.401 = 0.83`, the same 83% for "sunny" we found before. Squaring hurts small numbers far more than large ones, which is exactly why low temperature starves the tail.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We measure randomness with numbers instead of looking at bars. For five temperatures we compute the "effective number of choices" the sampler really has, then write 200 short answers of 10 tokens each and count how many are different and how many contain "purple".' },
+        { type: 'code', lang: 'python', title: 'practice_temperature_spread.py', code: `import numpy as np
+
+rng = np.random.default_rng(7)
+tokens = ["sunny", "rainy", "cloudy", "cold", "purple"]
+logits = np.array([4.0, 3.0, 2.5, 2.0, -1.0])
+PURPLE = 4                                    # index of the nonsense token
+
+def softmax_t(z, T):
+    z = z / T
+    p = np.exp(z - z.max())
+    return p / p.sum()
+
+print("  T   choices  distinct  with purple")
+for T in (0.2, 0.7, 1.0, 1.5, 3.0):
+    p = softmax_t(logits, T)
+    # Entropy measures spread; exp(entropy) = "effective number of choices"
+    entropy = -np.sum(p * np.log(p))
+    choices = np.exp(entropy)
+    # Write 200 short "answers" of 10 tokens each at this temperature
+    answers = rng.choice(len(tokens), size=(200, 10), p=p)
+    distinct = len({tuple(a) for a in answers})           # different answers
+    with_purple = np.mean((answers == PURPLE).any(axis=1))  # share with nonsense
+    print(f"{T:4.1f}   {choices:5.2f}   {distinct:6d}   {with_purple:10.1%}")`, output: `  T   choices  distinct  with purple
+ 0.2    1.05        8         0.0%
+ 0.7    2.43      184         0.0%
+ 1.0    3.10      198         3.5%
+ 1.5    3.75      200        13.0%
+ 3.0    4.50      200        48.5%`, walkthrough: [
+          { lines: [3, 6], note: 'The same five candidates and illustrative logits as in the lesson, with a fixed random seed.' },
+          { lines: [15, 18], note: '**Entropy** is `−∑ p·ln p`: it is 0 when one token has all the probability and largest when all are equal. Its exponential reads as "the sampler behaves as if it chose evenly among this many tokens".' },
+          { lines: [19, 23], note: 'For each temperature we sample 200 answers of 10 tokens. At T = 0.2 there are only 8 different answers; at T = 1.5 all 200 differ, and 13% of them contain "purple".' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change the answer length from 10 to 100 tokens: `size=(200, 100)`. Before running, predict the "with purple" share at T = 1.0 using the table from the previous section.',
+          'Add `0.05` to the list of temperatures. Predict "choices" and "distinct". Then explain why we cannot simply add `0` to the list.',
+          'Raise the logit of "purple" from −1.0 to 1.5, as if the model found it half plausible. Predict what happens to the "with purple" column at T = 0.7, where it was 0.0%.',
+        ] },
+        { type: 'check', question: 'At T = 3.0 the effective number of choices is 4.50. There are 5 tokens. Could a higher temperature push it above 5, and what value does it approach as T goes towards 0?', answer: 'No. The most spread-out distribution over 5 tokens is the uniform one, which gives exactly 5. Raising T moves towards that limit but can never pass it. Going the other way, lowering T moves the value towards 1: a single choice, which is greedy decoding. So temperature slides the sampler between "1 real option" and "all options equal".' },
+        { type: 'check', question: 'At T = 0.2 "sunny" has a probability of about 99%, yet the 200 answers were not all identical: we got 8 different ones. Why?', answer: 'Because 99% is per token, and each answer has 10 tokens. The chance that all ten draws are "sunny" is about 0.993¹⁰ ≈ 0.93. So about 7% of answers differ somewhere, which gives a handful of distinct variants. A low temperature makes output *mostly* repeatable, not identical. Only greedy decoding (T = 0) removes the sampling step completely.' },
       ],
     },
   ],

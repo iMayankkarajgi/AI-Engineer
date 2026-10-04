@@ -1,6 +1,6 @@
 export default {
   id: 'cross-attention-in-transformers',
-  minutes: 18,
+  minutes: 23,
   hook: 'When a translation model writes the French word "chats", how does it know to look back at the English word "cats" in a completely different sentence?',
   summary: 'Cross-attention is attention between two different sequences. The queries come from the sequence being generated (for example the French decoder), while the keys and values come from another source (the English encoder output, an audio clip, or a text prompt for an image model). The math is the same scaled dot-product attention; only the origin of Q versus K and V changes.',
   sections: [
@@ -158,6 +158,78 @@ with 5 source tokens, weights shape: (3, 5)`,
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Swapping the roles (taking queries from the encoder) produces outputs aligned to the *source* length instead of the target. Applying a causal mask to cross-attention needlessly hides parts of the source. Forgetting a **padding mask** on the source side lets the decoder attend to filler tokens in batched inputs. And treating cross-attention maps as exact word alignments: they are soft, and different heads and layers can disagree.' },
         { type: 'p', text: '**When not to use it:** if all your inputs are text and you are building on a decoder-only LLM, concatenating the source into the prompt is usually simpler and works well. Cross-attention earns its place when the source is a different modality, is very long and fixed (encode once, decode many tokens), or when you want a clean separation between "what we condition on" and "what we generate".' },
+      ],
+    },
+    {
+      id: "worked-example-one-target-token",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The lesson's code used random weights, so we could not check a row by hand. Let us do one target token with small made-up numbers. The decoder is about to write “chats”. Its query is [2, 0]. The three English tokens offer these keys and values (dₖ = 2, illustrative)." },
+        { type: "table", caption: "Source keys and values for the hand example (illustrative numbers).", head: ["Source token", "Key", "Value", "Raw score with query [2, 0]"], rows: [
+          ["I", "[0, 2]", "[1, 0]", "2·0 + 0·2 = 0"],
+          ["love", "[1, 1]", "[0, 1]", "2·1 + 0·1 = 2"],
+          ["cats", "[3, 0]", "[1, 1]", "2·3 + 0·0 = 6"],
+        ] },
+        { type: "steps", title: "From scores to the output for “chats”", items: [
+          { title: "Scale", text: "Divide by √2 ≈ 1.41: [0, 2, 6] becomes [0, 1.41, 4.24]." },
+          { title: "Softmax", text: "e⁰ = 1, e^1.41 ≈ 4.11, e^4.24 ≈ 69.59. The sum is 74.70, so the weights are about [0.01, 0.06, 0.93]. “chats” looks almost only at “cats”." },
+          { title: "Blend the source values", text: "0.01·[1, 0] + 0.06·[0, 1] + 0.93·[1, 1] ≈ [0.94, 0.99]. The output is close to the value of “cats”." },
+          { title: "Now add filler", text: "Pad the source with a fourth token. Its vector is arbitrary; say its key is [3, 0.5] and its value is [−2, 4]. Its raw score is also 6, the same as “cats”." },
+          { title: "See the damage", text: "With no mask the weights become about [0.01, 0.03, 0.48, 0.48] and the output jumps to about [−0.48, 2.44]. Half of what “chats” reads is now noise." },
+          { title: "Fix it", text: "Set the filler's score to −∞ before softmax. Its weight becomes 0 and we are back to [0.01, 0.06, 0.93]." },
+        ] },
+        { type: "p", text: "Two things are worth keeping from this. First, one row of cross-attention is nothing more than a soft lookup into the source: the target token brings a question, the source brings the answers. Second, the source side needs its own mask. It is not the causal mask, which we do not use here. It is a **padding mask** on the source columns, and without it the result for a sentence depends on how much filler its batch happened to add." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will imitate three decoding steps. The source keys and values are built once, before the loop. Each step then makes one new query and reads the source, with and without a padding mask, so we can watch both the reuse and the leak." },
+        { type: "code", lang: "python", title: "practice_cross_attention_steps.py", code: `import numpy as np
+np.set_printoptions(precision=2, suppress=True)
+rng = np.random.default_rng(11)
+
+src = ["I", "love", "cats", "<pad>"]          # source, padded to length 4
+d_model, d_k = 6, 4
+enc = rng.standard_normal((len(src), d_model))
+W_q, W_k, W_v = (rng.standard_normal((d_model, d_k)) * 0.6 for _ in range(3))
+
+# Source keys and values: computed ONCE, before decoding starts
+K, V = enc @ W_k, enc @ W_v
+src_is_pad = np.array([s == "<pad>" for s in src])
+
+def cross_attend(query, use_pad_mask):
+    scores = query @ K.T / np.sqrt(d_k)       # this target token vs every source token
+    if use_pad_mask:
+        scores = np.where(src_is_pad, -np.inf, scores)
+    w = np.exp(scores - scores.max())
+    return w / w.sum()
+
+# Decode three target tokens. Each step builds only ONE new query.
+for step, word in enumerate(["J'", "aime", "les"], start=1):
+    query = rng.standard_normal(d_model) @ W_q    # stand-in for the decoder state
+    leaky = cross_attend(query, use_pad_mask=False)
+    clean = cross_attend(query, use_pad_mask=True)
+    print(f"step {step} {word:>4}: no mask {leaky}  masked {clean}")
+print("K and V were built once and reused for", step, "steps")`, output: `step 1   J': no mask [0.22 0.38 0.28 0.12]  masked [0.25 0.43 0.32 0.  ]
+step 2 aime: no mask [0.12 0.49 0.26 0.13]  masked [0.13 0.56 0.3  0.  ]
+step 3  les: no mask [0.44 0.1  0.11 0.36]  masked [0.68 0.15 0.17 0.  ]
+K and V were built once and reused for 3 steps`,
+          walkthrough: [
+            { lines: [5, 8], note: "A source of three real tokens plus one filler token, random encoder vectors and three projection matrices." },
+            { lines: [10, 12], note: "The source side is projected to keys and values once. `src_is_pad` marks the filler column." },
+            { lines: [14, 19], note: "One row of cross-attention: score the query against every source key, optionally hide the filler, then softmax." },
+            { lines: [21, 27], note: "Three decoding steps. Only the query is new each time. Without the mask the filler takes 12%, 13% and 36% of the weight; with it, exactly 0." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Multiply the query by 3 (add `* 3` at the end of the `query = ...` line). Predict first: do the masked weights get flatter or more peaked, and does the top token change?",
+          "Add `src_is_pad[0] = True` after the line that builds `src_is_pad`, so “I” is hidden too. Predict the masked weights for step 1 from the current ones.",
+          "Move the line `K, V = enc @ W_k, enc @ W_v` inside `cross_attend`. Predict whether any printed weight changes, and count how many times the source is now projected.",
+        ] },
+        { type: "check", question: "At step 3 the unmasked row puts 36% on `<pad>`. Filler has no meaning. How can it earn that much weight, and what would it do to a real system?", answer: "A filler position still has a vector, so it still has a key, and a dot product with that key can be large by chance. Attention cannot know the token is meaningless unless we tell it. In a real system the output for the same sentence would then change with the amount of filler in its batch, which shows up as results that differ between batch sizes." },
+        { type: "check", question: "In the hand example the query for “chats” was [2, 0] and “cats” got 93%. Suppose training doubles the query to [4, 0] and changes nothing else. What happens to the weight on “cats”, and why?", answer: "It rises to almost 100%. Doubling the query doubles every raw score to [0, 4, 12], so the gaps between them double too, and softmax turns bigger gaps into a sharper split. The direction of the query decides *which* source token wins; its length decides *by how much*." },
       ],
     },
   ],

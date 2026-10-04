@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-sglang-work',
-  minutes: 22,
+  minutes: 27,
   hook: 'When an AI agent calls the same model twenty times with almost the same long prompt, why should the GPU redo all that work twenty times?',
   summary: 'SGLang is an open-source LLM serving engine plus a small Python language for writing multi-call LLM programs. Its runtime keeps the KV cache of past requests in a radix tree (RadixAttention) so any later request that shares a prefix reuses that work automatically, and it schedules requests to maximise those cache hits. Together with continuous batching, fast structured (JSON/regex) decoding and many performance features, it delivers high throughput, especially for agents, few-shot prompts and multi-turn chat.',
   sections: [
@@ -197,6 +197,85 @@ print(state.text())` },
         ], rows: [ ['Core memory idea', 'Radix tree over paged KV', 'Paged KV blocks + hashed prefix caching'], ['Program language', 'Yes (Python DSL)', 'No (API only)'], ['Structured output', 'Compressed FSM / grammar backends', 'Grammar backends'], ['API server', 'OpenAI-compatible', 'OpenAI-compatible'] ], verdict: 'Both are excellent. Benchmark your own traffic: heavy prefix sharing and structured agent loops often favour SGLang; breadth of models and hardware often favours vLLM.' },
         { type: 'callout', tone: 'tip', title: 'When SGLang\'s edge shrinks', text: 'If every request is unique (no shared system prompt, no history, no examples), there is little to reuse and RadixAttention gives little benefit. Put stable content (instructions, tools, examples) at the very start of prompts and variable content at the end, or prefix reuse will never trigger.' },
       ],
+    },
+    {
+      id: "eviction-by-hand",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We said the radix tree evicts least recently used leaves and protects nodes that a running request is using. Let us walk through one eviction with small numbers. The numbers are illustrative, and to keep it simple a node is evicted whole. The cache can hold 4,000 tokens of KV. The tree has one shared node S, the agent's instructions (2,000 tokens), with three user branches below it." },
+        { type: "table", caption: "The tree before the new request arrives (3,900 of 4,000 tokens used)", head: ["Node", "Tokens", "Last used", "In use right now?"], rows: [
+          ["S (shared instructions)", "2,000", "just now", "Yes, by user C's request"],
+          ["A (user A's history)", "900", "long ago", "No"],
+          ["B (user B's history)", "600", "a while ago", "No"],
+          ["C (user C's history)", "400", "just now", "Yes"]
+        ] },
+        { type: "steps", title: "A new user D arrives with S plus 500 new tokens", items: [
+          { title: "Match the prefix", text: "D's prompt matches S, so 2,000 tokens are reused. D locks S, so S now has two users: C's request and D's." },
+          { title: "Check the space", text: "D needs 500 new tokens. 3,900 + 500 = 4,400, which is 400 over the limit." },
+          { title: "List what may be evicted", text: "Only leaves can go, so S is safe while it has children. C is a leaf but it is locked. That leaves A and B." },
+          { title: "Evict the least recently used leaf", text: "A was used longest ago. Evicting it frees 900 tokens: 3,000 remain, and with D's 500 the tree holds 3,500." },
+          { title: "What if A were locked too?", text: "Then B goes instead: 3,300 + 500 = 3,800, which still fits. If A, B and C were all in use, nothing could be evicted and D would have to wait." }
+        ] },
+        { type: "p", text: "Notice what this policy protects. The shared instructions are the most valuable node, because every request reuses them, and they are also the hardest to evict: they are not a leaf, and they are touched by every request. What gets dropped is the private tail of a user who has gone quiet. If user A comes back later, only A's 900 tokens must be prefilled again, not the 2,000 shared ones." },
+        { type: "p", text: "This also explains a symptom to watch for. If the hit rate is low although prompts share a long prefix, the cache may be too small for the number of active branches, so tails are evicted before their users return." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson claimed that serving requests with the longest matched prefix first raises the hit rate. We will test that claim on a toy cache. Two agents, X and Y, each send three requests that begin with their own 20-token prompt. The requests arrive interleaved. The cache is so small that it can hold only one request's tokens at a time. Our toy counts each cached sequence in full, while a real radix tree would store a shared prefix once." },
+        { type: "code", lang: "python", title: "practice_cache_aware.py", code: `# Cache-aware scheduling with a small prefix cache (a toy model of the idea).
+from collections import OrderedDict
+CAPACITY = 30                 # tokens of KV the cache may hold (tiny on purpose)
+
+def shared(a, b):             # length of the common prefix of two token tuples
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return n
+
+def serve(queue, cache_aware):
+    cache, queue, prefilled, log = OrderedDict(), list(queue), 0, []
+    def match(req):           # longest prefix of this request already in the cache
+        return max((shared(req[1], c) for c in cache), default=0)
+    while queue:
+        req = max(queue, key=match) if cache_aware else queue[0]
+        queue.remove(req)
+        name, tokens = req
+        hit = match(req)
+        prefilled += len(tokens) - hit          # only the unmatched part is prefilled
+        log.append(f"{name}:{hit}")
+        cache[tokens] = True                    # keep this request's KV for later
+        while sum(len(c) for c in cache) > CAPACITY:
+            cache.popitem(last=False)           # evict the least recently used entry
+    return log, prefilled
+
+X = tuple(f"x{i}" for i in range(20))           # 20-token prompt of agent X
+Y = tuple(f"y{i}" for i in range(20))           # 20-token prompt of agent Y
+queue = [("X1", X + ("a",)), ("Y1", Y + ("b",)), ("X2", X + ("c",)),
+         ("Y2", Y + ("d",)), ("X3", X + ("e",)), ("Y3", Y + ("f",))]
+for label, aware in [("arrival order", False), ("longest prefix first", True)]:
+    log, prefilled = serve(queue, aware)
+    print(f"{label:20s} served as name:reused -> {' '.join(log)}")
+    print(f"{'':20s} tokens prefilled: {prefilled} of {sum(len(t) for _, t in queue)}")`, output: `arrival order        served as name:reused -> X1:0 Y1:0 X2:0 Y2:0 X3:0 Y3:0
+                     tokens prefilled: 126 of 126
+longest prefix first served as name:reused -> X1:0 X2:20 X3:20 Y1:0 Y2:20 Y3:20
+                     tokens prefilled: 46 of 126`, walkthrough: [
+          { lines: [1, 9], note: "A cache limit of 30 tokens, and a helper that counts how many leading tokens two sequences share." },
+          { lines: [11, 17], note: "The scheduler. In arrival order it takes the first waiting request. In cache-aware mode it takes the request whose prefix matches the cache best." },
+          { lines: [18, 25], note: "Serve the request: reuse the matched tokens, prefill the rest, store its tokens, and evict the least recently used entries when over the limit." },
+          { lines: [27, 34], note: "Six interleaved requests from two agents, served in both orders." }
+        ] },
+        { type: "p", text: "In arrival order every request finds the other agent's tokens in the cache, so nothing is reused and all 126 tokens are prefilled. With the longest prefix first, the X requests run back to back, then the Y requests, and only 46 tokens are prefilled. Now change it:" },
+        { type: "list", items: [
+          "Set `CAPACITY = 100`. Predict the tokens prefilled in arrival order. Does the scheduling order still matter when the cache is roomy?",
+          "Append four more X requests to `queue`. Predict the position at which `Y1` is served under longest prefix first. What problem does this show?",
+          "Put the changing part first: build each request as `(\"a\",) + X` instead of `X + (\"a\",)`, and so on. Predict the reuse in both orders."
+        ] },
+        { type: "check", question: "With a large cache, both orders prefill the same number of tokens. So when exactly does cache-aware scheduling earn its keep?", answer: "When the cache cannot hold every active prefix at once. Then the order decides whether a prefix is still in memory when the next request that needs it runs. Grouping requests that share a prefix lets them all use it before it is evicted. With plenty of memory nothing is evicted, so the order no longer changes the hit rate." },
+        { type: "check", question: "In the worked example, why is it reasonable that user A's history is evicted while the shared instructions S stay, even though S is five times larger and would free far more space?", answer: "The cost of an eviction is the prefill work needed when the tokens are wanted again. S is wanted by every request, so dropping it would force 2,000 tokens of prefill almost at once, for everybody. A's tail is wanted only if A returns. Evicting unused leaves first drops the tokens that are least likely to be needed soon." }
+      ]
     },
   ],
   quiz: [

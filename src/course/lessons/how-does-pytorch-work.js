@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-pytorch-work',
-  minutes: 20,
+  minutes: 25,
   hook: 'We just derived backpropagation by hand for a network with four parameters. How does a library do it automatically for a model with billions, on a GPU, while you write ordinary Python?',
   summary: 'PyTorch is a Python library for building and training neural networks. Its core is the tensor, a multi-dimensional array that can live on a GPU, plus autograd, which records every operation you run into a computation graph and then walks that graph backwards to compute gradients. A training loop is just: forward pass, loss, `loss.backward()`, `optimizer.step()`.',
   sections: [
@@ -202,6 +202,96 @@ print(model.weight.item(), model.bias.item())    # should approach 2 and 3`, wal
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'Training and fine-tuning open LLMs, computer-vision models for medical imaging and self-driving research, recommendation systems, and speech models are all commonly done in PyTorch. When you later fine-tune a model with LoRA or serve one with an inference engine, you will usually be working with PyTorch tensors underneath.' },
         { type: 'p', text: '**When not to use it:** for classic tabular problems, gradient-boosted trees (XGBoost, LightGBM) or scikit-learn are usually simpler and stronger. For tiny numeric scripts, NumPy suffices. And for some deployment targets (mobile, browsers, microcontrollers) you typically export a trained PyTorch model to another runtime rather than shipping PyTorch itself.' },
         { type: 'check', question: 'Why does PyTorch let you write a model whose number of layers depends on an `if` statement evaluated on each input?', answer: 'Because the computation graph is built **dynamically while the code runs** (define-by-run). Whatever path Python takes on this pass is exactly what gets recorded, so autograd differentiates that path.' },
+      ],
+    },
+    {
+      id: 'backward-walk-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Our tiny engine printed `dL/dw = −24` and `dL/db = −12` on its first step. Let us follow the backward walk node by node to see where those numbers come from. The values are `w = 0.5`, `x = 2`, `b = 0`, `y = 7`.' },
+        { type: 'p', text: 'The forward pass creates five results, in this order: `p = w·x = 1`, `s = p + b = 1`, `n = (−1)·y = −7`, `err = s + n = −6`, and `loss = err·err = 36`. The backward pass visits them in the opposite order.' },
+        { type: 'steps', title: 'The backward walk for step 0', items: [
+          { title: 'Seed', text: '`loss.grad = 1`. Every other gradient starts at 0.' },
+          { title: 'loss = err · err', text: 'A multiply sends "the other input × incoming gradient" to each input. Both inputs are the **same** node `err`, so it receives `−6 · 1` twice: `err.grad = −12`. This is the familiar `2·err`.' },
+          { title: 'err = s + n', text: 'An add passes the gradient through unchanged: `s.grad = −12` and `n.grad = −12`.' },
+          { title: 's = p + b', text: 'Again an add: `p.grad = −12` and `b.grad = −12`. The bias has its gradient.' },
+          { title: 'p = w · x', text: 'A multiply: `w.grad = x · (−12) = −24` and `x.grad = w · (−12) = −6`. The weight has its gradient.' },
+        ] },
+        { type: 'table', caption: 'Every node after the backward walk', head: ['Node', 'Forward value', 'Gradient', 'Did we need it?'], rows: [
+          ['loss', '36', '1', 'Starting point'],
+          ['err', '−6', '−12', 'Yes, on the path to w and b'],
+          ['s', '1', '−12', 'Yes'],
+          ['p', '1', '−12', 'Yes'],
+          ['w', '0.5', '−24', 'Yes: a parameter'],
+          ['b', '0', '−12', 'Yes: a parameter'],
+          ['x', '2', '−6', 'No: it is data'],
+          ['n and y', '−7 and 7', '−12 and 12', 'No: they are data'],
+        ] },
+        { type: 'p', text: 'Two lessons hide in this walk. First, step 2 only works because the backward rules use `+=`. With a plain `=`, the second visit to `err` would overwrite the first and we would get `−6`, half the true gradient. Second, the order matters: `err` must have received **all** of its gradient before it passes anything on. That is why the engine sorts the graph first.' },
+        { type: 'p', text: 'The last three rows show wasted work. Our engine computes gradients for the data `x` and `y`, which nobody uses. PyTorch avoids this: a tensor created without `requires_grad=True` is not tracked, and autograd skips every branch of the graph that leads only to untracked tensors. The same idea, switched on for a whole block of code, is `torch.no_grad()`.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We saw that forgetting to zero gradients is a bug. But adding gradients up is a deliberate design, and here we use it on purpose. We rebuild the two objects of a PyTorch loop, a parameter with a `.grad` field and an optimizer with `zero_grad()` and `step()`, and show that four small backward passes can stand in for one large one. This trick is called **gradient accumulation**. It is used when a GPU has room for only a small batch but we want the smoother gradient of a large one: run several small backward passes, then step once.' },
+        { type: 'code', lang: 'python', title: 'practice_grad_accumulation.py', code: `import numpy as np
+
+class Param:                               # like a leaf tensor that requires grad
+    def __init__(self, value):
+        self.data, self.grad = float(value), 0.0
+
+class SGD:                                 # like torch.optim.SGD
+    def __init__(self, params, lr):
+        self.params, self.lr = params, lr
+    def zero_grad(self):
+        for p in self.params:
+            p.grad = 0.0
+    def step(self):
+        for p in self.params:
+            p.data -= self.lr * p.grad
+
+def forward_backward(w, b, x, y, scale=1.0):   # loss = scale * MSE of w*x + b
+    err = w.data * x + b.data - y
+    w.grad += scale * 2 * np.mean(err * x)     # += : accumulate, never overwrite
+    b.grad += scale * 2 * np.mean(err)
+    return scale * np.mean(err ** 2)
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 5, 64)
+y = 2 * x + 3
+w, b = Param(0.5), Param(0.0)
+opt = SGD([w, b], lr=0.05)
+
+# A) one backward pass on all 64 examples
+opt.zero_grad()
+forward_backward(w, b, x, y)
+print(f"one batch of 64    : dL/dw={w.grad:.4f}  dL/db={b.grad:.4f}")
+
+# B) four backward passes on 16 examples each, with no zero_grad in between
+opt.zero_grad()
+for i in range(0, 64, 16):
+    forward_backward(w, b, x[i:i + 16], y[i:i + 16], scale=1 / 4)
+print(f"4 batches of 16    : dL/dw={w.grad:.4f}  dL/db={b.grad:.4f}")
+opt.step()
+print(f"after one step     : w={w.data:.4f}  b={b.data:.4f}")`, output: `one batch of 64    : dL/dw=-39.5945  dL/db=-13.4047
+4 batches of 16    : dL/dw=-39.5945  dL/db=-13.4047
+after one step     : w=2.4797  b=0.6702`, walkthrough: [
+          { lines: [3, 5], note: 'A parameter is a number plus a slot for its gradient, like a PyTorch leaf tensor and its `.grad`.' },
+          { lines: [7, 15], note: 'The optimizer only knows the list of parameters. `zero_grad` clears the slots; `step` applies `data −= lr · grad`. It never looks at the loss.' },
+          { lines: [17, 21], note: 'This function plays the role of the forward pass plus `loss.backward()` for our one-neuron model. It **adds** into `.grad`, as autograd does. `scale` multiplies the loss.' },
+          { lines: [29, 32], note: 'The reference: gradients from one pass over all 64 examples.' },
+          { lines: [34, 40], note: 'Four passes over 16 examples each, each loss divided by 4, with no `zero_grad` in between. The accumulated gradients match the big batch to four decimals. Then a single `step` uses them.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Remove `scale=1 / 4` from the call in part B. Before running, predict the new `dL/dw`. What ordinary setting would have the same effect on the update?',
+          'Move `opt.step()` inside the `for` loop of part B, so the weights change after every small batch. Predict whether the printed gradients still match part A, and explain why.',
+          'Use unequal batches: change the loop to `range(0, 64, 24)` with slices of 24 (the last one has only 16 examples) and `scale=1 / 3`. Predict whether the result still equals part A exactly.',
+        ] },
+        { type: 'check', question: 'Why do four accumulated passes over 16 examples give exactly the same gradient as one pass over 64 in this script?', answer: 'Two conditions hold. The loss is an average over examples, so the mean over 64 equals the average of the four means over 16, and dividing each small loss by 4 does that averaging. And the parameters do not change between the four passes, because we call `step` only once at the end. Break either condition (unequal batch sizes without proper weights, or a step in between) and the two no longer match.' },
+        { type: 'check', question: 'A model contains BatchNorm layers. Would accumulating four batches of 16 behave exactly like one batch of 64?', answer: 'No. The gradients add up as before, but BatchNorm computes its mean and variance **inside each forward pass**, so it would normalize with statistics of 16 examples, not 64. Gradient accumulation imitates a large batch for the gradient only. Anything that depends on the batch during the forward pass still sees the small batch.' },
       ],
     },
   ],

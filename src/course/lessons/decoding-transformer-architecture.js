@@ -1,6 +1,6 @@
 export default {
   id: "decoding-transformer-architecture",
-  minutes: 25,
+  minutes: 30,
   hook: "Every major chatbot, image captioner and code assistant is built from the same few repeated parts. What are they, and how does a sentence flow through them?",
   summary: "The Transformer turns tokens into vectors, adds position information, and then refines those vectors through a stack of identical layers. Each layer has two parts: multi-head attention, where tokens exchange information, and a feed-forward network, which processes each token on its own, both wrapped in residual connections and layer normalization. The original design had an encoder that reads the input and a decoder that writes the output; today we also use encoder-only and decoder-only versions.",
   sections: [
@@ -177,6 +177,79 @@ next-token probs for last position: [0.27 0.04 0.03 0.03 0.08 0.03 0.09 0.35 0. 
         ] },
         { type: "callout", tone: "warn", title: "Limits we must know", text: "Self-attention compute and memory grow with the square of the sequence length, so long contexts are expensive. Generation is still one token at a time for decoder models. And a Transformer is only as good as its training data; the architecture alone does not guarantee truthfulness." },
         { type: "check", question: "If we removed the positional encodings from a Transformer encoder, what would happen to “dog bites man” vs “man bites dog”?", answer: "Each token would get the same output vector in both sentences (just in a different order), because self-attention without position information cannot tell order. The model could not tell who bit whom." },
+      ],
+    },
+    {
+      id: "worked-example-parameter-count",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We said the base model has about 65 million parameters and that most of them sit in the feed-forward layers. Let us check both claims with plain multiplication. A weight matrix from size a to size b has a × b weights plus b biases. We use d_model = 512 and d_ff = 2,048." },
+        { type: "steps", title: "Counting one encoder layer", items: [
+          { title: "Attention", text: "Four matrices of 512 × 512 (for queries, keys, values and the output mix), each with 512 biases: 4 × (262,144 + 512) = 1,050,624." },
+          { title: "Feed-forward, expand", text: "512 → 2,048: 512 × 2,048 + 2,048 = 1,050,624. One FFN matrix already matches the whole attention block." },
+          { title: "Feed-forward, shrink", text: "2,048 → 512: 2,048 × 512 + 512 = 1,049,088. FFN total: 2,099,712." },
+          { title: "Layer norms", text: "Two norms, each with a scale and a shift of 512 numbers: 2 × 1,024 = 2,048." },
+          { title: "Add up", text: "1,050,624 + 2,099,712 + 2,048 = 3,152,384 per encoder layer. The FFN holds almost exactly two thirds of it." },
+        ] },
+        { type: "chart", kind: "bar", title: "Parameters in one base encoder layer", yLabel: "Millions", unit: " M", labels: ["Attention", "Feed-forward", "Layer norms"], series: [ { name: "Parameters", values: [1.05, 2.1, 0.002] } ], caption: "Computed from the layer sizes above. The layer norms are too small to see." },
+        { type: "p", text: "A decoder layer has one more attention block (cross-attention) and one more norm: 2 × 1,050,624 + 2,099,712 + 3,072 = 4,204,032. Six encoder layers give about 18.9 million and six decoder layers about 25.2 million, so the two stacks hold about 44.1 million." },
+        { type: "p", text: "The rest is the embedding table. The paper used a shared vocabulary of about 37,000 tokens, and 37,000 × 512 is about 18.9 million. That brings our count to roughly 63 million, close to the reported figure of about 65 million. The small gap comes from details such as the exact vocabulary size." },
+        { type: "callout", tone: "tip", title: "A quick rule", text: "Every big matrix in a layer scales with d_model × d_model. So doubling the vector size roughly quadruples the parameters per layer, while adding a layer only adds one more copy." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will test the claim that attention is order-blind. We run self-attention on “dog bites man” and on “man bites dog”, first without positional encoding and then with it, and compare the vector that comes out for “dog”." },
+        { type: "code", lang: "python", title: "practice_order_blind.py", code: `import numpy as np
+
+rng = np.random.default_rng(5)
+n, d = 3, 4                                 # 3 tokens, 4 numbers each
+E = rng.normal(size=(n, d))                 # embeddings for "dog", "bites", "man"
+
+def self_attention(x):
+    scores = x @ x.T / np.sqrt(d)
+    w = np.exp(scores - scores.max(1, keepdims=True))
+    return (w / w.sum(1, keepdims=True)) @ x
+
+def positions(n):
+    # Sinusoidal positional encoding, same formula as the lesson
+    pos = np.arange(n)[:, None]; i = np.arange(d)[None, :]
+    angle = pos / 10000 ** (2 * (i // 2) / d)
+    return np.where(i % 2 == 0, np.sin(angle), np.cos(angle))
+
+order_a = [0, 1, 2]                         # dog bites man
+order_b = [2, 1, 0]                         # man bites dog
+
+# Without positions: compare the vector for "dog" in both sentences
+dog_a = self_attention(E[order_a])[0]       # dog is first in sentence A
+dog_b = self_attention(E[order_b])[2]       # dog is last in sentence B
+print("no positions  : dog differs by", round(float(np.abs(dog_a - dog_b).sum()), 4))
+
+# With positions added before attention
+dog_a = self_attention(E[order_a] + positions(n))[0]
+dog_b = self_attention(E[order_b] + positions(n))[2]
+print("with positions: dog differs by", round(float(np.abs(dog_a - dog_b).sum()), 4))
+print("PE for position 0:", np.round(positions(n)[0], 2))
+print("PE for position 2:", np.round(positions(n)[2], 2))`, output: `no positions  : dog differs by 0.0
+with positions: dog differs by 2.1852
+PE for position 0: [0. 1. 0. 1.]
+PE for position 2: [ 0.91 -0.42  0.02  1.  ]`,
+          walkthrough: [
+            { lines: [3, 10], note: "Three random token embeddings and a plain single-head self-attention with no learned weights. That is enough to test order." },
+            { lines: [12, 16], note: "The sinusoidal positional encoding: sine in even dimensions, cosine in odd ones, slower waves in later dimensions." },
+            { lines: [18, 24], note: "The same three embeddings in two orders. Without positions, the output for “dog” is identical in both sentences: the difference is exactly 0.0." },
+            { lines: [26, 31], note: "Add positions before attention. Now “dog” at position 0 and “dog” at position 2 start as different vectors, so their outputs differ." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change `order_b` to `[1, 0, 2]` (“bites dog man”) and read “dog” from index 1 instead of 2. Predict the “no positions” difference before running.",
+          "In the two “with positions” lines, use `0.01 * positions(n)`. Predict: does the difference stay near 2.19, drop to exactly 0, or become small but not 0?",
+          "Change `d` from 4 to 8 and print `positions(n)[2]` again. Predict which of the 8 numbers will be closest to their position-0 values.",
+        ] },
+        { type: "check", question: "Position 0 has encoding [0, 1, 0, 1] and position 2 has [0.91, −0.42, 0.02, 1]. The first two numbers changed a lot, the last two hardly at all. Why is that useful and not a flaw?", answer: "The first pair is a fast wave and the last pair is a very slow wave. Fast waves tell nearby positions apart but repeat after a few tokens. Slow waves barely move between neighbours but keep changing over hundreds or thousands of positions, so they separate far-apart tokens. Together they give every position a unique pattern at both small and large scales." },
+        { type: "check", question: "Suppose we widen the base model from d_model = 512 to 1,024 and d_ff from 2,048 to 4,096, keeping 6 layers. Roughly how do the parameters in one encoder layer change, and why?", answer: "They grow about four times, to roughly 12.6 million. Every large matrix has both sides doubled (512 × 512 becomes 1,024 × 1,024, and 512 × 2,048 becomes 1,024 × 4,096), and doubling both sides multiplies the entries by four. Only the small bias and norm terms grow by two." },
       ],
     },
   ],

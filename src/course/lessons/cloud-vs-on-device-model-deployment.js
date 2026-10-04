@@ -1,6 +1,6 @@
 export default {
   id: 'cloud-vs-on-device-model-deployment',
-  minutes: 18,
+  minutes: 23,
   hook: 'Should your model live in a data center a thousand kilometres away, or inside the phone in your user\'s pocket?',
   summary: 'Deployment is putting a trained model where it can answer real requests. In cloud deployment the model runs on servers and devices send data over the network; in on-device deployment the model ships inside the app and runs locally. The choice trades model size and easy updates (cloud) against latency, privacy, offline use and zero server cost (on-device), and many real products use a hybrid of both.',
   sections: [
@@ -161,6 +161,84 @@ on-device (small model):     350 ms, any network, even offline
           '**How many requests?** Millions per day of a simple task: on-device saves a large bill.',
           '**How often will the model change?** Weekly improvements or experiments: cloud makes this easy.',
         ] },
+      ],
+    },
+    {
+      id: "worked-hybrid-budget",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The hybrid idea sounds like 'the best of both'. Let us check that with numbers before we believe it. We reuse the figures from the code above, all **illustrative**: 100,000 users, 5 captions each per day, $0.50 per 1,000 cloud requests, 350 ms on the phone, and 530 ms for a cloud call on 4G. The one new number is the **escalation rate**: the share of photos the small model passes to the cloud." },
+        { type: "steps", title: "Budgeting a hybrid photo app", items: [
+          { title: "Count the requests", text: "100,000 users × 5 per day × 30 days = 15,000,000 captions per month." },
+          { title: "Cloud-only bill", text: "15,000,000 / 1,000 × $0.50 = **$7,500** per month, as the script printed." },
+          { title: "Hybrid bill", text: "Only escalated requests reach the server. At a 20% escalation rate: 0.20 × $7,500 = **$1,500**. At 5%: $375. The bill is simply the escalation rate times the cloud-only bill." },
+          { title: "Hybrid latency for an easy photo", text: "The local model answers alone: **350 ms**, on any network." },
+          { title: "Hybrid latency for a hard photo", text: "The phone tries first, then calls the cloud: 350 + 530 = **880 ms** on 4G. That is slower than going to the cloud directly." },
+          { title: "Average and break-even", text: "Mean latency on 4G = 350 + rate × 530. At 20% that is 456 ms, better than cloud-only's 530. But set 350 + rate × 530 equal to 530 and we get a rate of about 34%. Above that, hybrid is slower on average than cloud-only on this network." },
+        ] },
+        { type: "chart", kind: "line", title: "Monthly cloud bill vs escalation rate (illustrative)", xLabel: "Requests escalated to the cloud (%)", yLabel: "Dollars per month", series: [
+          { name: "Hybrid bill", points: [[0, 0], [5, 375], [10, 750], [20, 1500], [50, 3750], [100, 7500]] },
+        ], caption: "A straight line from $0 (pure on-device) to $7,500 (every request escalated), using the lesson's illustrative prices." },
+        { type: "p", text: "So a hybrid design is only as good as its small model. If the phone handles most photos well, we get a small bill, low latency and offline safety. If it passes most photos on, we pay for two models, wait for both, and gain little. The number to watch in production is the escalation rate, and the way to improve it is a better small model, not a faster server." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "Averages hide what real users feel. We will simulate 10,000 caption requests arriving on a mix of networks, including some with no connection at all, and compare cloud, on-device and hybrid by their **median**, their **95th percentile** (the wait that only the unluckiest 5% exceed) and their failure rate." },
+        { type: "code", lang: "python", title: "practice_deploy_simulation.py", code: `import random
+import statistics
+random.seed(42)
+
+# Each request happens on some network. Shares and speeds are illustrative.
+NETWORKS = [("good wifi", 0.50, 40, 20), ("4G", 0.35, 90, 5),
+            ("weak 3G", 0.10, 400, 0.5), ("offline", 0.05, None, None)]
+LOCAL_MS, SERVER_MS, PHOTO_KB = 350, 120, 200
+
+def cloud_ms(rtt, uplink_mbps):
+    return rtt + PHOTO_KB * 8 / uplink_mbps + SERVER_MS   # kbit / Mbps = ms
+
+def one_request():
+    """Return the latency (ms) of cloud, on-device and hybrid; None = failed."""
+    _, _, rtt, up = random.choices(NETWORKS, weights=[n[1] for n in NETWORKS])[0]
+    cloud = None if rtt is None else cloud_ms(rtt, up)
+    hard = random.random() < 0.20                # local model unsure on 20%
+    hybrid = LOCAL_MS + (cloud if hard and cloud is not None else 0)
+    return cloud, LOCAL_MS, hybrid, hard and cloud is not None
+
+results = [one_request() for _ in range(10_000)]
+
+def report(name, values):
+    ok = sorted(v for v in values if v is not None)
+    failed = 1 - len(ok) / len(values)
+    p95 = ok[int(0.95 * len(ok))]
+    print(f"{name:10s} median {statistics.median(ok):5.0f} ms   "
+          f"p95 {p95:5.0f} ms   failed {failed:4.1%}")
+
+report("cloud", [r[0] for r in results])
+report("on-device", [r[1] for r in results])
+report("hybrid", [r[2] for r in results])
+escalated = sum(r[3] for r in results) / len(results)
+print(f"hybrid sent {escalated:.1%} of requests to the cloud "
+      f"-> about {escalated:.0%} of the cloud-only bill")`, output: `cloud      median   240 ms   p95  3720 ms   failed 5.2%
+on-device  median   350 ms   p95   350 ms   failed 0.0%
+hybrid     median   350 ms   p95   880 ms   failed 0.0%
+hybrid sent 19.2% of requests to the cloud -> about 19% of the cloud-only bill`,
+          walkthrough: [
+            { lines: [6, 11], note: "The network mix: name, share of requests, round-trip time and uplink speed. The latency formula is the same one the lesson used, with the upload written as kilobits divided by megabits per second." },
+            { lines: [13, 19], note: "One request. We draw a network, compute the cloud latency (or None when offline), and decide whether the local model is unsure (20% of the time). The hybrid always pays the local 350 ms and adds a cloud call only for hard photos that have a connection." },
+            { lines: [23, 28], note: "A small report: sort the successful latencies, read off the median and the 95th percentile, and count failures." },
+            { lines: [30, 35], note: "Cloud has the best median (240 ms) but a p95 of 3,720 ms and 5.2% failures. On-device is always 350 ms. Hybrid never fails, has a p95 of 880 ms, and sends about 19% of requests to the cloud." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Make the audience more rural: set the shares to wifi `0.30`, 4G `0.35`, weak 3G `0.10`, offline `0.25`. Predict the failure rate of cloud and of hybrid before running.",
+          "Set `LOCAL_MS = 1200`, as on an old budget phone. Predict the hybrid median and p95. Does on-device still look like the safe default?",
+          "Change the unsure share from `0.20` to `0.60`. Predict the hybrid p95 and the share of the cloud-only bill we now pay.",
+        ] },
+        { type: "check", question: "In the run above, cloud had the best median (240 ms against 350 ms). Why might we still choose on-device or hybrid for a photo app used by travellers?", answer: "The median describes the typical lucky request. The p95 of 3,720 ms says one request in twenty takes close to four seconds, and 5.2% fail outright because there is no connection. Travellers are exactly the users who live in that tail. On-device gives every request 350 ms and no failures; hybrid keeps that floor and adds cloud quality when a connection exists." },
+        { type: "check", question: "Suppose the small model becomes unsure on 60% of photos. Using the worked example's numbers on 4G, is hybrid still faster on average than cloud-only, and what happens to the bill?", answer: "No. Mean hybrid latency is 350 + 0.60 × 530 = 668 ms, worse than cloud-only's 530 ms, because most requests now pay for both models. The bill rises to 60% of the cloud-only bill. The break-even is near 34%. The real fix is a better small model (or a smarter confidence check), so that fewer photos need to be escalated." },
       ],
     },
     {

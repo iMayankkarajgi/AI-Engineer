@@ -1,6 +1,6 @@
 export default {
   id: "prefill-vs-decode-llm-inference-optimization",
-  minutes: 22,
+  minutes: 27,
   hook: "Why can a GPU read your 4,000-token prompt in a fraction of a second, yet take several seconds to write a 300-token answer?",
   summary: "Every LLM request runs in two phases. Prefill processes the whole prompt in one parallel pass and builds the KV cache; it is limited by raw compute. Decode then produces one token per step, reading all the weights and the cache each time; it is limited by memory bandwidth. Because the phases stress different hardware limits, they have different metrics (TTFT vs TPOT) and different optimizations.",
   sections: [
@@ -131,6 +131,73 @@ prefill, 4096-token prompt  tokens= 4096 intensity=  4096 time=  66.26 ms  compu
           { name: "Decode (memory-bound)", summary: "Move fewer bytes per token, or get more tokens per byte.", pros: ["Continuous batching: share each weight read across many users", "Weight quantization (INT8/INT4) and KV cache compression", "GQA/MQA/MLA models with smaller caches", "Speculative decoding: verify several guessed tokens per pass", "Paged KV memory to fit bigger batches"], cons: ["Bigger batches raise per-token latency a little"], bestFor: "Lowering TPOT and raising throughput" }
         ], verdict: "Prefill wants fewer FLOPs; decode wants fewer bytes per token. Some systems go further and run the two phases on different GPUs (the next lesson)." },
         { type: "callout", tone: "example", title: "Real-world use", text: "Open-source engines such as vLLM, SGLang and TensorRT-LLM implement most of these: continuous batching, paged KV memory, chunked prefill, prefix caching and speculative decoding. API providers expose the same split in pricing: input (prompt) tokens are usually much cheaper per token than output tokens, reflecting that prefill is far more efficient per token than decode." }
+      ]
+    },
+    {
+      id: "worked-example-latency-budget",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Let us add up the time for one whole request by hand, using the ideal numbers from `roofline.py`: about 0.016 ms per prompt token in prefill, and 4.78 ms per decode step. Our customer sends a 2,000-token log and gets a 200-token answer. These are lower bounds from a simple model, not measurements, but the proportions are what we care about." },
+        { type: "steps", title: "Where the time goes for one chat request", items: [
+          { title: "Prefill", text: "2,000 tokens × 0.016 ms ≈ 32 ms. All 2,000 tokens share one read of the weights, so this pass is compute-bound." },
+          { title: "First token", text: "Prefill also gives us output token 1. With no queueing, TTFT ≈ 32 ms." },
+          { title: "Decode", text: "The other 199 tokens need 199 steps. 199 × 4.78 ms ≈ 951 ms. Every step reads all 16 GB of weights to produce one token." },
+          { title: "Add them up", text: "End-to-end ≈ 32 + 951 = 983 ms. Decode handled about 9% of the tokens (200 of 2,200) but took about 97% of the time." },
+          { title: "Check the formula", text: "TTFT + TPOT × (N − 1) = 32 + 4.78 × 199 ≈ 983 ms. The hand sum and the formula agree." }
+        ] },
+        { type: "table", caption: "Ideal time split for three workloads on the lesson's roofline model (lower bounds, not measurements)", head: ["Workload", "Prompt → output tokens", "Prefill", "Decode", "Decode share of time"], rows: [
+          ["Chat", "2,000 → 200", "≈ 32 ms", "≈ 951 ms", "≈ 97%"],
+          ["Summariser", "20,000 → 100", "≈ 324 ms", "≈ 473 ms", "≈ 59%"],
+          ["Story writer", "200 → 1,000", "≈ 4.8 ms", "≈ 4,775 ms", "≈ 99.9%"]
+        ] },
+        { type: "p", text: "Look closely at the story writer's prefill. 200 tokens × 0.016 ms would be 3.2 ms, but the table says 4.8 ms. A pass can never be faster than one full read of the weights, which takes 4.78 ms. With only 200 tokens the intensity is about 200, below the ridge point of 295, so even this prefill is memory-bound. **Prefill is compute-bound only when the prompt is long enough.**" },
+        { type: "p", text: "A common mistake is to judge a workload by its total token count. The chat and a story of 200 → 2,000 tokens both move 2,200 tokens, yet the second takes about ten times longer, because every output token pays for its own pass." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a small latency calculator. It takes a prompt length, an output length and a decode batch size, and returns TTFT, TPOT, total time and server throughput. The timing constants are illustrative. The point is to see how the two phases and the batch size trade against each other." },
+        { type: "code", lang: "python", title: "practice_latency_budget.py", code: `# One request's latency from its two phases, and how batch size shifts it.
+# All timings are illustrative, not measured.
+PREFILL_MS_PER_TOKEN = 0.02     # prefill is compute-bound: cost per prompt token
+DECODE_BASE_MS = 5.0            # reading the weights once per decode step
+DECODE_PER_USER_MS = 0.05       # small extra work per request in the batch
+
+def request_metrics(prompt_tokens, output_tokens, batch, queue_ms=0.0):
+    ttft = queue_ms + prompt_tokens * PREFILL_MS_PER_TOKEN
+    tpot = DECODE_BASE_MS + DECODE_PER_USER_MS * batch
+    total = ttft + tpot * (output_tokens - 1)
+    throughput = batch * 1000 / tpot           # tokens/s across all users
+    return ttft, tpot, total, throughput
+
+workloads = [("chat", 2000, 200), ("summarise", 20000, 100), ("story", 200, 1000)]
+print("workload   batch  TTFT ms  TPOT ms  total s  decode share  server tok/s")
+for name, p, n in workloads:
+    for batch in (1, 32):
+        ttft, tpot, total, thr = request_metrics(p, n, batch)
+        share = 1 - ttft / total               # part of the wait spent decoding
+        print(f"{name:10s} {batch:5d} {ttft:8.0f} {tpot:8.2f} {total/1000:8.2f} "
+              f"{share:12.0%} {thr:13.0f}")`, output: `workload   batch  TTFT ms  TPOT ms  total s  decode share  server tok/s
+chat           1       40     5.05     1.04          96%           198
+chat          32       40     6.60     1.35          97%          4848
+summarise      1      400     5.05     0.90          56%           198
+summarise     32      400     6.60     1.05          62%          4848
+story          1        4     5.05     5.05         100%           198
+story         32        4     6.60     6.60         100%          4848`, walkthrough: [
+          { lines: [1, 5], note: "Three illustrative constants: prefill cost per prompt token, the fixed cost of a decode step, and a small extra cost per request in the batch." },
+          { lines: [7, 12], note: "The whole model. TTFT comes from queueing plus prefill. TPOT comes from the decode step. Throughput counts one token per user per step." },
+          { lines: [14, 21], note: "Run three workloads at batch 1 and batch 32 and print how much of each wait is decode." }
+        ] },
+        { type: "p", text: "Going from batch 1 to batch 32 made every user's TPOT a little worse (5.05 ms to 6.60 ms) while the server's output rose about 24 times. Now change it:" },
+        { type: "list", items: [
+          "Pass `queue_ms=500` for the chat workload. Predict first: which of the four numbers change, and which stay exactly the same?",
+          "Set `DECODE_PER_USER_MS = 0.5`. Predict whether batch 32 still gives more server tokens per second than batch 1, and how much TPOT each user now sees.",
+          "Add a workload `(\"swap\", 200, 2000)` next to the chat one. Both move 2,200 tokens. Predict which is slower and by roughly what factor before you run it."
+        ] },
+        { type: "check", question: "In the practice output, the summariser has the highest TTFT but the lowest total time. How can both be true?", answer: "TTFT depends on the prompt, and its prompt is the longest (20,000 tokens). Total time is mostly decode steps, and it writes the fewest output tokens (100). A long wait to start and a short wait to finish are set by different phases." },
+        { type: "check", question: "We keep raising the decode batch size because server tokens per second keeps going up. What tells us to stop?", answer: "Each user's TPOT. Every extra request in the batch makes the step slightly longer, so every user's tokens arrive a little more slowly. We stop when TPOT reaches our latency target, or when the KV caches no longer fit in memory, whichever comes first." }
       ]
     },
     {

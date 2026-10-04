@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-llama-cpp-run-llms-on-everyday-hardware',
-  minutes: 22,
+  minutes: 27,
   hook: 'How does a model that was trained on thousands of data-centre GPUs end up answering questions on an ordinary laptop with no internet connection?',
   summary: 'llama.cpp is an open-source C/C++ engine that runs LLMs on everyday CPUs and GPUs. It combines four ideas: quantize the weights to about 4–8 bits so they fit, pack everything into one GGUF file, memory-map that file so it loads instantly, and squeeze speed out of the hardware with SIMD instructions, threads and optional GPU offload. Because token generation is limited by memory bandwidth, smaller weights translate almost directly into faster answers.',
   sections: [
@@ -167,6 +167,77 @@ desktop GPU          ~ 900 GB/s -> at most ~183.7 tokens/s
         ], rows: [ ['Typical hardware', 'CPU, Apple silicon, consumer GPU', 'NVIDIA / AMD data-centre GPUs'], ['Model format', 'GGUF', 'safetensors (FP16/BF16, FP8, AWQ, GPTQ)'], ['Goal', 'Run anywhere, low memory', 'Maximum throughput'] ], verdict: 'Use llama.cpp to run a model where you are; use a serving engine when you must serve many users from GPUs.' },
         { type: 'callout', tone: 'example', title: 'Our notes assistant, solved', text: 'We run `llama-server` with an 8B Q4_K_M model and 19 layers offloaded. Our note-taking app calls its OpenAI-compatible endpoint on localhost. Summaries stream at a comfortable reading speed and no data leaves the laptop.' },
       ],
+    },
+    {
+      id: "planning-the-gpu-budget",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Our earlier estimate put 19 layers on the GPU, counting only the weights. The warning box said to leave room for the KV cache too. Let us redo the sum with the cache included. We need one assumption about the model's shape: 32 layers, 8 key/value heads of size 128 and a 16-bit cache, which gives about 128 KiB of KV cache per token. Check the real shape of your own model; this one is illustrative." },
+        { type: "steps", title: "How many layers fit in 3 GB of free VRAM?", items: [
+          { title: "Weights per layer", text: "4.9 GB ÷ 32 layers ≈ 0.153 GB per layer." },
+          { title: "KV cache for the whole context", text: "With a context of 8,192 tokens: 8,192 × 128 KiB ≈ 1.07 GB, spread evenly over 32 layers. That is about 0.034 GB per layer." },
+          { title: "Cost of one offloaded layer", text: "The layer's weights and its share of the cache both sit on the GPU: 0.153 + 0.034 ≈ 0.187 GB." },
+          { title: "Divide and round down", text: "3.0 ÷ 0.187 ≈ 16.0, so 16 layers fit, not 19. With 19 layers we would need 19 × 0.187 ≈ 3.55 GB." },
+          { title: "Ask for a longer context", text: "At 32,768 tokens the cache is about 4.3 GB, or 0.134 GB per layer. One offloaded layer now costs 0.287 GB, and only 10 layers fit." },
+          { title: "Check the RAM side", text: "With 16 layers on the GPU, the other 16 layers stay in RAM: about 2.45 GB of weights plus 0.54 GB of cache. That is comfortable on a 16 GB laptop." }
+        ] },
+        { type: "table", caption: "Layers that fit in 3 GB of VRAM as the context grows (illustrative model shape)", head: ["Context", "KV cache in total", "Cost per offloaded layer", "Largest -ngl that fits"], rows: [
+          ["Weights only", "ignored", "0.153 GB", "19"],
+          ["8,192 tokens", "≈ 1.07 GB", "≈ 0.187 GB", "16"],
+          ["32,768 tokens", "≈ 4.3 GB", "≈ 0.287 GB", "10"]
+        ] },
+        { type: "p", text: "The model file did not change between the rows. Only the context size did. So `-ngl` and `-c` have to be chosen together: a setting that works for short chats can run out of GPU memory when we later raise the context, and the fix is to offload fewer layers or to shorten the context." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "Memory mapping lets a model start even when RAM is tight, because the operating system loads pieces of the file on first use and can drop them again. What does that do to speed? We will simulate it. The weights are 32 chunks of 150 MB. Each token reads every chunk once, in order. A chunk in RAM is fast, and a chunk that has to come from disk is slow. When RAM is full, the least recently used chunk is dropped. The speeds are illustrative." },
+        { type: "code", lang: "python", title: "practice_page_cache.py", code: `# What memory mapping does when the model is bigger than free RAM: a toy page cache.
+from collections import OrderedDict
+N_LAYERS, LAYER_MB = 32, 150           # about 4.8 GB of weights, in 32 equal chunks
+DISK_MB_S, RAM_MB_S = 2000, 80000      # illustrative: SSD read speed, RAM bandwidth
+
+def run(free_ram_mb, tokens=5):
+    cache = OrderedDict()              # chunks now held in RAM, least recently used first
+    capacity = free_ram_mb // LAYER_MB # how many chunks fit in free RAM
+    times = []
+    for _ in range(tokens):
+        disk_reads = 0
+        for layer in range(N_LAYERS):  # each token reads every layer once, in order
+            if layer in cache:
+                cache.move_to_end(layer)           # already in RAM: fast
+            else:
+                disk_reads += 1                    # not in RAM: read it from disk
+                cache[layer] = True
+                if len(cache) > capacity:
+                    cache.popitem(last=False)      # RAM full: drop the oldest chunk
+        t = disk_reads * LAYER_MB / DISK_MB_S + N_LAYERS * LAYER_MB / RAM_MB_S
+        times.append(t)
+    return times
+
+for ram in (8000, 4800, 4000, 2400):
+    times = run(ram)
+    print(f"free RAM {ram} MB: first token {times[0]:.2f} s, "
+          f"later tokens {times[-1]:.2f} s ({1 / times[-1]:.1f} tokens/s)")`, output: `free RAM 8000 MB: first token 2.46 s, later tokens 0.06 s (16.7 tokens/s)
+free RAM 4800 MB: first token 2.46 s, later tokens 0.06 s (16.7 tokens/s)
+free RAM 4000 MB: first token 2.46 s, later tokens 2.46 s (0.4 tokens/s)
+free RAM 2400 MB: first token 2.46 s, later tokens 2.46 s (0.4 tokens/s)`, walkthrough: [
+          { lines: [1, 4], note: "The model as 32 chunks of 150 MB, with an illustrative disk speed and RAM bandwidth." },
+          { lines: [6, 19], note: "The toy page cache. Each token walks through all layers. A chunk already in RAM is just marked as recently used. A missing chunk is read from disk, and the oldest chunk is dropped if RAM is full." },
+          { lines: [20, 22], note: "Time for one token: the disk reads, plus one pass over all the weights at RAM speed." },
+          { lines: [24, 27], note: "Try four amounts of free RAM and compare the first token with the later ones." }
+        ] },
+        { type: "p", text: "The first token always takes about 2.5 s, because the whole file must come from disk once. With 4,800 MB free or more, later tokens run at RAM speed. With 4,000 MB free, every token is as slow as the first. Now change it:" },
+        { type: "list", items: [
+          "Set `LAYER_MB = 100`, a smaller quantization of about 3.2 GB, and keep 4,000 MB free. Predict the speed of later tokens before you run it.",
+          "Add 4,650 to the list of RAM sizes: room for 31 of the 32 chunks. Predict how many disk reads each later token needs when we are just one chunk short.",
+          "Set `DISK_MB_S = 200`, a slow external drive. Predict the first-token time when RAM is plentiful, and say which line of the output shows that later tokens do not care."
+        ] },
+        { type: "check", question: "In the worked example, raising the context from 8,192 to 32,768 tokens cut the layers we can offload from 16 to 10, although the model file is the same. Why?", answer: "Each offloaded layer brings its share of the KV cache onto the GPU, and the cache grows with the context size. At 32,768 tokens a layer's cache share (about 0.134 GB) is almost as large as its weights (0.153 GB), so every layer costs nearly twice as much VRAM and fewer fit." },
+        { type: "check", question: "In the practice run, 4,000 MB of free RAM is only about 17% short of the 4,800 MB the model needs. Why is the slowdown about 40 times and not about 17%?", answer: "Every token reads all the chunks in the same order. By the time we come back to a chunk, it is the one that was used longest ago, so it has already been dropped to make room. Every read then comes from disk, at disk speed instead of RAM speed. Being a little short of RAM is a cliff, not a gentle slope. The fix is a smaller file or more free memory." }
+      ]
     },
   ],
   quiz: [

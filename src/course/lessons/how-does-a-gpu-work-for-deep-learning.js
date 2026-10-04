@@ -1,6 +1,6 @@
 export default {
   id: "how-does-a-gpu-work-for-deep-learning",
-  minutes: 24,
+  minutes: 29,
   hook: "Why does a chip designed to draw video-game pixels train and run almost every modern AI model — and why does the size of its memory matter as much as its speed?",
   summary: "A GPU is a processor with thousands of simple cores that all perform the same kind of arithmetic at once, plus very fast memory to feed them. Deep learning is mostly huge matrix multiplications made of millions of independent multiply-adds, which is exactly the kind of work a GPU parallelises well. Specialised Tensor Cores, low-precision number formats and the CUDA software stack make it faster still, while VRAM size and memory bandwidth decide which models fit and how quickly they generate tokens.",
   sections: [
@@ -200,6 +200,88 @@ batch 256:  227.6 FLOPs per byte`,
         ] },
         { type: "callout", tone: "note", title: "It is not the only option", text: "AMD GPUs (with the ROCm software stack), Google TPUs, and specialised inference chips (such as LPUs, covered later in this module) compete on price, efficiency or speed for specific workloads. The best choice depends on the model, the software we rely on, availability and cost." },
         { type: "callout", tone: "warn", title: "When a GPU is the wrong tool", text: "Small models with tiny batches, heavy branching logic, classic machine learning on small tables (gradient-boosted trees often run fine on CPUs), or workloads dominated by data loading. Moving small data to the GPU and back can cost more time than the computation saves." },
+      ],
+    },
+    {
+      id: "worked-decode-ceiling",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Let us turn 'decoding is memory-bound' into a number for our shop's chatbot. We want a rough **ceiling** on how fast one conversation can receive tokens from the 7B model on a GPU with about 3.35 TB/s of memory bandwidth (the H100 SXM figure from earlier). This is back-of-envelope arithmetic, not a benchmark: real speeds are lower." },
+        { type: "steps", title: "From bandwidth to tokens per second", items: [
+          { title: "What one token costs in bytes", text: "To produce one token for one user, every weight is read once. In FP16 that is 7 × 10⁹ × 2 bytes = **14 GB** of memory traffic per token." },
+          { title: "What the memory can deliver", text: "About 3.35 TB/s, which is 3,350 GB every second." },
+          { title: "Divide", text: "3,350 / 14 ≈ **239 tokens per second** at the very most. No amount of extra compute can beat this, because the weights cannot arrive faster." },
+          { title: "Check the compute side", text: "Each weight is used for about 2 FLOPs, so one token needs about 14 billion FLOPs. At 239 tokens/s that is roughly 3.3 trillion FLOPs per second. The GPU can do on the order of a thousand trillion. The cores are idle well over 99% of the time." },
+          { title: "Shrink the weights", text: "In INT4 the weights are 3.5 GB, so the ceiling becomes 3,350 / 3.5 ≈ 957 tokens/s. Quantisation does not only make the model fit; it also raises the speed limit." },
+          { title: "Share the read", text: "With 8 users batched together, the weights are still read once per step, but that one pass now yields 8 tokens. Total throughput can rise close to 8× while each user sees about the same speed. This keeps working until compute, not bandwidth, becomes the limit." },
+        ] },
+        { type: "table", caption: "Decode ceiling for one stream = bandwidth / bytes of weights (3,350 GB/s, 7B parameters)", head: ["Format", "Weights", "Ceiling per stream"], rows: [
+          ["FP16 / BF16", "14 GB", "≈ 239 tokens/s"],
+          ["INT8", "7 GB", "≈ 479 tokens/s"],
+          ["INT4", "3.5 GB", "≈ 957 tokens/s"],
+        ] },
+        { type: "p", text: "Why is the real number lower? The KV cache must be read too, kernels have launch overhead, sampling the next token takes time, and no kernel uses 100% of the rated bandwidth. But the ceiling is still useful. If a vendor or a teammate quotes a single-stream speed above it, something else is going on, such as a smaller model or a different number format." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will put four ideas from this lesson into one short script: serial versus vectorised matrix multiplication, how many rounds a pile of independent cells needs with few or many workers, Amdahl's law, and the decode ceiling we just worked out by hand." },
+        { type: "code", lang: "python", title: "practice_parallel_numbers.py", code: `import math, time
+import numpy as np
+rng = np.random.default_rng(0)
+
+# 1) Same matrix product two ways: one cell at a time, or all cells at once.
+n = 60
+X, W = rng.normal(size=(n, n)), rng.normal(size=(n, n))
+X @ W                                            # warm-up call, not timed
+t0 = time.perf_counter()
+Y_loop = [[sum(X[i, k] * W[k, j] for k in range(n)) for j in range(n)]
+          for i in range(n)]                     # serial: 3,600 cells in turn
+t1 = time.perf_counter()
+Y_vec = X @ W                                    # vectorised: one library call
+t2 = time.perf_counter()
+print("same answer:", np.allclose(Y_loop, Y_vec))
+print("vectorised call at least 10x faster:", (t1 - t0) > 10 * (t2 - t1))
+
+# 2) Rounds needed if each worker finishes one output cell per round.
+cells = 32 * 4096                                # the lesson's layer, batch 32
+for name, workers in [("8 fast cores", 8), ("4,096 simple cores", 4096)]:
+    print(f"{name:18s}: {math.ceil(cells / workers):6,} rounds for {cells:,} cells")
+
+# 3) Amdahl's law: speed-up = 1 / (serial + parallel / workers)
+for serial in (0.0, 0.05, 0.5):
+    s = 1 / (serial + (1 - serial) / 4096)
+    print(f"serial share {serial:4.0%}: speed-up with 4,096 workers = {s:6.1f}x")
+
+# 4) Decode ceiling: each new token reads every weight once (batch size 1).
+bandwidth_gb_s = 3350                            # about 3.35 TB/s, as in the lesson
+for name, gb in [("FP16", 14.0), ("INT8", 7.0), ("INT4", 3.5)]:
+    print(f"7B model in {name}: at most ~{bandwidth_gb_s / gb:.0f} tokens/s per stream")`, output: `same answer: True
+vectorised call at least 10x faster: True
+8 fast cores      : 16,384 rounds for 131,072 cells
+4,096 simple cores:     32 rounds for 131,072 cells
+serial share   0%: speed-up with 4,096 workers = 4096.0x
+serial share   5%: speed-up with 4,096 workers =   19.9x
+serial share  50%: speed-up with 4,096 workers =    2.0x
+7B model in FP16: at most ~239 tokens/s per stream
+7B model in INT8: at most ~479 tokens/s per stream
+7B model in INT4: at most ~957 tokens/s per stream`,
+          walkthrough: [
+            { lines: [6, 16], note: "The same 60×60 product computed cell by cell in a Python loop and in one `X @ W` call. We print only whether the answers match and whether the single call is at least 10× faster, because exact timings change from run to run." },
+            { lines: [19, 21], note: "131,072 independent output cells. If each worker finishes one cell per round, 8 workers need 16,384 rounds and 4,096 workers need 32. Real cores differ in speed; this only counts how the work divides." },
+            { lines: [24, 26], note: "Amdahl's law with 4,096 workers. With no serial part we get the full 4,096×. With 5% serial we get 19.9×, and with 50% serial only 2.0×." },
+            { lines: [29, 31], note: "The decode ceiling: bandwidth divided by the bytes read per token, for three number formats." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `cells = 1 * 4096` (batch size 1). Predict the rounds for both machines. What does the answer say about how busy the 4,096 workers are?",
+          "In part 3, change `4096` to `8` workers. Predict the speed-up for a 5% serial share before running. Is the serial part still the main limit?",
+          "Set `bandwidth_gb_s = 50`, a figure in the 'tens of GB/s' range of desktop CPU memory. Predict the FP16 ceiling. Would a faster CPU help?",
+        ] },
+        { type: "check", question: "A training job spends half its time loading and preparing data on the CPU and half on GPU maths. We swap in a GPU that is twice as fast. How much faster is the whole job?", answer: "Only about 1.33×. The data half is unchanged (0.5) and the GPU half shrinks to 0.25, so the new time is 0.75 of the old one, and 1 / 0.75 ≈ 1.33. This is Amdahl's law: the part we did not speed up now dominates. Fixing the data loading would pay off more than a third GPU upgrade." },
+        { type: "check", question: "We batch 8 users together on a memory-bound decoder. Does each user now get tokens 8 times more slowly?", answer: "No. The expensive part of a decode step is streaming the weights from memory, and that happens once per step however many users share it. Eight users mean roughly eight tokens per pass instead of one, so total throughput rises while each user's speed stays about the same. The extra arithmetic uses cores that were idle anyway. This holds until the batch is large enough for compute to become the limit." },
       ],
     },
   ],

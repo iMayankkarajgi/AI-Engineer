@@ -1,6 +1,6 @@
 export default {
   id: 'supervised-vs-unsupervised-learning',
-  minutes: 16,
+  minutes: 21,
   hook: 'If we have a million customer records but nobody has labelled a single one, can a machine still learn something useful from them?',
   summary: 'Supervised learning learns from examples that come with the correct answer (a label) and then predicts that answer for new inputs. Unsupervised learning gets no answers at all and instead discovers structure on its own, such as groups, unusual points, or simpler representations. The choice depends mostly on whether we have labels and whether we know exactly what we want to predict.',
   sections: [
@@ -152,6 +152,78 @@ match with the hidden labels: 100%`, walkthrough: [
         ] },
         { type: 'callout', tone: 'example', title: 'They often work together', text: 'A common pattern: first cluster unlabelled data to understand it and decide which categories matter, then label a sample per category, then train a supervised model. Unsupervised dimensionality reduction (like PCA) is also often used as a preprocessing step before a supervised model.' },
         { type: 'callout', tone: 'tip', title: 'Pitfalls to remember', text: 'For supervised learning, check label quality: noisy or inconsistent labels cap how good the model can get. For unsupervised learning, scale features first (Lesson 2.4): if "basket in dollars" ranges up to 100 and "visits" up to 15, distance is dominated by dollars, and clusters may reflect units rather than real behaviour.' },
+      ],
+    },
+    {
+      id: 'common-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'Clustering always returns groups, even when the groups mean nothing. So the mistakes here are quiet ones: the code runs, the output looks tidy, and the result is still wrong. Two of them are worth working through with numbers.' },
+        { type: 'p', text: '**Mistake 1: letting units decide the groups.** Take three illustrative customers. A visits 2 times and spends $20. B visits 12 times and spends $24. C visits 3 times and spends $38. By behaviour, A and C are both rare visitors, and B is a regular. Now measure straight-line distance on the raw numbers, and again after dividing visits by 15 and basket by 100 so both features run from about 0 to 1.' },
+        { type: 'table', caption: 'Illustrative customers. Distance = √(Δvisits² + Δbasket²).', head: ['Pair', 'Raw distance', 'Scaled distance', 'Who is A\'s nearest neighbour?'], rows: [
+          ['A to B', '√(10² + 4²) ≈ 10.8', '√(0.667² + 0.04²) ≈ 0.67', 'Raw: B'],
+          ['A to C', '√(1² + 18²) ≈ 18.0', '√(0.067² + 0.18²) ≈ 0.19', 'Scaled: C'],
+        ] },
+        { type: 'p', text: 'The nearest neighbour flips. On raw numbers an $18 gap looks bigger than a 10-visit gap only because dollars use bigger numbers. To spot this, print the range of each feature before clustering. If one range is many times larger than another, scale first.' },
+        { type: 'p', text: '**Mistake 2: picking k by the lowest score.** The usual internal score is the total squared distance from each point to its own centre. We will call it the **spread**. More groups always give a lower spread, and with one group per customer it reaches zero. So "lowest spread" always votes for the largest k. What we look for instead is the **elbow**: the k after which the spread stops falling sharply.' },
+        { type: 'steps', title: 'A safer routine for clustering', items: [
+          { title: 'Scale the features', text: 'Put every feature on a similar range so no single unit dominates the distance.' },
+          { title: 'Try several k', text: 'Run the algorithm for k = 1, 2, 3 and so on, and record the spread each time.' },
+          { title: 'Find the elbow', text: 'Pick the k where the big drops end. After it, extra groups only split real groups into pieces.' },
+          { title: 'Look inside each group', text: 'Print a few members and the group averages. If we cannot describe a group in one plain sentence, it may not be real.' },
+          { title: 'Test usefulness', text: 'Check that acting on the groups helps, for example that a campaign per group does better than one campaign for all.' },
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will run k-means for k = 1 to 6 on customers drawn from three hidden types, and watch the spread. The goal is to find the elbow ourselves, with no labels to help.' },
+        { type: 'code', lang: 'python', title: 'practice_choose_k.py', code: `import numpy as np
+
+# 45 unlabelled customers drawn from 3 hidden types: [visits, basket $]
+rng = np.random.default_rng(11)
+centres = np.array([[2, 20], [8, 35], [14, 70]])
+X = np.vstack([rng.normal(c, [1.0, 4.0], size=(15, 2)) for c in centres])
+
+def kmeans(X, k, steps=20):
+    """Plain k-means. Start centres are spread out: each new one is the
+    point farthest from the centres picked so far (no randomness)."""
+    C = [X[0]]
+    while len(C) < k:
+        d = np.min([np.linalg.norm(X - c, axis=1) for c in C], axis=0)
+        C.append(X[d.argmax()])
+    C = np.array(C)
+    for _ in range(steps):
+        groups = np.linalg.norm(X[:, None] - C[None], axis=2).argmin(axis=1)
+        C = np.array([X[groups == g].mean(axis=0) for g in range(k)])
+    spread = ((X - C[groups]) ** 2).sum()    # total squared distance to own centre
+    return groups, spread
+
+print(" k  spread  group sizes")
+for k in range(1, 7):
+    groups, spread = kmeans(X, k)
+    print(f"{k:2d}  {spread:6.0f}  {np.bincount(groups).tolist()}")`, output: ` k  spread  group sizes
+ 1   23168  [45]
+ 2    2730  [30, 15]
+ 3     545  [15, 15, 15]
+ 4     381  [15, 8, 15, 7]
+ 5     285  [8, 8, 15, 7, 7]
+ 6     185  [8, 8, 8, 7, 7, 7]`, walkthrough: [
+          { lines: [3, 6], note: 'Make 45 customers from three hidden types. We keep no labels at all.' },
+          { lines: [8, 15], note: 'Choose spread-out starting centres: each new centre is the point farthest from the ones already chosen. This keeps the run repeatable.' },
+          { lines: [16, 20], note: 'The usual k-means loop (assign, then move centres), followed by the spread: total squared distance from each point to its own centre.' },
+          { lines: [22, 25], note: 'Try k = 1 to 6 and print the spread and group sizes for each.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change the middle hidden centre from `[8, 35]` to `[3, 24]`, so it almost overlaps the first type. Predict where the elbow moves to before you run it.',
+          'Change the noise from `[1.0, 4.0]` to `[3.0, 12.0]`. Predict whether the drop from k = 2 to k = 3 is still as sharp, and what that says about messy real data.',
+          'Add the line `X = (X - X.mean(axis=0)) / X.std(axis=0)` right after `X` is created. Predict whether the k = 3 group sizes change, and why the spread numbers become much smaller.',
+        ] },
+        { type: 'check', question: 'The spread keeps falling all the way to k = 6. Why do we still say k = 3 is the best choice for this data?', answer: 'Because the large drops stop at 3: from 23,168 to 2,730 to 545. After that each extra group saves only a little (545 to 381 to 285), and the group sizes show what is happening: k = 4 just cuts one group of 15 into 8 and 7. Spread always falls as k grows, so we look for the elbow, not the minimum.' },
+        { type: 'check', question: 'At k = 2 the group sizes are [30, 15]. Which two hidden types were merged, and why those two?', answer: 'The first two types, centred at [2, 20] and [8, 35], were merged. They are much closer to each other than either is to the third type at [14, 70]. With only two centres, k-means lowers the spread most by keeping the far-away group separate and covering the two nearby groups with one centre.' },
       ],
     },
   ],

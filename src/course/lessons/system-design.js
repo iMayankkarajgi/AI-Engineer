@@ -1,6 +1,6 @@
 export default {
   id: 'system-design',
-  minutes: 22,
+  minutes: 27,
   hook: 'Your code works perfectly on your laptop; what has to change when ten million people use it at the same time?',
   summary: 'System design is deciding how the parts of a software system (clients, servers, databases, caches, queues and the network between them) fit together so it meets its requirements for scale, speed, reliability and cost. We need it because one machine eventually runs out of capacity and fails, and every choice to fix that brings trade-offs. This lesson builds the core vocabulary: scaling, load balancing, caching, CDNs, databases, replication, sharding, consistent hashing, queues, CAP, and back-of-the-envelope estimation.',
   sections: [
@@ -163,6 +163,84 @@ consistent hashing: 19.4% of keys move when 4 -> 5 servers`,
           '**Treating CAP as "pick any two" at all times.** The choice is forced only during a network partition.',
         ] },
         { type: 'check', question: 'A teammate wants to shard the URL table across 50 database servers on day one. Using the estimate from the code, is that justified?', answer: 'Probably not. About 12 writes/s, 1,157 reads/s and under 1 TB in five years fit a single primary database with read replicas and a cache. Sharding adds complexity we do not yet need; plan for it, but add it when growth requires.' },
+      ],
+    },
+    {
+      id: "worked-capacity-availability",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Estimates are only useful if they turn into decisions. Let us take the shortener's numbers from the code (about 1,157 reads per second on average) and size the system. Three inputs below are **illustrative** assumptions that we would measure in real life: peak traffic is 5× the average, one app server handles 1,000 requests per second, and one app server is up 99% of the time." },
+        { type: "steps", title: "From estimate to a sized design", items: [
+          { title: "Design for the peak, not the average", text: "1,157 × 5 ≈ **5,800 requests per second** at peak. A link going viral does not wait for our average." },
+          { title: "Count app servers", text: "5,800 / 1,000 = 5.8, so 6 servers carry the peak. Add one spare so that losing a server does not overload the rest: **7 servers** (often written N + 1)." },
+          { title: "Size the cache", text: "Each record is about 500 bytes. Caching the 10 million hottest links needs 10,000,000 × 500 bytes = **5 GB** of memory, which fits on one cache machine." },
+          { title: "What the cache buys", text: "At a 90% hit rate, the database sees 10% of peak reads: about 580 per second instead of 5,800. That is the difference between needing shards and not needing them." },
+          { title: "Availability of redundant copies", text: "One server at 99% is down 1% of the time. Two independent servers are both down 1% × 1% = 0.01% of the time, so the pair is up **99.99%**. Redundancy multiplies the *failure* chances." },
+          { title: "Availability of a chain", text: "A request needs the load balancer **and** the app tier **and** the database. If they are up 99.99%, 99.99% and 99.9%, the chain is up 0.9999 × 0.9999 × 0.999 ≈ **99.88%**. Parts in a row multiply the *success* chances, so the chain is weaker than its weakest part." },
+        ] },
+        { type: "table", caption: "Two rules of availability arithmetic", head: ["Arrangement", "Rule", "Example"], rows: [
+          ["In parallel (any one copy is enough)", "1 − (chance that all copies fail)", "Two 99% servers → 1 − 0.01 × 0.01 = 99.99%"],
+          ["In series (every part is needed)", "Multiply the availabilities", "99.99% × 99.99% × 99.9% ≈ 99.88%"],
+        ] },
+        { type: "p", text: "Two lessons. First, the weakest part in a chain sets the ceiling: here the database at 99.9%. Adding more app servers will not lift the total; replicating the database will. Second, the parallel rule assumes failures are **independent**. Two servers in the same rack, or running the same buggy release, fail together, and the real number is worse than the formula says." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the cache-aside pattern with an **LRU cache** and feed it traffic shaped like real link clicks: a few links are extremely popular and most are rarely visited. We measure the hit rate for three cache sizes, then check the availability arithmetic from the worked example." },
+        { type: "code", lang: "python", title: "practice_cache_hit_rate.py", code: `# An LRU cache in front of a "database", fed with realistic skewed traffic.
+import random
+from collections import OrderedDict
+random.seed(7)
+
+N_URLS, N_REQUESTS = 10_000, 50_000
+# A few links are very popular, most are rarely clicked (weight = 1 / rank).
+weights = [1 / rank for rank in range(1, N_URLS + 1)]
+requests = random.choices(range(N_URLS), weights=weights, k=N_REQUESTS)
+
+def run(capacity):
+    cache, hits = OrderedDict(), 0
+    for code in requests:
+        if code in cache:
+            hits += 1
+            cache.move_to_end(code)              # mark as most recently used
+        else:                                    # miss: read the database...
+            cache[code] = "long url"             # ...and fill the cache
+            if len(cache) > capacity:
+                cache.popitem(last=False)        # evict the least recently used
+    return hits / N_REQUESTS
+
+print("cache size  share of URLs  hit rate  database reads")
+for capacity in (100, 1_000, 5_000):
+    hit = run(capacity)
+    print(f"{capacity:10,} {capacity / N_URLS:13.0%} {hit:9.1%} "
+          f"{round((1 - hit) * N_REQUESTS):15,}")
+
+# Availability: parts in a chain multiply; redundant copies multiply failures.
+one = 0.99                                       # one app server, illustrative
+pair = 1 - (1 - one) ** 2                        # down only if both are down
+chain = 0.9999 * pair * 0.999                    # load balancer -> apps -> database
+print(f"one server {one:.2%} | two in parallel {pair:.2%} | whole chain {chain:.2%}")`, output: `cache size  share of URLs  hit rate  database reads
+       100            1%     39.2%          30,401
+     1,000           10%     67.4%          16,296
+     5,000           50%     85.2%           7,423
+one server 99.00% | two in parallel 99.99% | whole chain 99.88%`,
+          walkthrough: [
+            { lines: [6, 9], note: "10,000 short links and 50,000 clicks. Link number 1 is the most popular; the link at rank r is clicked in proportion to 1 / r. This kind of skew is typical of real traffic." },
+            { lines: [11, 21], note: "Cache-aside with LRU eviction. On a hit we move the entry to the 'recently used' end. On a miss we read the database, store the result, and evict the entry that has gone unused the longest if the cache is over capacity." },
+            { lines: [23, 27], note: "A cache holding just 1% of the links serves 39% of requests. Holding 10% serves 67%. Each further step in size buys less." },
+            { lines: [30, 33], note: "The two availability rules: two 99% servers in parallel give 99.99%, and the chain of load balancer, app pair and a 99.9% database gives 99.88%." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Make every link equally popular: `weights = [1] * N_URLS`. Predict the hit rate for the cache holding 10% of the links. What does this say about when caching works?",
+          "Replace the LRU policy with 'evict a random entry' (for example, delete `random.choice(list(cache))`). Predict whether the hit rate for the 1,000-entry cache goes up, down or stays about the same.",
+          "Change the database in the chain from `0.999` to `0.9999`. Predict the new chain availability. Then try three app servers instead of two and see which change helps more.",
+        ] },
+        { type: "check", question: "In the run above, a cache with 1% of the links already served 39% of requests, yet going from 10% to 50% of the links only raised the hit rate from 67% to 85%. Why do the gains shrink?", answer: "Because popularity is very uneven. The first entries we cache are the most-clicked links, and each one removes a lot of database reads. Later entries are rarely clicked links, so each adds little. Past some point, extra cache memory buys almost nothing, and the remaining misses are for the long tail of links that are clicked once in a while. This is also why uniform traffic caches badly: no small set of keys is hot." },
+        { type: "check", question: "Our chain is 99.88% available and the business wants 99.95%. A teammate proposes adding a third and a fourth app server. Will that reach the target?", answer: "No. The app pair is already at 99.99%; making it 99.9999% changes the product by almost nothing. The chain is held back by the 99.9% database: even with perfect app servers the total would be about 0.9999 × 0.999 ≈ 99.89%. To reach 99.95% we must improve the weakest part, for example with a replica and automatic failover for the database." },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: 'math-behind-attention-qkv',
-  minutes: 22,
+  minutes: 27,
   hook: 'When a Transformer reads "I love cats", how does the word "love" decide how much to listen to "I" and how much to listen to "cats"? It is just four matrix steps, and we can do them by hand.',
   summary: 'Attention turns each token into three vectors: a query (what I am looking for), a key (what I offer) and a value (what I will pass on). Dot products between queries and keys give scores, we scale them by √dₖ, softmax turns each row into weights that sum to 1, and the output for each token is the weighted average of the value vectors. We will compute every number for a three-word sentence.',
   sections: [
@@ -208,6 +208,77 @@ output =
         { type: 'callout', tone: 'example', title: 'Where you meet this every day', text: 'Every token a chatbot writes passes through dozens of attention layers, each doing exactly these steps (with many heads at once, covered later). When a support bot answers "Your order ships Monday" after reading a long order history, attention is how the word "ships" finds the relevant date in the earlier text.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Mixing up which side is transposed (it is Q·Kᵀ, giving tokens × tokens, not Qᵀ·K). Applying softmax over the wrong axis (it must run along each row, over the keys). Forgetting the √dₖ scaling. And thinking Q, K and V are three different inputs: in self-attention they are all projections of the **same** X.' },
         { type: 'p', text: 'One honest limit: the score matrix has one entry per pair of tokens, so memory and compute grow with the **square** of the sequence length. Doubling the context roughly quadruples the attention work. Techniques like FlashAttention, sliding windows and KV caching (later lessons) exist largely to manage this cost.' },
+      ],
+    },
+    {
+      id: "worked-example-cats-row",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We did the row for “I” by hand. Let us now do the row for “cats” from start to finish, and this time use the stability trick by hand too. Its raw scores from the score matrix are [4, 12, 10]." },
+        { type: "steps", title: "The “cats” row, one move at a time", items: [
+          { title: "Scale", text: "Divide by √3 ≈ 1.73: [4, 12, 10] becomes [2.31, 6.93, 5.77]." },
+          { title: "Subtract the row maximum", text: "The largest value is 6.93. Subtracting it gives [−4.62, 0, −1.15]. The weights will be the same, but now no exponent is large." },
+          { title: "Exponentiate", text: "e^(−4.62) ≈ 0.010, e⁰ = 1, e^(−1.15) ≈ 0.315. The sum is about 1.325." },
+          { title: "Normalise", text: "Divide each by 1.325: weights ≈ [0.007, 0.755, 0.238]. They add up to 1." },
+          { title: "Blend the values", text: "0.007·[1, 2, 3] + 0.755·[2, 8, 0] + 0.238·[2, 6, 3] ≈ [1.99, 7.48, 0.74]. This matches the last row of the code's output." },
+        ] },
+        { type: "p", text: "Now look at the three outputs next to the values they were mixed from. Something stands out: every output number sits **between** the smallest and largest value in its column." },
+        { type: "table", caption: "Each output is a weighted average, so it can never leave the range of the values. Numbers from the code output.", head: ["Value column", "Values (I, love, cats)", "Range", "Outputs (I, love, cats)"], rows: [
+          ["1st", "1, 2, 2", "1 to 2", "1.86, 2.00, 1.99"],
+          ["2nd", "2, 8, 6", "2 to 8", "6.32, 7.81, 7.48"],
+          ["3rd", "3, 0, 3", "0 to 3", "1.70, 0.27, 0.74"],
+        ] },
+        { type: "p", text: "This is a real limit of the attention step. Its weights are positive and sum to 1, so it can only *select and blend* what the value vectors already hold. It cannot produce a 9 in the second column when the largest value there is 8. Building new features out of the blend is the job of the layers around attention: the output matrix and the feed-forward network that follows." },
+        { type: "callout", tone: "tip", title: "A free sanity check", text: "When we debug attention code, we can test this directly: before any output projection, each output number must lie between the column minimum and maximum of V. If it does not, the weights are not a proper softmax row." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build attention as a **soft dictionary** with plain Python loops and no matrices. Three colour names have a key and a value. We look up a query, and then make the lookup sharper and sharper to watch a blend turn into a near-exact lookup." },
+        { type: "code", lang: "python", title: "practice_soft_dictionary.py", code: `import math
+
+# A "soft dictionary": each entry has a key vector and a value vector.
+# Values are made-up (red, green) colour amounts, for illustration only.
+keys = {"red": [1.0, 0.0], "green": [0.0, 1.0], "orange": [0.8, 0.6]}
+values = {"red": [255, 0], "green": [0, 255], "orange": [255, 165]}
+
+def attend(query, sharpness):
+    d_k = len(query)
+    scores = {}
+    for name, key in keys.items():
+        dot = sum(q * k for q, k in zip(query, key))    # query . key
+        scores[name] = sharpness * dot / math.sqrt(d_k)  # scale by sqrt(d_k)
+    top = max(scores.values())
+    exps = {name: math.exp(s - top) for name, s in scores.items()}
+    total = sum(exps.values())
+    weights = {name: e / total for name, e in exps.items()}   # softmax
+    # Output = weighted average of the value vectors
+    out = [sum(weights[n] * values[n][i] for n in keys) for i in range(2)]
+    return weights, out
+
+query = [1.0, 0.1]        # "something very red, a tiny bit green"
+for sharpness in [1, 5, 25]:
+    weights, out = attend(query, sharpness)
+    w = "  ".join(f"{n}={p:.2f}" for n, p in weights.items())
+    print(f"sharpness {sharpness:2d}: {w}  ->  output [{out[0]:.0f}, {out[1]:.0f}]")`, output: `sharpness  1: red=0.41  green=0.22  orange=0.37  ->  output [200, 117]
+sharpness  5: red=0.61  green=0.03  orange=0.37  ->  output [249, 67]
+sharpness 25: red=0.92  green=0.00  orange=0.08  ->  output [255, 13]`,
+          walkthrough: [
+            { lines: [3, 6], note: "The dictionary. Keys are 2-number directions used for matching. Values are what we get back. The key of “orange” points mostly the same way as “red”." },
+            { lines: [8, 13], note: "Score every entry: the dot product of the query with its key, divided by √dₖ. `sharpness` multiplies the scores so we can see what bigger scores do." },
+            { lines: [14, 20], note: "Softmax with the subtract-the-maximum trick, then the weighted average of the value vectors, one output number at a time." },
+            { lines: [22, 26], note: "Look up the same query at three sharpness levels. The winner never changes, but its share grows from 41% to 92%." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change the query to `[0.0, 1.0]`. Predict the winner and the output at sharpness 25 before running.",
+          "Change the query to `[0.8, 0.6]`, exactly the key of “orange”. Predict: does “orange” win at sharpness 1, and by how much?",
+          "Keep the original query but make the orange key twice as long: `[1.6, 1.2]`. Predict which entry wins now, and what that says about long key vectors.",
+        ] },
+        { type: "check", question: "The query [1.0, 0.1] points almost exactly at the key of “red”. Yet at sharpness 1, “red” gets only 41%. Is the matching broken?", answer: "No. The raw dot products are 1.0 for red, 0.86 for orange and 0.1 for green, and after dividing by √2 the gaps between them are well under 1. Softmax turns small gaps into a soft split. How peaked attention is depends on how far apart the scores are, and that depends on how long the query and key vectors are. A trained model grows those lengths where it needs a sharp lookup." },
+        { type: "check", question: "In the lesson's table, the second value column holds 2, 8 and 6. Could some choice of attention weights make a token's output 9 in that column?", answer: "No. The weights are positive and sum to 1, so the result is always a weighted average and stays between 2 and 8. To get anything outside that range the model needs a different step, such as the output projection or the feed-forward network. Attention moves and mixes information; it does not invent new values." },
       ],
     },
   ],

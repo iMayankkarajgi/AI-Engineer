@@ -1,6 +1,6 @@
 export default {
   id: 'what-is-okf-open-knowledge-format',
-  minutes: 16,
+  minutes: 21,
   hook: 'Our company\'s knowledge lives in wikis, chat threads, spreadsheets and people\'s heads, so how does an AI agent find the one definition of "active user" that is actually right?',
   summary: 'OKF (Open Knowledge Format) is an open, vendor-neutral specification from Google Cloud for writing down curated knowledge as a folder of Markdown files. Each file describes one concept, starts with a small YAML header whose only required field is `type`, and links to related concepts with ordinary Markdown links. An agent reads the files directly and follows the links like a graph, instead of guessing from scattered search results.',
   sections: [
@@ -216,6 +216,93 @@ Context for 'How is WAU computed?':
           '**When not to use it**: for a small one-off project, a README may be enough; for searching a vast archive, use retrieval; for live data, use a tool or MCP server.',
         ] },
       ],
+    },
+    {
+      id: "common-mistakes-bundle",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "A bundle is easy to start and easy to let drift. Most problems fall into two groups: things a simple script can find, and things only a reviewer can find. It helps to know which is which, so we automate the first group and save human attention for the second." },
+        { type: "table", caption: "What goes wrong in a bundle and who can catch it",
+          head: ["Problem", "How we spot it", "Who catches it"],
+          rows: [
+            ["A concept file has no `type`", "Parse the frontmatter of every concept file", "A script. This is the one hard rule from the lesson."],
+            ["A concept that nothing links to", "Count the links pointing at each file; a count of 0 means agents that follow links will never reach it", "A script. This is a team check, not a rule of the format."],
+            ["A link to a file that is not written", "Collect link targets that are not in the bundle", "A script. It is allowed, so we report it as a gap, not an error."],
+            ["Two files define the same idea differently", "Read them side by side", "A reviewer. Both files are valid; the format cannot tell which is right."],
+            ["A definition that is out of date", "Compare with how the real system behaves today", "A reviewer, helped by `log.md` and any freshness fields the team uses."],
+            ["A file that mixes several concepts", "The title needs the word “and”", "A reviewer. One concept per file keeps links precise."]
+          ] },
+        { type: "p", text: "The gaps deserve a second look. A missing file that one concept links to is a small hole. A missing file that five concepts link to is knowledge the whole team relies on and nobody has written down. So we do not just list gaps; we count how many files want each one and write the most wanted first." },
+        { type: "steps", title: "A review routine for every change to the bundle",
+          items: [
+            { title: "Run the script checks", text: "Missing `type`, zero in-links, and the list of gaps with their counts. These take seconds and need no judgement." },
+            { title: "Fix errors, triage warnings", text: "A missing `type` must be fixed. A file with no in-links is either linked from `index.md` or from a related concept, or removed." },
+            { title: "Read the diff as a person", text: "Is the definition right? Does it contradict another file? This is the part a script cannot do." },
+            { title: "Record the change", text: "Add a dated line to `log.md` so the next reader, human or agent, can see what changed and when." }
+          ] },
+        { type: "p", text: "Remember the warning from earlier: a tidy bundle looks official. Passing every script check means the files have the right shape. It says nothing about whether the facts are true." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code walked *forward* along links, the way an agent gathers context. Now we look at the bundle the way a maintainer does. We build a small linter that checks the required field, counts the links pointing *at* each concept, and lists the gaps with how many files want each one." },
+        { type: "code", lang: "python", title: "practice_bundle_lint.py", code: `# Lint a tiny OKF-style bundle: required field, in-links, and knowledge gaps.
+import re
+
+BUNDLE = {
+    "/index.md": "- [WAU](/metrics/wau.md)\\n- [Revenue](/metrics/revenue.md)",
+    "/metrics/wau.md": "---\\ntype: Metric\\ntitle: Weekly active users\\n---\\n"
+                       "From [events](/tables/events.md). Owner: [growth](/teams/growth.md).",
+    "/metrics/revenue.md": "---\\ntype: Metric\\ntitle: Revenue\\n---\\nSum of paid [orders](/tables/orders.md).",
+    "/tables/events.md": "---\\ntype: BigQuery Table\\ntitle: events\\n---\\nOne row per user action.",
+    "/glossary/churn.md": "---\\ntitle: Churned customer\\n---\\nNo order in 90 days. See [orders](/tables/orders.md).",
+}
+LINK = re.compile(r"\\]\\((/[^)]+\\.md)\\)")        # links written from the bundle root
+RESERVED = {"index.md", "log.md"}               # listing / history, not concepts
+
+def frontmatter(text):
+    block = text.split("---")[1]
+    return dict(line.split(": ", 1) for line in block.strip().splitlines())
+
+concepts = {p: t for p, t in BUNDLE.items() if p.rsplit("/", 1)[-1] not in RESERVED}
+incoming = {p: [] for p in concepts}            # concept -> files that link to it
+gaps = {}                                       # missing target -> files that link to it
+for source, text in BUNDLE.items():
+    for target in LINK.findall(text):
+        (incoming[target] if target in concepts else gaps.setdefault(target, [])).append(source)
+
+for path, text in concepts.items():
+    fm = frontmatter(text)
+    notes = []
+    if "type" not in fm:
+        notes.append("ERROR: no type")
+    if not incoming[path]:
+        notes.append("warning: nothing links here")
+    print(f"{path:20s} in-links={len(incoming[path])}  {'; '.join(notes) or 'ok'}")
+for target, sources in sorted(gaps.items()):
+    print(f"gap: {target} not written yet, wanted by {len(sources)} file(s)")`, output: `/metrics/wau.md      in-links=1  ok
+/metrics/revenue.md  in-links=1  ok
+/tables/events.md    in-links=1  ok
+/glossary/churn.md   in-links=0  ERROR: no type; warning: nothing links here
+gap: /tables/orders.md not written yet, wanted by 2 file(s)
+gap: /teams/growth.md not written yet, wanted by 1 file(s)`,
+          walkthrough: [
+            { lines: [4, 13], note: "A five-file bundle. The churn file has no `type` and nothing links to it. Two files link to an orders table that does not exist yet." },
+            { lines: [19, 24], note: "One pass over every link in every file. A link to an existing concept is recorded under `incoming`; a link to a missing file is recorded under `gaps`. Links from `index.md` count too." },
+            { lines: [26, 33], note: "Report each concept: how many files link to it, an error if `type` is missing, and a warning if nothing links to it." },
+            { lines: [34, 35], note: "Report each gap with the number of files that want it." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Add `- [Churn](/glossary/churn.md)` to the text of `/index.md`. Predict the new line for the churn file. Which note disappears and which stays?",
+          "Write the missing table: add a `/tables/orders.md` entry with `type: BigQuery Table`. Predict its in-link count and which gap line disappears.",
+          "Add an empty `\"/log.md\": \"2026: bundle created\"` entry. Predict whether it shows up in the report, and explain why from the code."
+        ] },
+        { type: "check", question: "The linter prints an ERROR for a missing `type` but only a warning for a file nothing links to, and a plain “gap” for a missing target. Why three different levels?", answer: "They match what the lesson says about the format. A missing `type` breaks the one required rule, so the file is not a valid concept. A file with no in-links is valid, just hard for a link-following agent to find, so it is a team-level warning. A link to an unwritten file is explicitly allowed and useful: it marks knowledge still to be written. Treating all three as errors would make the report noisy and teach people to ignore it." },
+        { type: "check", question: "`/tables/orders.md` is wanted by 2 files and `/teams/growth.md` by 1. Suppose we have time to write only one. Which do we pick, and what does the forward walk from the earlier code tell us that this count does not?", answer: "We pick the orders table: two concepts depend on it, so writing it fills two holes at once. The in-link count shows how widely a file is needed across the bundle. The forward walk shows something different: what an agent would actually read for one specific question. A gap can have a low count and still sit on the path of our most common question, so a careful team looks at both." }
+      ]
     },
     {
       id: 'summary',

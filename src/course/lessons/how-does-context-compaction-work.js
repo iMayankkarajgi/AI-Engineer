@@ -1,6 +1,6 @@
 export default {
   id: "how-does-context-compaction-work",
-  minutes: 16,
+  minutes: 21,
   hook: "How can an AI agent keep working for hours when its context window fills up in minutes?",
   summary: "Every LLM has a context window: a fixed maximum number of tokens it can see at once. Long conversations and agent sessions eventually overflow it. Context compaction solves this by replacing older parts of the history with a compact summary that keeps the important facts, decisions and open tasks, while keeping the most recent turns word for word.",
   sections: [
@@ -166,6 +166,67 @@ Context the model sees next:
           "**Complementary tricks**: clearing old tool outputs (keep only their conclusions), writing notes to a file the agent can re-read, and handing sub-tasks to sub-agents with fresh windows."
         ] },
         { type: "callout", tone: "warn", title: "Compaction is lossy", text: "A summary can drop a detail that turns out to matter later (an exact error message, a specific number) or even state something slightly wrong, and the model will trust the summary. Mitigations: tell the summarizer to keep numbers, names, paths and decisions verbatim; keep recent turns raw; archive the full history so tools can look things up; avoid compacting in the middle of a delicate step; and test compaction on real long sessions." }
+      ]
+    },
+    {
+      id: "compaction-mistakes",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Compaction usually fails quietly. The session keeps running, and the damage shows up many turns later. These are the patterns to watch for." },
+        { type: "table", caption: "Four compaction failures", head: ["Mistake", "What we see later", "Fix"], rows: [["Summary of a summary", "A fact survives the first compaction and is gone after the third", "Tell the summarizer to carry the old summary forward unchanged and only add to it"], ["Trigger set too late", "The summarization call itself fails or is cut short", "Trigger earlier, so the old turns plus the new summary still fit"], ["Too few recent turns kept", "The assistant repeats a step it has just done", "Keep more recent turns word for word"], ["Compacting in the middle of a step", "A half-finished tool call is described vaguely, then redone wrongly", "Compact only at natural boundaries, after a step is complete"]] },
+        { type: "p", text: "The trigger deserves a small calculation. Take a 20,000-token window, a trigger at 16,000 and a summary of about 2,000 tokens (illustrative)." },
+        { type: "steps", title: "How much room does compaction itself need?", items: [{ title: "What the summary call reads", text: "The old turns: at most about 16,000 tokens." }, { title: "What it writes", text: "A summary of about 2,000 tokens. Together that is 18,000, which fits in 20,000." }, { title: "Move the trigger to 19,500", text: "Now the same call needs about 21,500 tokens. It does not fit, and the compaction fails exactly when we need it." }, { title: "The rule", text: "The gap between the trigger and the limit is not waste. It is the working room that compaction needs." }] },
+        { type: "p", text: "A simple safety net is a list of **pinned facts**: a few exact strings, such as the budget and the dates, that code looks for after every compaction. If one is missing we know at once, not twenty turns later." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will run a longer session that compacts twice. The second summary must fold in the first one. After each compaction, code checks that two pinned facts are still present in the context." },
+        { type: "code", lang: "python", title: "practice_repeat_compaction.py", code: `def tokens(text):
+    return len(text.split())                 # rough stand-in for a tokenizer
+
+LIMIT, KEEP_RECENT = 40, 2
+PINNED = ["budget 4000", "12-14 June"]       # facts that must never be lost
+
+def summarize(old):
+    # Stand-in for an LLM summary: keep the earlier summary and KEY lines only
+    prior = [t[9:] for t in old if t.startswith("SUMMARY: ")]
+    kept = [t.split("KEY ", 1)[1] for t in old if "KEY " in t]
+    return "SUMMARY: " + "; ".join(prior + kept)
+
+def compact(history):
+    old, recent = history[:-KEEP_RECENT], history[-KEEP_RECENT:]
+    return [summarize(old)] + recent
+
+turns = [
+    "user: KEY budget 4000 for a team of 8",
+    "tool: lodge search returned 14 rows of prices and photos and reviews and maps",
+    "user: KEY dates 12-14 June",
+    "assistant: I found three lodges near trails that fit",
+    "tool: menu page with forty dishes listed one by one in great detail",
+    "user: KEY one vegetarian guest",
+    "assistant: Pine Lodge has vegetarian options every day",
+    "user: please book Pine Lodge for us",
+]
+history, count = [], 0
+for t in turns:
+    history.append(t)
+    used = sum(tokens(h) for h in history)
+    if used > LIMIT:                         # trigger
+        history = compact(history)
+        count += 1
+        after = sum(tokens(h) for h in history)
+        lost = [f for f in PINNED if f not in " ".join(history)]
+        print(f"compaction {count}: {used} -> {after} tokens | pinned facts lost: {lost}")
+print(history[0])`, output: `compaction 1: 50 -> 33 tokens | pinned facts lost: []
+compaction 2: 46 -> 24 tokens | pinned facts lost: []
+SUMMARY: budget 4000 for a team of 8; dates 12-14 June`, walkthrough: [{ lines: [4, 5], note: "The trigger, the number of recent turns kept raw, and two pinned facts that must survive every compaction." }, { lines: [7, 11], note: "The stand-in summarizer. It carries any earlier summary forward, then adds the lines marked `KEY`. Bulky tool lines are dropped." }, { lines: [13, 15], note: "One compaction: split into old and recent, and replace the old part with a single summary line." }, { lines: [27, 37], note: "The session loop: add a turn, measure, compact when over the limit, then check the pinned facts." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["In `summarize`, change `prior + kept` to just `kept`. Predict what the second compaction reports under `pinned facts lost`.", "Set `KEEP_RECENT = 4`. Predict how many compactions run and whether the context gets back under the limit.", "Remove the word `KEY` from the dates turn, so it reads `user: dates 12-14 June`. Predict the output. What does it say about trusting the summarizer to notice what matters?"] },
+        { type: "check", question: "The second compaction summarized three items: the first summary and two later turns. Neither of those turns had a `KEY` line. Why did the budget and the dates still survive?", answer: "Because `summarize` carries the earlier summary forward: a line that starts with `SUMMARY:` is copied into the new summary before any new key lines are added. Each compaction folds the previous one in. A summarizer that looked only for new key lines would have produced an empty summary here and wiped out everything learned in the first half of the session." },
+        { type: "check", question: "The pinned-fact check looks for exact strings such as `budget 4000`. A real LLM summarizer might write “a budget of 4,000 dollars”. Is the fact lost? What should we do?", answer: "The fact is still there, but the exact-string check would report it as lost. Two fixes work together. Tell the summarizer to copy numbers, dates and names word for word, which also protects them from being distorted. And keep the check strict, so that any re-wording of a critical value is flagged for a human to look at." }
       ]
     }
   ],

@@ -1,6 +1,6 @@
 export default {
   id: "how-does-prompt-caching-work",
-  minutes: 17,
+  minutes: 22,
   hook: "If our chatbot sends the same 20,000-token manual with every question, why should the model read it from scratch every single time?",
   summary: "When an LLM reads a prompt it computes internal key and value tensors for every token. Prompt caching stores those tensors for a prompt prefix so the next request that starts with exactly the same tokens can skip that work. The result is lower latency and much cheaper input tokens, as long as we put the stable content first and keep it byte-for-byte identical.",
   sections: [
@@ -176,6 +176,62 @@ MISS key=da6706aa2f cost=$0.0902  (no caching: $0.0722)`,
         ] },
         { type: "callout", tone: "example", title: "Prompt caching in the real world", text: "Coding agents resend a large system prompt, tool list and file contents on every step, so they lean heavily on caching. Chat products place a cache breakpoint at the end of the conversation so each new turn reuses the previous one. Document assistants cache a long contract once and answer many questions about it within minutes. Self-hosted servers like vLLM and SGLang reuse shared prefixes across users who share a system prompt." },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Putting dynamic content (dates, user IDs, retrieved chunks) before the stable content. Serializing JSON or tools in a different order each time. Assuming a cache survives an hour when the TTL is 5 minutes and traffic is sparse. Not checking the usage fields in the API response, which report how many tokens were read from or written to the cache: if cached tokens show 0, the prefix is not matching." }
+      ]
+    },
+    {
+      id: "worked-chat-example",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "Chats are where caching feels most natural, so let us count one. A support chat has a 2,000-token system prompt. Each user message is 100 tokens and each reply is 300 tokens. We place the cache point at the end of every request. All numbers are illustrative." },
+        { type: "table", caption: "Input tokens per turn. “Read” tokens come from the cache; “new” tokens are processed and written.", head: ["Turn", "Input tokens", "Read from cache", "New"], rows: [["1", "2,000 + 100 = 2,100", "0", "2,100"], ["2", "2,100 + 300 + 100 = 2,500", "2,100", "400"], ["3", "2,500 + 300 + 100 = 2,900", "2,500", "400"]] },
+        { type: "p", text: "Notice that the last reply counts as new input on the next turn. The model wrote it as output. When we send it back, it is fresh prompt text that sits after the cached point." },
+        { type: "steps", title: "Pricing the three turns (write 1.25×, read 0.10×, in units of one normal input token)", items: [{ title: "Without caching", text: "2,100 + 2,500 + 2,900 = 7,500 units." }, { title: "Turn 1", text: "Everything is a write: 2,100 × 1.25 = 2,625." }, { title: "Turn 2", text: "2,100 read and 400 written: 210 + 500 = 710." }, { title: "Turn 3", text: "2,500 read and 400 written: 250 + 500 = 750." }, { title: "Total", text: "2,625 + 710 + 750 = 4,085 units, about 46% less than 7,500. The gap widens with every extra turn, because the read part keeps growing while the new part stays at 400." }] },
+        { type: "p", text: "The same table explains a classic failure. If the app edits an early message in the middle of a chat, for example by trimming the oldest turn or by re-wording the system prompt, the prefix changes at that point. Every token after it is new again, and that turn is billed like turn 1." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a cache that works on the blocks of a prompt. For each request it finds the longest run of leading blocks it has seen before, and it forgets entries that were not used for 300 seconds. Token counts are illustrative." },
+        { type: "code", lang: "python", title: "practice_block_cache.py", code: `import hashlib
+
+TTL = 300                      # seconds an unused entry survives
+cache = {}                     # prefix hash -> time of last use
+
+def key(blocks):
+    return hashlib.sha256("|".join(blocks).encode()).hexdigest()[:8]
+
+def request(blocks, sizes, now):
+    # Find the longest prefix of blocks that is cached and not expired
+    hit = 0
+    for i in range(len(blocks), 0, -1):
+        k = key(blocks[:i])
+        if k in cache and now - cache[k] <= TTL:
+            hit = i
+            break
+    # Store (or refresh) every prefix of this request for later calls
+    for i in range(1, len(blocks) + 1):
+        cache[key(blocks[:i])] = now
+    read, fresh = sum(sizes[:hit]), sum(sizes[hit:])
+    print(f"t={now:3}s  cached blocks={hit}  read={read:5}  computed={fresh:5}")
+
+sizes = [4000, 20000, 50]      # illustrative token counts per block
+system, manual = "system rules v1", "product manual v7"
+
+request([system, manual, "Q: how do I descale?"], sizes, now=0)
+request([system, manual, "Q: is the lid dishwasher safe?"], sizes, now=60)
+request([system, manual, "Q: what is the warranty?"], sizes, now=500)
+request(["time 10:42", system, manual], [10, 4000, 20000], now=510)
+request(["time 10:43", system, manual], [10, 4000, 20000], now=520)`, output: `t=  0s  cached blocks=0  read=    0  computed=24050
+t= 60s  cached blocks=2  read=24000  computed=   50
+t=500s  cached blocks=0  read=    0  computed=24050
+t=510s  cached blocks=0  read=    0  computed=24010
+t=520s  cached blocks=0  read=    0  computed=24010`, walkthrough: [{ lines: [3, 7], note: "A TTL, an empty cache, and a key function that hashes a run of leading blocks." }, { lines: [10, 16], note: "Lookup: try the longest prefix first, then shorter ones. An entry counts only if it was used within the TTL." }, { lines: [17, 21], note: "Store or refresh every prefix of this request, then report how many tokens were read from the cache and how many had to be computed." }, { lines: [26, 30], note: "Five requests: a first call, a quick follow-up, a late follow-up, and two calls that put a time string in front." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Change the third request from `now=500` to `now=350`. Predict hit or miss before running. Remember that each use resets the clock.", "In the last two requests, move the time block to the end: `[system, manual, \"time 10:42\"]` with sizes `[4000, 20000, 10]`. Predict `read` and `computed` for both.", "Give the second request a new manual, `\"product manual v8\"`. Predict `cached blocks`, `read` and `computed` for it."] },
+        { type: "check", question: "Request 3 arrives at t=500 and misses, although the same prefix was a hit at t=60 and no text changed. What happened? And what would one question every 4 minutes have done?", answer: "The entry expired. It was last used at t=60, and 440 seconds passed, which is more than the 300-second TTL. Each use resets the clock, so a question every 240 seconds would have kept the entry alive without end. Sparse traffic caused this miss, not changed text. That is why low-traffic apps see fewer hits than their prompts suggest." },
+        { type: "check", question: "Our cache stores every leading run of blocks, not just the whole prompt. Suppose we stored one entry per request, keyed on all its blocks together. What would happen to request 2?", answer: "It would miss. Request 2 ends with a different question, so its full-prompt key was never stored. The saving comes from matching a *prefix* that is shorter than the whole prompt: system plus manual. This is why the stable part must end before the changing part begins, and why real APIs cache up to a marked point or in blocks instead of whole prompts." }
       ]
     }
   ],

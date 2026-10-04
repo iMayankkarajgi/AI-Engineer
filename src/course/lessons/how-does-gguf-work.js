@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-gguf-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'Why can you download one file called something like model-Q4_K_M.gguf, double-click it in a desktop app, and be chatting with an LLM a few seconds later?',
   summary: 'GGUF is a single-file format for storing an LLM: a small header, a dictionary of metadata (architecture, tokenizer, chat template), a table describing each tensor, and then the (usually quantized) weights, aligned so they can be memory-mapped. Names like Q4_K_M describe how the weights were quantized. Because everything is in one self-describing file that loads almost instantly, GGUF became the standard for running models locally with llama.cpp, Ollama and LM Studio.',
   sections: [
@@ -198,6 +198,85 @@ Q6_K: 6.562 bits/weight`, walkthrough: [
         { type: 'callout', tone: 'example', title: 'Our laptop, solved', text: 'We download an 8B instruct model as Q4_K_M (about 4.9 GB), open it in LM Studio or Ollama, and it starts in seconds thanks to mmap. The chat template inside the file makes sure our messages are formatted the way the model was trained.' },
         { type: 'callout', tone: 'tip', title: 'When not to use GGUF', text: 'If you are fine-tuning or training, stay with safetensors in BF16. If you are serving many users on data-centre GPUs, engines like vLLM, SGLang or TensorRT-LLM with their own formats (FP8, AWQ, GPTQ) usually give higher throughput. GGUF shines for local, single-user or small-scale inference.' },
       ],
+    },
+    {
+      id: "counting-the-bytes",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "`gguf_demo.py` printed that the tensor data starts at byte 224. Where does that number come from? Nothing in the file is hidden, so we can add it up by hand. We need two rules from the code: a string costs 8 bytes for its length plus one byte per character, and a value type or a 32-bit number costs 4 bytes." },
+        { type: "steps", title: "Adding up the tiny file", items: [
+          { title: "Header", text: "4 magic bytes + 4 for the version + 8 for the tensor count + 8 for the metadata count = 24 bytes." },
+          { title: "First key", text: "`general.architecture` has 20 characters: 8 + 20 = 28. Then 4 for the value type. The value `llama` is a string: 8 + 5 = 13. Total 45 bytes." },
+          { title: "Second and third keys", text: "`general.name` = `tiny-demo`: (8 + 12) + 4 + (8 + 9) = 41 bytes. `llama.context_length` = 4096: (8 + 20) + 4 + 4 = 36 bytes." },
+          { title: "Tensor info", text: "The name `blk.0.ffn_up.weight` has 19 characters: 8 + 19 = 27. Then 4 for the number of dimensions, 2 × 8 for the two sizes, 4 for the data type and 8 for the offset. Total 59 bytes." },
+          { title: "Pad to the boundary", text: "24 + 45 + 41 + 36 + 59 = 205 bytes. The next multiple of 32 is 224, so the writer adds 19 zero bytes." },
+          { title: "Tensor data", text: "Eight 32-bit floats take 32 bytes, from byte 224 to byte 255. The whole file is 256 bytes." }
+        ] },
+        { type: "table", caption: "Byte map of tiny.gguf", head: ["Part", "Bytes", "Size"], rows: [
+          ["Header", "0 – 23", "24"],
+          ["Metadata (3 keys)", "24 – 145", "122"],
+          ["Tensor info (1 tensor)", "146 – 204", "59"],
+          ["Padding", "205 – 223", "19"],
+          ["Tensor data", "224 – 255", "32"]
+        ] },
+        { type: "p", text: "Two lessons hide in this sum. First, a reader never has to guess. Every string says how long it is and every value says what type it is, so the reader always knows how many bytes come next. That is also how it can step over a key it does not know. Second, in this toy file the description is larger than the data: 205 bytes against 32. In a real model it is the other way round by a huge margin: the weights are gigabytes, and the metadata, even with the whole vocabulary inside, is tiny next to them." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson described how a Q8_0 block is stored: one 16-bit scale followed by 32 small integers. We will pack blocks like that into real bytes and unpack them again. Then we do the same with a simplified 4-bit block that squeezes two weights into every byte. The 4-bit packing here is a teaching version, not the exact layout of any GGUF type." },
+        { type: "code", lang: "python", title: "practice_block_packing.py", code: `import struct
+import numpy as np
+rng = np.random.default_rng(5)
+BLOCK = 32
+weights = rng.normal(0, 0.05, size=2 * BLOCK).astype(np.float32)   # two blocks
+
+def pack8(block):                      # 8-bit block: one FP16 scale + one byte per weight
+    scale = np.float16(np.abs(block).max() / 127)
+    q = np.round(block / np.float32(scale)).clip(-127, 127).astype(np.int8)
+    return struct.pack("<e", scale) + q.tobytes()
+
+def unpack8(raw):
+    scale, = struct.unpack_from("<e", raw, 0)
+    return np.frombuffer(raw, dtype=np.int8, offset=2) * np.float32(scale)
+
+def pack4(block):                      # simplified 4-bit block: two weights per byte
+    scale = np.float16(np.abs(block).max() / 7)
+    q = (np.round(block / np.float32(scale)).clip(-7, 7) + 8).astype(np.uint8)
+    return struct.pack("<e", scale) + (q[0::2] | (q[1::2] << 4)).tobytes()
+
+def unpack4(raw):
+    scale, = struct.unpack_from("<e", raw, 0)
+    b = np.frombuffer(raw, dtype=np.uint8, offset=2)
+    q = np.empty(2 * len(b), dtype=np.int16)
+    q[0::2], q[1::2] = b & 15, b >> 4  # split each byte back into two 4-bit values
+    return (q - 8) * np.float32(scale)
+
+for name, pack, unpack in [("8-bit", pack8, unpack8), ("4-bit", pack4, unpack4)]:
+    blocks = [pack(weights[i:i + BLOCK]) for i in range(0, len(weights), BLOCK)]
+    back = np.concatenate([unpack(b) for b in blocks])
+    size = sum(len(b) for b in blocks)
+    print(f"{name}: {len(blocks[0])} bytes per block, {size * 8 / len(weights)} bits/weight, "
+          f"mean error {np.abs(back - weights).mean():.5f}")
+print("as FP32:", weights.nbytes, "bytes | as FP16:", weights.nbytes // 2, "bytes")`, output: `8-bit: 34 bytes per block, 8.5 bits/weight, mean error 0.00020
+4-bit: 18 bytes per block, 4.5 bits/weight, mean error 0.00324
+as FP32: 256 bytes | as FP16: 128 bytes`, walkthrough: [
+          { lines: [1, 5], note: "64 random weights: two blocks of 32." },
+          { lines: [7, 14], note: "The 8-bit block. Packing writes a 2-byte float scale and 32 signed bytes. Unpacking reads the scale and multiplies it back." },
+          { lines: [16, 26], note: "The 4-bit block. Each weight becomes a number from 1 to 15, and two of them share one byte: one in the low half, one in the high half." },
+          { lines: [28, 34], note: "Pack both blocks, unpack them, and report bytes per block, bits per weight and the round-trip error." }
+        ] },
+        { type: "p", text: "The byte counts match the lesson exactly: 34 bytes and 8.5 bits per weight for the 8-bit block, 18 bytes and 4.5 bits per weight for the 4-bit one. The 4-bit error is about 16 times larger, because its grid has 15 levels instead of 255. Now change it:" },
+        { type: "list", items: [
+          "Set `BLOCK = 16`. Predict the bytes per block and the bits per weight for both formats before you run it.",
+          "Add `weights[5] = 3.0` right after `weights` is created, and print the mean error of each block separately. Predict which block gets worse and which is untouched.",
+          "Store the scale as a 32-bit float: use `np.float32` for the scale, `\"<f\"` in `struct`, and `offset=4`. Predict the new bits per weight. Is the extra precision of the scale worth it?"
+        ] },
+        { type: "check", question: "We add one more metadata key to tiny.gguf, and its entry takes 30 bytes. At which byte does the tensor data start now?", answer: "At byte 256. The part before the padding grows from 205 to 235 bytes, and the next multiple of 32 after 235 is 256. The padding is not a fixed amount: it is whatever is needed to reach the boundary, here 21 bytes instead of 19." },
+        { type: "check", question: "An older reader meets a metadata key it has never heard of. What in the layout lets it skip that entry and still find the next one?", answer: "The key is a string that starts with its own length, and it is followed by a value type. The type tells the reader how big the value is, or, for a string, that a length comes first. So the reader can compute where the entry ends without knowing what the key means." }
+      ]
     },
   ],
   quiz: [

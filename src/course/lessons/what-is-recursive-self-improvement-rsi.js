@@ -1,6 +1,6 @@
 export default {
   id: "what-is-recursive-self-improvement-rsi",
-  minutes: 21,
+  minutes: 26,
   hook: "What happens if an AI gets good enough at AI research to improve itself, and the improved version is even better at improving itself?",
   summary: "Recursive self-improvement (RSI) is a loop in which an AI system improves its own capabilities, and the improved system then makes the next improvement, and so on. Whether this speeds up, keeps a steady pace or fizzles depends on how much each gain makes the next gain easier, and on bottlenecks such as compute, data and reliable evaluation. Partial versions exist today (self-play, self-generated training data, AI agents that improve code and algorithms), while full, open-ended RSI remains hypothetical and is a central topic in AI safety.",
   sections: [
@@ -171,7 +171,80 @@ after 20 rounds: skill=1.126, kept=9/20, of which secretly worse=3`, walkthrough
           ["Status in 2026", "Standard practice", "Partial, bounded examples"]
         ], verdict: "Normal training improves a model; RSI improves the improver. Today we see bounded pieces of RSI, always anchored by strong evaluators and human oversight." }
       ]
-    }
+    },
+    {
+      id: "common-mistakes",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Every self-improvement loop, from a simple prompt optimiser to a self-editing agent, tends to fail in the same few ways. None of them needs an intelligence explosion. They show up in small, everyday loops, and each one has a cheap test." },
+        { type: "table", caption: "Failure modes of an improvement loop and how to check for them", head: ["Failure", "What it looks like", "A cheap check"], rows: [
+          ["Chasing noise", "Many changes are accepted, each by a tiny margin", "Re-run the old and the new version several times. If their scores overlap, the “gain” is noise"],
+          ["Overfitting the test", "The score on the loop's own benchmark climbs, but results elsewhere stay flat", "Keep a second test set the loop never sees and compare it now and then"],
+          ["Gaming the evaluator", "Big score jumps from odd changes, such as editing test files or special-casing inputs", "Read the actual changes, not only the score. Keep the evaluator outside the system's reach"],
+          ["Feeding on its own output", "Outputs get more uniform and rare cases disappear round after round", "Mix in fresh real data and track diversity, not only average quality"],
+          ["No transfer", "Task scores rise but each round's gain gets smaller", "Plot the gain per round. Shrinking gains mean the improver itself is not getting better"]
+        ] },
+        { type: "p", text: "The second row deserves a worked example, because it happens even when nobody cheats. Suppose the system proposes **five** changes that all do nothing: the true score stays at 70. The benchmark is a little noisy, so the five measured scores come out as 68, 71, 69, 73 and 70 (illustrative numbers)." },
+        { type: "steps", title: "How picking the best creates a gain from nothing", items: [
+          { title: "Measure", text: "Five candidates, all truly at 70, score 68, 71, 69, 73 and 70. Their average is 70.2, as we would expect." },
+          { title: "Select", text: "The loop keeps the best one and reports 73: an apparent gain of 3 points." },
+          { title: "Re-test on fresh questions", text: "The kept version scores about 70 again. The gain was only the luckiest draw of the noise." },
+          { title: "Scale it up", text: "With 50 candidates instead of 5, the luckiest draw is luckier still. The more options a loop tries on the same test, the more it overstates its progress." },
+          { title: "The fix", text: "Choose on one test set and confirm on another. Only the confirmed number counts as progress." }
+        ] },
+        { type: "callout", tone: "tip", title: "A rule for any loop that keeps the best", text: "The score used to **choose** a winner is always too optimistic for that winner. This holds for hyper-parameter search, prompt tuning and model selection as much as for RSI. Report the score from data that played no part in the choice." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will test one idea: how much does a **steadier evaluator** help a self-improvement loop? The loop proposes small random changes and keeps one only if its measured score beats the current one. This time the verifier can average several benchmark runs before deciding. We run 2,000 rounds with 1, 4, 16 and 64 runs per measurement and count how often the verifier was fooled." },
+        { type: "code", lang: "python", title: "practice_verifier_strength.py", code: `import random
+
+NOISE = 0.05      # how much one benchmark run wobbles around the true skill
+CHANGE = 0.02     # typical size of one proposed self-modification
+
+def measure(skill, repeats, rng):
+    """Average \`repeats\` noisy benchmark runs. More repeats = a steadier score."""
+    return sum(skill + rng.gauss(0, NOISE) for _ in range(repeats)) / repeats
+
+def self_improve(repeats, rounds=2000, seed=1):
+    rng = random.Random(seed)
+    skill, kept, worse = 1.0, 0, 0
+    for _ in range(rounds):
+        candidate = skill + rng.gauss(0, CHANGE)       # helps or hurts, 50/50
+        if measure(candidate, repeats, rng) > measure(skill, repeats, rng):
+            kept += 1
+            worse += candidate < skill                 # the verifier was fooled
+            skill = candidate
+    return skill, kept, worse
+
+print("repeats  kept  secretly worse  final skill  benchmark runs")
+for repeats in (1, 4, 16, 64):
+    skill, kept, worse = self_improve(repeats)
+    runs = 2000 * 2 * repeats                          # cost of all the checking
+    print(f"{repeats:7d}  {kept:4d}  {worse:8d} ({worse / kept:4.0%})  "
+          f"{skill:11.2f}  {runs:14,d}")`, output: `repeats  kept  secretly worse  final skill  benchmark runs
+      1  1005       402 ( 40%)         5.84           4,000
+      4   993       369 ( 37%)         8.20          16,000
+     16  1028       227 ( 22%)        13.18          64,000
+     64  1013       118 ( 12%)        16.79         256,000`, walkthrough: [
+          { lines: [3, 4], note: "Two toy settings. One benchmark run wobbles by 0.05, which is larger than a typical change of 0.02. Real gains are hidden under the noise." },
+          { lines: [6, 8], note: "The verifier: average several noisy runs. More runs give a steadier score, at a higher cost." },
+          { lines: [10, 19], note: "The loop: propose a change that helps or hurts with equal chance, keep it only if it measures better, and count the kept changes that were secretly worse." },
+          { lines: [22, 26], note: "Run the same loop with four verifier strengths and print what was kept, how often the verifier was fooled, the final true skill, and the total number of benchmark runs spent." }
+        ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Make the proposals bigger: change `CHANGE` from `0.02` to `0.2`. Predict what happens to the “secretly worse” share for 1 repeat, and why big changes are easier to verify.",
+          "Make the proposals mostly harmful: change `rng.gauss(0, CHANGE)` to `rng.gauss(-0.01, CHANGE)`. Predict whether the 1-repeat loop still ends above 1.0, and whether the 64-repeat loop does.",
+          "Make the benchmark noisier: change `NOISE` from `0.05` to `0.2`. Predict which rows now look alike, and how many repeats would be needed to get back the old 16-repeat behaviour. (Hint: averaging n runs divides the noise by √n.)"
+        ] },
+        { type: "check", question: "Going from 1 to 64 repeats cuts the share of secretly worse changes from 40% to 12%, and the final skill rises from 5.84 to 16.79. What did that cost, and what does it say about the speed limit of self-improvement?", answer: "It cost 64 times more benchmark runs: 256,000 instead of 4,000. Averaging n runs only shrinks the noise by √n, so each further cut in errors gets more expensive. In this toy the proposals are equally good in every row; only the checking differs. So the pace of the loop is set by how well and how cheaply it can verify, not by how fast it can propose. That is one of the bottlenecks sceptics point to." },
+        { type: "check", question: "With a single run per measurement, 40% of kept changes were secretly worse, yet skill still rose from 1.0 to 5.84. Why does the loop still make progress, and why should that not reassure us about real systems?", answer: "A better candidate is still more likely to pass than a worse one, and a clearly bad change rarely beats the noise, so on average the kept changes add up to a gain. But the toy assumes honest, unbiased noise and a single number for “better”. A real evaluator can be gamed or can miss whole kinds of harm. Then its errors all lean the same way and do not average out, and a loop that accepts many unnoticed regressions can drift somewhere we did not intend while its score keeps rising." }
+      ]
+    },
   ],
   quiz: [
     { q: "What makes self-improvement “recursive”?", options: ["The model is retrained on more data every year by its developers", "The improved system performs the next improvement itself", "The model calls itself as a function inside its own code", "The model's source code is written using recursion"], answer: 1, explain: "Recursion here means the output of each round (a better system) becomes the tool for the next round." },

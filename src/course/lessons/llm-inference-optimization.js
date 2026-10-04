@@ -1,6 +1,6 @@
 export default {
   id: "llm-inference-optimization",
-  minutes: 22,
+  minutes: 27,
   hook: "Why does a chatbot that fits easily on one GPU suddenly run out of memory when eight people paste in long documents at the same time?",
   summary: "An LLM writes one token at a time, and to avoid redoing work it stores a Key and a Value vector for every past token in every layer: the KV cache. That cache grows with context length and with the number of users, and it quickly becomes the main memory cost of serving. This lesson shows where the memory goes and walks through the four big families of KV cache compression (quantization, token eviction, sharing keys and values across heads, and low-rank compression) and when to pick each.",
   sections: [
@@ -170,6 +170,79 @@ GQA 8 + INT8 combined        15.6 GB  ( 8.0x smaller)`, walkthrough: [
         { type: "callout", tone: "example", title: "Our support chatbot", text: "We pick a GQA model (8 KV heads), enable an FP8 KV cache in the serving engine, and skip eviction because customers often ask about details buried deep in their pasted logs. Memory for eight 32k conversations drops from about 125 GiB to about 16 GiB." },
         { type: "callout", tone: "warn", title: "Common mistake", text: "Judging compression by memory saved or by a short benchmark only. Quality losses from eviction and aggressive quantization often show up only on long-context retrieval tasks. Always evaluate on your real long prompts, including questions about the middle and start of the context." },
         { type: "p", text: "When not to bother: for short chats (a few hundred tokens) with few concurrent users, the cache is small compared with the weights. Weight quantization or a smaller model will save more than KV tricks." }
+      ]
+    },
+    {
+      id: "worked-example-users-per-gpu",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "So far we asked how big the cache is for a fixed number of users. In practice we ask the reverse question: **how many users fit on the GPU we already have?** Let us work it out by hand for our support chatbot on one GPU with 80 GiB of memory. We turn the size formula around: users = free memory ÷ cache per user." },
+        { type: "steps", title: "From GPU memory to a user count", items: [
+          { title: "Subtract the weights", text: "The FP16 weights take about 16 GiB. That leaves 80 − 16 = 64 GiB for KV caches. Real servers also keep some spare room for temporary buffers, so treat 64 GiB as an upper limit." },
+          { title: "Find the cost of one token", text: "Full multi-head FP16: 2 × 32 × 32 × 128 × 2 bytes = 512 KiB. With GQA (8 KV heads) it is 4 times smaller: 128 KiB. With GQA and a 1-byte cache it is 64 KiB." },
+          { title: "Find the cost of one user", text: "Each user holds 32,000 tokens. Full FP16: 512 KiB × 32,000 ≈ 15.6 GiB. GQA: 128 KiB × 32,000 ≈ 3.9 GiB. GQA with 1-byte numbers: ≈ 1.95 GiB." },
+          { title: "Divide and round down", text: "64 ÷ 15.6 → 4 users. 64 ÷ 3.9 → 16 users. 64 ÷ 1.95 → 32 users. We always round down: a user whose cache only half fits cannot be served." },
+          { title: "Remember the output tokens", text: "The 32,000 tokens must include the answer we are about to write. A 31,500-token prompt with a 500-token reply fills the whole slot by the end of the reply." }
+        ] },
+        { type: "table", caption: "Users that fit in 64 GiB of free memory at 32,000 tokens each (computed from the size formula)", head: ["Plan", "KV per token", "KV per user", "Users that fit"], rows: [
+          ["32 KV heads, FP16", "512 KiB", "≈ 15.6 GiB", "4"],
+          ["GQA 8 KV heads, FP16", "128 KiB", "≈ 3.9 GiB", "16"],
+          ["GQA 8 KV heads, 1 byte per number", "64 KiB", "≈ 1.95 GiB", "32"]
+        ] },
+        { type: "p", text: "Two things stand out. First, the user count moves in whole steps of the compression factor: 4, then 16, then 32. Second, the weights are a fixed cost that compression of the cache never touches. If the context were only 2,000 tokens, each GQA user would need about 0.24 GiB, and the 16 GiB of weights would be the larger part of the bill for the first 60 or so users." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a toy KV cache with a fixed row budget and run two eviction policies over the same ten tokens. The model is tiny and made up, so the byte counts are small, but the accounting is the same as in the real formula. Watch which tokens survive, and whether the order number `A17` is still there at the end." },
+        { type: "code", lang: "python", title: "practice_kv_eviction.py", code: `# Toy KV cache with a row budget: which tokens survive each eviction policy?
+LAYERS, KV_HEADS, HEAD_DIM, BYTES = 4, 2, 8, 2    # a tiny made-up model, FP16
+ROW_BYTES = 2 * LAYERS * KV_HEADS * HEAD_DIM * BYTES   # K + V for one token
+BUDGET = 6                                         # max tokens we may keep
+
+def sliding_window(cache, budget):
+    # keep only the most recent tokens
+    return cache[-budget:]
+
+def sinks_plus_window(cache, budget, sinks=2):
+    # keep the first few tokens (attention sinks) plus the most recent ones
+    if len(cache) <= budget:
+        return cache
+    return cache[:sinks] + cache[-(budget - sinks):]
+
+tokens = ["<s>", "Order", "A17", "is", "late", "and", "the", "box", "was", "wet"]
+print("bytes per cached token:", ROW_BYTES)
+for name, policy in [("sliding window", sliding_window),
+                     ("sinks + window", sinks_plus_window)]:
+    cache = []
+    for pos, tok in enumerate(tokens):
+        cache.append((pos, tok))           # decode step: append one row
+        cache = policy(cache, BUDGET)      # evict if we are over budget
+    kept = [tok for _, tok in cache]
+    print(f"{name}: kept {kept}")
+    print(f"  bytes = {len(cache) * ROW_BYTES}, "
+          f"order id still cached: {'A17' in kept}")
+print("no eviction: bytes =", len(tokens) * ROW_BYTES)`, output: `bytes per cached token: 256
+sliding window: kept ['late', 'and', 'the', 'box', 'was', 'wet']
+  bytes = 1536, order id still cached: False
+sinks + window: kept ['<s>', 'Order', 'the', 'box', 'was', 'wet']
+  bytes = 1536, order id still cached: False
+no eviction: bytes = 2560`, walkthrough: [
+          { lines: [1, 4], note: "A tiny model shape. One cached token costs 2 × layers × KV heads × head size × bytes = 256 bytes. We may keep at most 6 tokens." },
+          { lines: [6, 14], note: "Two policies. The first keeps the newest rows only. The second also protects the first two rows, the attention sinks." },
+          { lines: [16, 24], note: "The decode loop: append one row per token, then let the policy trim the cache back to the budget." },
+          { lines: [25, 28], note: "Report what survived, the bytes used, and whether the order number is still in the cache." }
+        ] },
+        { type: "p", text: "Both policies end at the same 1,536 bytes, and both have lost the order number. Now change it:" },
+        { type: "list", items: [
+          "Set `sinks=3` in `sinks_plus_window`. Predict first: which token is now protected, and which recent token do we lose to pay for it?",
+          "Set `BYTES = 1` and `BUDGET = 10` (a 1-byte cache with no eviction). Predict the final byte count and compare it with 1,536. Which plan is smaller here, and which one still holds `A17`?",
+          "Add twenty more words to `tokens` and run the original settings. Predict the bytes for each policy and for the no-eviction line. Which of the three numbers keeps growing?"
+        ] },
+        { type: "check", question: "In the practice run both eviction policies use exactly the same number of bytes. Why can they still give different answers in a real model?", answer: "Bytes measure how much we keep, not what we keep. The two policies hold different rows, so the new query attends over different keys and values. Equal memory does not mean equal information." },
+        { type: "check", question: "A 1-byte cache with no eviction beat the 6-row budget on memory for our ten tokens. Why does eviction still win for a stream that never ends?", answer: "A quantized cache is smaller per token but still grows by one row per token forever. A row budget puts a hard cap on the cache, so its size stops growing no matter how long the stream runs. Quantization changes the slope; eviction sets a ceiling." }
       ]
     }
   ],

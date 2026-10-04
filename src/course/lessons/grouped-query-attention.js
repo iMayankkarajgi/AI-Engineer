@@ -1,6 +1,6 @@
 export default {
   id: 'grouped-query-attention',
-  minutes: 20,
+  minutes: 25,
   hook: 'Why does a 70B model\'s memory for one long chat shrink from about 10 GB to about 1.25 GB just by letting attention heads share notes?',
   summary: 'During generation an LLM stores the keys and values of every past token (the KV cache), and with standard multi-head attention that cache becomes the main memory and speed bottleneck. Multi-Query Attention shares one key-value head across all query heads, which is fast but can hurt quality. Grouped-Query Attention sits in between: query heads are split into groups and each group shares one key-value head, keeping almost all the quality at a fraction of the memory.',
   sections: [
@@ -154,6 +154,69 @@ pooled key heads: (8, 5, 4) -> (2, 5, 4)`,
         ] },
         { type: 'p', text: 'The paper found mean-pooling worked better than picking one head or random initialization, because it preserves information from all original heads.' },
         { type: 'callout', tone: 'warn', title: 'Common mistake', text: 'Mean-pooling heads without any further training gives a noticeably worse model. The short uptraining phase is not optional. Also, choosing too few KV heads (approaching MQA) to save memory can quietly cost quality on long-context tasks, so evaluate before shipping.' },
+      ],
+    },
+    {
+      id: 'parameter-and-memory-math',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: "GQA changes the shape of two weight matrices and nothing else. Let us count with a small layer: `d_model = 512` and 8 query heads, so `d_head = 64`. We ignore bias terms." },
+        { type: 'table', caption: "Attention weights in one layer (d_model 512, 8 query heads, d_head 64)", head: ['Matrix', 'MHA (8 KV heads)', 'GQA (2 KV heads)', 'MQA (1 KV head)'], rows: [
+          ['Query projection', '512 × 512 = 262,144', '262,144', '262,144'],
+          ['Key projection', '512 × 512 = 262,144', '512 × 128 = 65,536', '512 × 64 = 32,768'],
+          ['Value projection', '512 × 512 = 262,144', '512 × 128 = 65,536', '512 × 64 = 32,768'],
+          ['Output projection', '262,144', '262,144', '262,144'],
+          ['Total', '1,048,576', '655,360', '589,824'],
+        ] },
+        { type: 'p', text: "We can read the table in two ways. First, weights: GQA with 2 KV heads removes 393,216 of 1,048,576 attention weights in this layer, about 37%. Second, cache: each token now stores 2 key vectors and 2 value vectors instead of 8 of each, a 4× cut. The weight saving happens once. The cache saving repeats for every token of every chat, which is why it matters far more when serving." },
+        { type: 'list', items: [
+          "**H must divide evenly by G.** 8 query heads with 3 KV heads cannot form equal groups, so the head mapping breaks.",
+          "**Query heads in a group are not copies.** They share keys and values, but each keeps its own query projection, so each can focus on different tokens.",
+          "**Use KV heads in the cache formula.** Plugging the number of query heads into the formula for a GQA model overstates the cache by a factor of H / G.",
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will do two small things by hand. First we print which KV head each query head reads for different group counts. Then we turn the cache formula into a serving question: how many chats fit into a fixed amount of GPU memory?" },
+        { type: 'code', lang: 'python', title: 'practice_gqa_budget.py', code: `# Part 1: which KV head does each query head read?
+H = 8                                    # query heads
+for G in [8, 4, 2, 1]:                   # KV heads: MHA, GQA-4, GQA-2, MQA
+    group = H // G                       # query heads per KV head
+    mapping = [h // group for h in range(H)]
+    print(f"G={G}: query head -> KV head {mapping}")
+
+# Part 2: how many chats fit in a fixed cache budget?
+# Illustrative small model: 24 layers, 16 query heads, d_head 64, FP16
+layers, d_head, nbytes = 24, 64, 2
+budget_gib, chat_tokens = 8, 4096        # memory left for caches, tokens per chat
+for G in [16, 4, 1]:
+    per_token = 2 * layers * G * d_head * nbytes       # keys + values, in bytes
+    per_chat_gib = per_token * chat_tokens / 2**30
+    chats = int(budget_gib / per_chat_gib)
+    print(f"G={G:>2}: {per_token / 1024:4.0f} KiB/token, {per_chat_gib:.3f} GiB/chat, "
+          f"{chats:>3} chats fit in {budget_gib} GiB")`, output: `G=8: query head -> KV head [0, 1, 2, 3, 4, 5, 6, 7]
+G=4: query head -> KV head [0, 0, 1, 1, 2, 2, 3, 3]
+G=2: query head -> KV head [0, 0, 0, 0, 1, 1, 1, 1]
+G=1: query head -> KV head [0, 0, 0, 0, 0, 0, 0, 0]
+G=16:   96 KiB/token, 0.375 GiB/chat,  21 chats fit in 8 GiB
+G= 4:   24 KiB/token, 0.094 GiB/chat,  85 chats fit in 8 GiB
+G= 1:    6 KiB/token, 0.023 GiB/chat, 341 chats fit in 8 GiB`,
+          walkthrough: [
+            { lines: [1, 6], note: "The whole of GQA's bookkeeping is one integer division. With 8 query heads and G KV heads, query head h reads KV head h // (8 // G)." },
+            { lines: [8, 11], note: "An illustrative small model and a serving budget: 8 GiB of GPU memory left for KV caches, and chats of 4,096 tokens." },
+            { lines: [12, 17], note: "Apply the cache formula for 16, 4 and 1 KV heads. Going from 16 to 4 KV heads lets 85 chats fit instead of 21, on the same hardware." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `H = 12` and loop over `[12, 6, 4, 3, 1]`. Predict the mapping for `G = 4` before running. Then add `5` to the list and explain the odd result.",
+          "Double `chat_tokens` to `8192`. Predict the new number of chats for each G without running the code.",
+          "Set `nbytes = 1`, as if the cache were stored in 8 bits (illustrative). Predict which gives more chats: halving the bytes, or going from 16 to 4 KV heads.",
+        ] },
+        { type: 'check', question: "With H = 8 and G = 2, query heads 0 to 3 read the same keys and values. Will they produce the same attention pattern?", answer: "No. Each query head still has its own query projection, so each asks a different question of the same keys and gets different scores. What they share is what can be matched and what is handed over, not what they look for. That is why GQA loses little quality." },
+        { type: 'check', question: "In the small layer of the table, GQA with 2 KV heads removes about 37% of the attention weights and cuts the KV cache 4 times. Which saving matters more for serving long chats, and why?", answer: "The cache saving. Weights are stored once, no matter how many users or tokens there are. The cache is paid again for every token of every active chat, so a 4× cut there multiplies across the whole load, as the 21 versus 85 chats in the script show." },
       ],
     },
     {

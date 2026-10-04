@@ -1,6 +1,6 @@
 export default {
   id: "reflection-agent",
-  minutes: 18,
+  minutes: 23,
   hook: "Good writers rarely publish their first draft; can an agent improve its own work by reviewing it before handing it over?",
   summary: "A Reflection agent works in a generate → critique → revise loop: it produces a draft, a critic examines the draft against the goal and points out concrete problems, and the agent revises using that feedback, repeating until the critic is satisfied or a round limit is reached. Reflection works best when the critique is grounded in something real, such as test results, a checklist or a tool, because a model judging its own work without outside evidence often misses its own mistakes.",
   sections: [
@@ -178,6 +178,91 @@ def is_palindrome(s):
         { type: "callout", tone: "example", title: "Real-world use", text: "Coding agents run the test suite after an edit and revise until tests pass. Writing assistants check a draft against a style guide and a word limit. Data agents re-run a query to confirm totals before reporting. In each case the critic is grounded in something checkable." },
         { type: "p", text: "**When not to use it.** For simple lookups, short factual answers, or tasks with no clear quality criteria, reflection mostly adds cost and latency. It earns its keep when mistakes are costly and quality can be checked." },
         { type: "p", text: "**Quick summary.** A Reflection agent drafts, critiques and revises in a loop until the critic passes or a round limit is hit. It improves quality rather than gathering information, and pairs naturally with ReAct. Its effectiveness depends on the critic: specific, evidence-based critiques (tests, rubrics, tools) work; vague self-review often does not." }
+      ]
+    },
+    {
+      id: "worked-example-best-draft",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The palindrome run improved every round. That is the happy case. Let us walk through a run where a revision gets *worse*, and see how the stop rule and “keep the best draft” work together. The numbers below are illustrative: a critic scores each draft from 0 to 5 against a five-item rubric." },
+        { type: "chart", kind: "line", title: "Rubric score per round", xLabel: "Round", yLabel: "Score (out of 5)",
+          series: [
+            { name: "Score of this round's draft", points: [[1, 2], [2, 4], [3, 3], [4, 4]] },
+            { name: "Best score so far", points: [[1, 2], [2, 4], [3, 4], [4, 4]] }
+          ],
+          caption: "Illustrative scores. Round 3 is a regression: the revision fixed one item and broke two that were fine. The best-so-far line never goes down." },
+        { type: "steps", title: "What the loop does each round",
+          items: [
+            { title: "Round 1: score 2", text: "First draft. It becomes the best so far. Three rubric items failed, so the critique lists those three." },
+            { title: "Round 2: score 4", text: "The revision fixes two items. 4 beats 2, so this draft replaces the best. One item still fails." },
+            { title: "Round 3: score 3", text: "The generator rewrites too much. The last item is fixed but two others break. 3 is lower than 4, so the best draft stays the round 2 draft." },
+            { title: "Round 4: score 4", text: "Back to 4, with a different item failing. It does not beat the best, so nothing changes." },
+            { title: "Stop", text: "Two rounds in a row brought no improvement. A “stop when scores stop improving” rule ends the loop here and returns the round 2 draft, with a note about the one item it still fails." }
+          ] },
+        { type: "p", text: "Compare three possible stop rules on this run. “Return the latest draft at round 3” would hand over a score of 3, worse than what we already had. “Run until the critic passes” might never end. “Keep the best and stop after two rounds without improvement” returns a 4 and spends a known amount." },
+        { type: "p", text: "The cost is easy to count. With an LLM critic, each round is one generator call and one critic call, so four rounds are 8 model calls. If we had stopped after round 2, it would have been 4 calls for the same final score. We could not have known that in advance, which is why the rule needs a little patience (two rounds, not one) but not much more." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a reflection loop for writing rather than code. The task is a one-line reply about a shop's refund rule. The critic is a rubric of four small checks, each a plain function. The generator's drafts are scripted, and one of them is a regression, so we can watch “keep the best draft” do its job." },
+        { type: "code", lang: "python", title: "practice_rubric_reflection.py", code: `# Reflection with a rubric critic, a round limit, and "keep the best draft".
+RUBRIC = {                                   # each check is a small function
+    "mentions refund":  lambda d: "refund" in d.lower(),
+    "mentions 14 days": lambda d: "14 days" in d,
+    "at most 12 words": lambda d: len(d.split()) <= 12,
+    "does not say sorry": lambda d: "sorry" not in d.lower(),
+}
+
+def critic(draft):
+    """Deterministic critic: returns (score, names of the failed checks)."""
+    failed = [name for name, check in RUBRIC.items() if not check(draft)]
+    return len(RUBRIC) - len(failed), failed
+
+DRAFTS = [   # what a generator LLM might write each round (round 3 gets worse)
+    "Sorry, we can give your money back if you ask us soon enough.",
+    "You can get a refund if you ask soon after buying.",
+    "Sorry for the trouble! You can get a full refund within 14 days of buying.",
+    "You can get a refund within 14 days of buying.",
+]
+
+def generator(round_, feedback):
+    """Scripted LLM. A real one would read the last draft and the feedback."""
+    return DRAFTS[round_ - 1]
+
+MAX_ROUNDS = 4
+best, best_score, feedback = None, -1, []
+for round_ in range(1, MAX_ROUNDS + 1):
+    draft = generator(round_, feedback)
+    score, feedback = critic(draft)
+    print(f"round {round_}: {score}/4  failed: {', '.join(feedback) or 'nothing'}")
+    if score > best_score:                   # keep the best, not the latest
+        best, best_score = draft, score
+    if not feedback:                         # critic passes -> stop early
+        break
+print(f"returned ({best_score}/4): {best}")
+print("generator calls:", round_, "| critic runs:", round_)`, output: `round 1: 0/4  failed: mentions refund, mentions 14 days, at most 12 words, does not say sorry
+round 2: 3/4  failed: mentions 14 days
+round 3: 2/4  failed: at most 12 words, does not say sorry
+round 4: 4/4  failed: nothing
+returned (4/4): You can get a refund within 14 days of buying.
+generator calls: 4 | critic runs: 4`,
+          walkthrough: [
+            { lines: [2, 7], note: "The rubric: four named checks. Each takes the draft and returns True or False. This is our definition of “good”, written before any draft exists." },
+            { lines: [9, 12], note: "The critic runs every check and returns a score plus the names of the failed checks. Those names are the feedback: specific and tied to a criterion." },
+            { lines: [14, 23], note: "Four scripted drafts. Round 3 adds the 14 days but brings back “sorry” and grows too long." },
+            { lines: [25, 36], note: "The loop: generate, critique, remember the best draft, and stop early when nothing fails. The final lines return the best draft, not simply the last one." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `MAX_ROUNDS = 3`. Predict which draft is returned and its score. Then change `if score > best_score` to `if True` (always keep the latest) and predict again.",
+          "Tighten the rubric: change the word limit to `<= 9`. Predict the score of each round and whether the loop ever stops early.",
+          "Add a fifth check, `\"ends with a full stop\": lambda d: d.endswith(\".\")`. The `/4` in the print lines is now wrong; fix it using `len(RUBRIC)`. Predict which rounds, if any, change their list of failed checks."
+        ] },
+        { type: "check", question: "Round 3's draft finally mentions 14 days, which was the only thing round 2 was missing. Why is its score still lower than round 2's?", answer: "Because the critic re-ran *every* check, not just the one that failed last time. The round 3 draft fixed “mentions 14 days” but broke two checks that had been passing: it is longer than 12 words and it says sorry. A critic that only re-checked the last complaint would have called round 3 a success and missed the regression." },
+        { type: "check", question: "This rubric can be checked by code. Name one quality of a good reply that these four checks cannot see, and say what kind of critic would be needed for it.", answer: "The checks see words and length, not meaning. A draft like “No refund within 14 days” would pass all four and say the opposite of the policy. Checking that the reply is *correct* and polite needs a critic that understands the text: an LLM critic given the policy as its source, or a human. A sound design uses the code checks first, because they are cheap and cannot be argued with, and a grounded LLM critic for what is left." }
       ]
     }
   ],

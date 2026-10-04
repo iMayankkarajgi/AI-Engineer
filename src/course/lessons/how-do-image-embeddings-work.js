@@ -1,6 +1,6 @@
 export default {
   id: "how-do-image-embeddings-work",
-  minutes: 18,
+  minutes: 23,
   hook: "Two photos of the same red mug can differ in almost every pixel — so how does a computer still know they show the same thing?",
   summary: "An image embedding is a short list of numbers (a vector) that captures what an image shows, produced by a trained neural network called an encoder. Similar-looking or similar-meaning images get vectors that point in similar directions, so we can compare images with simple math such as cosine similarity. Embeddings power image search, duplicate detection, recommendations, clustering and text-to-image search.",
   sections: [
@@ -189,6 +189,87 @@ nearest neighbours of ocean:
         ] },
         { type: "callout", tone: "warn", title: "Common pitfalls", text: "Mixing embeddings from two different models (their spaces are unrelated, so comparisons are meaningless); forgetting to apply the same pre-processing at query time as at indexing time; trusting a generic encoder on a very specialised domain (X-rays, circuit boards) without evaluation; and re-embedding only part of the archive after switching models." },
         { type: "p", text: "When not to use them: if we need *exact* matches (same file), a cryptographic hash is cheaper and certain; if we need to read text or numbers from an image, use OCR; and if decisions are high-stakes, embedding similarity should only shortlist candidates for a human or a stronger model to check." },
+      ],
+    },
+    {
+      id: "mistakes-and-diagnosis",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Embedding search fails quietly. There is no error message; the results are just a little worse, or strangely repetitive. So it pays to know the usual faults and the quick test for each. Start with the most common one: **forgetting to normalise**." },
+        { type: "p", text: "Take a query q = [1, 0] and two stored photos, A = [0.9, 0.1] and B = [3, 4]. By cosine, A wins easily: cos(q, A) = 0.9 / 0.906 ≈ 0.99, while cos(q, B) = 3 / 5 = 0.6. But the raw dot products are q·A = 0.9 and q·B = 3. Ranked by raw dot product, B comes first only because it is *long*. One long vector like this can show up near the top of every search." },
+        { type: "table", caption: "Symptoms, likely causes and quick tests", head: ["What we see", "Likely cause", "Quick test"], rows: [
+          ["The same few photos appear in almost every result list", "Vectors not normalised; long ones win on dot product", "Print the lengths of 100 stored vectors. They should all be ≈ 1.0"],
+          ["Results look random after a model upgrade", "Old and new model vectors mixed in one index", "Embed one stored photo again and compare with its stored vector. Cosine should be ≈ 1.0"],
+          ["Good results in tests, poor on live queries", "Different resize, crop or colour scaling at query time", "Run one image through both code paths and compare the two vectors"],
+          ["Everything scores between 0.6 and 0.9", "Normal for many encoders; scores are bunched", "Judge by rank and by gaps, not by the absolute number"],
+          ["Duplicates found, but so are unrelated photos", "Threshold copied from another model or guessed", "Score 50 known duplicate pairs and 50 known different pairs, then pick a value between the two groups"],
+        ] },
+        { type: "steps", title: "A four-step health check for a new index", items: [
+          { title: "Self-match", text: "Search with a photo that is already in the index. It must come back as result number one with a cosine very close to 1.0. If not, indexing and querying do not use the same pipeline." },
+          { title: "Length check", text: "Compute the L2 norm of a sample of stored vectors. Any value far from 1.0 means normalisation was skipped somewhere." },
+          { title: "Eyeball test", text: "Pick 20 real queries and look at the top 5 results for each. Wrong results that share a background or a lighting style tell us what the encoder is paying attention to." },
+          { title: "Labelled pairs", text: "Collect a small set of pairs we know match and pairs we know do not. Their two score ranges show where a safe threshold sits, or that no clean threshold exists." },
+        ] },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a miniature search index: 12 made-up photo embeddings for mugs, kettles and toasters. One stored vector is 'broken' (far too long). We search with a new mug photo, first carelessly and then properly, and we check the link between cosine and L2 distance with real numbers." },
+        { type: "code", lang: "python", title: "practice_mini_index.py", code: `import numpy as np
+rng = np.random.default_rng(11)
+
+# A tiny photo archive: 3 kinds of product, 4 photos each, 6-d embeddings.
+kinds = ["mug", "kettle", "toaster"]
+centres = rng.normal(size=(3, 6))                # one direction per kind
+labels = [k for k in kinds for _ in range(4)]
+vecs = np.repeat(centres, 4, axis=0) + rng.normal(0, 0.25, size=(12, 6))
+vecs[5] *= 6.0                                   # one kettle vector is very long
+
+def unit(v):
+    """L2-normalise: divide each row by its length."""
+    return v / np.linalg.norm(v, axis=-1, keepdims=True)
+
+query = centres[0] + rng.normal(0, 0.25, size=6) # a new mug photo
+
+def top3(scores):
+    best = np.argsort(-scores)[:3]
+    return [f"{labels[i]}#{i}" for i in best]
+
+raw_dot = vecs @ query                           # no normalisation
+cosine = unit(vecs) @ unit(query)                # normalise both sides first
+print("top 3 by raw dot product:", top3(raw_dot))
+print("top 3 by cosine         :", top3(cosine))
+
+# On unit vectors, L2 distance gives the same ranking as cosine.
+dist = np.linalg.norm(unit(vecs) - unit(query), axis=1)
+same = (np.argsort(dist) == np.argsort(-cosine)).all()
+print("L2 ranking equals cosine ranking:", same)
+print("check  d^2 = 2 - 2cos  on photo 0:",
+      round(dist[0] ** 2, 4), "vs", round(2 - 2 * cosine[0], 4))
+
+# A threshold for "is this a mug?" must come from our own scores.
+mug = cosine[:4]; other = cosine[4:]
+print(f"lowest mug score {mug.min():.2f} | highest non-mug score {other.max():.2f}")`, output: `top 3 by raw dot product: ['kettle#5', 'mug#3', 'mug#0']
+top 3 by cosine         : ['mug#2', 'mug#3', 'mug#0']
+L2 ranking equals cosine ranking: True
+check  d^2 = 2 - 2cos  on photo 0: 0.2435 vs 0.2435
+lowest mug score 0.74 | highest non-mug score 0.47`,
+          walkthrough: [
+            { lines: [5, 9], note: "Each product kind gets a random centre; its four photos are that centre plus small noise. Then we scale photo 5, a kettle, by 6 to imitate one vector that escaped normalisation." },
+            { lines: [21, 24], note: "The same search done two ways. With raw dot products the long kettle vector takes first place. After normalising both sides, the top three are all mugs." },
+            { lines: [27, 31], note: "On unit vectors, sorting by smallest L2 distance gives the same order as sorting by largest cosine, and d² = 2 − 2·cos holds to four decimals." },
+            { lines: [34, 35], note: "The four mug photos score at least 0.74; nothing else scores above 0.47. Any threshold in that gap separates them cleanly, for this data and this 'encoder' only." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Change the noise in the `vecs` line from `0.25` to `1.0`. Predict what happens to the gap between the lowest mug score and the highest non-mug score.",
+          "Change `vecs[5] *= 6.0` to `vecs[5] *= 0.01` (a very short vector). Predict whether the raw dot product ranking is now correct, and whether the cosine ranking changes at all.",
+          "Replace `query` with `(centres[0] + centres[1]) / 2`, a photo showing a mug next to a kettle. Predict which kinds appear in the cosine top 3.",
+        ] },
+        { type: "check", question: "All stored vectors are unit length, but we forget to normalise the query. We rank by dot product. Is the ranking wrong?", answer: "No, the ranking is still right. A longer query multiplies every score by the same number, so the order does not change. What breaks is the meaning of the scores: they are no longer cosines, so any threshold such as 'above 0.8 is a duplicate' stops working. The dangerous case is unnormalised *stored* vectors, because each one is scaled differently." },
+        { type: "check", question: "In the run above the lowest mug score was 0.74 and the highest non-mug score was 0.47. We set the threshold at 0.6 and then swap in a different encoder. Can we keep 0.6?", answer: "Not safely. The gap between 0.47 and 0.74 belongs to this encoder and this data. Another model may bunch all its scores between 0.2 and 0.4, or between 0.8 and 0.95. We must score known matching and non-matching pairs again and pick a new threshold." },
       ],
     },
     {

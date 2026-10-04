@@ -1,6 +1,6 @@
 export default {
   id: 'scaling-dot-product-attention',
-  minutes: 20,
+  minutes: 25,
   hook: 'Why does the attention formula divide by √dₖ, and not by dₖ, or 2, or nothing at all? A short piece of probability gives the exact answer.',
   summary: 'A dot product of two dₖ-long vectors with random, unit-variance entries has variance dₖ, so its typical size grows like √dₖ. Large scores push softmax into a near one-hot output where gradients almost vanish and learning stalls. Dividing by √dₖ brings the variance back to 1 for any vector width, which keeps softmax soft and trainable.',
   sections: [
@@ -160,6 +160,78 @@ largest gradient entry (scaled): 0.2446`,
             { lines: [26, 30], note: 'The softmax Jacobian measures how much gradient reaches the scores. Raw: about 0 (no learning signal). Scaled: about 0.24 (healthy).' },
           ] },
         { type: 'check', question: 'From the output, if dₖ were 4096, roughly what variance would raw q·k have, and what would dividing by √4096 = 64 give?', answer: 'About 4096 (std about 64) raw, and about 1 after scaling. The pattern in the table continues: variance ≈ dₖ before scaling and ≈ 1 after.' },
+      ],
+    },
+    {
+      id: "spotting-scale-bugs",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "A wrong scale never crashes. The code runs, the shapes are right, and the model simply learns badly. So we need a way to *measure* the scale. The handiest number is the standard deviation of the scaled scores at the start of training. If everything is set up as the proof assumes, it should be close to 1." },
+        { type: "table", caption: "Worked numbers for a model with d_model = 4,096 and 32 heads, so dₖ = 128 and √dₖ ≈ 11.3. All values follow from Var(X / c) = Var(X) / c².", head: ["Mistake", "What we divide by", "Score std we would measure", "What the attention maps look like"], rows: [
+          ["None (correct)", "√128 ≈ 11.3", "≈ 1", "Soft, with clear favourites"],
+          ["No scaling", "1", "≈ 11.3", "Almost one-hot"],
+          ["Used √d_model", "√4,096 = 64", "≈ 0.18", "Nearly flat"],
+          ["Scaled twice", "√128 × √128 = 128", "≈ 0.09", "Flat"],
+          ["Entries have std 2, not 1", "√128 ≈ 11.3", "≈ 4", "Too sharp, even with correct scaling"],
+        ] },
+        { type: "p", text: "The last row is the one people forget. The proof assumed entries with variance 1. If query and key entries each have standard deviation 2, one product qᵢkᵢ has variance 2² × 2² = 16, the dot product has variance 16·dₖ, and after dividing by √dₖ the standard deviation is still 4. The √dₖ factor removes the effect of *width*. It does nothing about the *size* of the entries." },
+        { type: "steps", title: "A quick diagnosis routine", items: [
+          { title: "Measure", text: "Take one batch at initialisation and compute the standard deviation of the scores right before softmax, for one head." },
+          { title: "Near 1?", text: "Then the scale is fine. Look elsewhere for the problem." },
+          { title: "Close to √dₖ?", text: "The scaling is missing. Close to 1/√dₖ? It is applied twice, once by hand and once inside a library call." },
+          { title: "Off by √(number of heads)?", text: "The full model width was used instead of the per-head width." },
+          { title: "Some other factor?", text: "Check the entries themselves. Print the standard deviation of Q and K. If they are not near 1, look at the weight initialisation and at whether the input was normalised." },
+        ] },
+        { type: "viz", name: "temperature", caption: "Dividing scores before softmax is the same move as temperature. Drag the slider: a low value acts like missing scaling (one bar takes all), a high value acts like dividing too much (all bars level out)." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson's code *sampled* random vectors, so its variances were close to dₖ but never exact. We will now get the exact answer with no randomness at all. We let every entry be +1 or −1, list every possible pair of vectors, and compute the variance of the dot product over the full list." },
+        { type: "code", lang: "python", title: "practice_exact_variance.py", code: `import itertools
+import math
+from collections import Counter
+
+def all_scores(d_k):
+    # Every entry of q and k is +1 or -1 (mean 0, variance 1).
+    # Instead of sampling, list EVERY possible pair of vectors.
+    signs = list(itertools.product([-1, 1], repeat=d_k))
+    return [sum(a * b for a, b in zip(q, k)) for q in signs for k in signs]
+
+def variance(xs):
+    mean = sum(xs) / len(xs)
+    return sum((x - mean) ** 2 for x in xs) / len(xs)
+
+# The full distribution for d_k = 2: which scores can happen, and how often?
+print("d_k = 2 scores:", sorted(Counter(all_scores(2)).items()))
+
+print("d_k  cases   raw  /sqrt(d_k)   /d_k")
+for d_k in [1, 2, 4, 6]:
+    raw = all_scores(d_k)
+    by_sqrt = [s / math.sqrt(d_k) for s in raw]
+    by_dk = [s / d_k for s in raw]
+    print(f"{d_k:<4} {len(raw):<6} {variance(raw):4.1f}  {variance(by_sqrt):9.2f}  {variance(by_dk):6.3f}")`, output: `d_k = 2 scores: [(-2, 4), (0, 8), (2, 4)]
+d_k  cases   raw  /sqrt(d_k)   /d_k
+1    4       1.0       1.00   1.000
+2    16      2.0       1.00   0.500
+4    256     4.0       1.00   0.250
+6    4096    6.0       1.00   0.167`,
+          walkthrough: [
+            { lines: [5, 9], note: "A fair +1/−1 entry has mean 0 and variance 1, exactly what the proof assumes. `itertools.product` lists every possible vector, and we take the dot product of every query with every key." },
+            { lines: [11, 13], note: "Plain variance: the average squared distance from the mean." },
+            { lines: [15, 16], note: "For dₖ = 2 there are 16 cases. The score is −2 in 4 of them, 0 in 8 and +2 in 4." },
+            { lines: [18, 23], note: "For each width, the variance with no scaling, with √dₖ and with dₖ. Raw equals dₖ exactly, √dₖ gives exactly 1, and dividing by dₖ shrinks towards 0." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Add `8` to the list of widths. Predict all four numbers in the new row before running (it takes a moment: count the cases first).",
+          "Change the entries from `[-1, 1]` to `[-2, 2]`. Predict the raw variance for `d_k = 2` and the value in the `/sqrt(d_k)` column.",
+          "Replace `math.sqrt(d_k)` with `d_k ** 0.25`. Predict whether that column now grows, shrinks or stays at 1 as `d_k` rises.",
+        ] },
+        { type: "check", question: "For dₖ = 2 the scores are −2 (4 cases), 0 (8 cases) and +2 (4 cases). Work out the variance from these counts. Why is 0 the most common score?", answer: "The mean is 0, so the variance is the average square: (4 × 4 + 8 × 0 + 4 × 4) / 16 = 32 / 16 = 2, which equals dₖ. A score of 0 happens when the two terms have opposite signs and cancel, and that is half of all cases. Cancelling is common, but it is never complete on average, so the spread still grows as more terms are added." },
+        { type: "check", question: "A teammate uses the correct √dₖ, measures the standard deviation of the scaled scores at initialisation, and gets about 4 instead of 1. What should they check next?", answer: "The size of the query and key entries. The √dₖ factor assumes each entry has variance about 1. A score std of 4 fits entries with standard deviation near 2 (2 × 2 = 4). They should print the std of Q and K, then look at the weight initialisation and at whether the input to the attention layer was normalised." },
       ],
     },
     {

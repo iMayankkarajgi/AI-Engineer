@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-eagle',
-  minutes: 18,
+  minutes: 23,
   hook: 'Why would guessing a model\'s hidden thoughts be easier than guessing its next word, and how does that make generation three times faster?',
   summary: 'EAGLE is a speculative decoding method whose tiny draft network predicts the target model\'s next internal feature vector (its top-layer hidden state) instead of the next token, and feeds back the token that was actually sampled to remove ambiguity. Its guesses are accepted far more often than a small separate model\'s, so the big model can confirm several tokens per pass with no change in output. EAGLE-2 adds dynamic draft trees and EAGLE-3 scales the idea further; all three are now built into major serving engines.',
   sections: [
@@ -156,6 +156,93 @@ after sampling 'always': next feature = [-0.28 -0.43 -0.62 -0.55]`, walkthrough:
         { type: 'callout', tone: 'example', title: 'Real-world use', text: 'For our 70B coding assistant, we would download (or train) an EAGLE-3 draft head for the exact model version, enable it in vLLM or SGLang, and measure latency at our real batch sizes. Code is predictable text, so acceptance rates tend to be high and users notice faster streaming.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes and limits', text: 'A draft head is tied to one exact target model: if you fine-tune the target, retrain or re-fit the drafter, or acceptance collapses. Speedups are largest at small batch sizes; on a saturated GPU serving hundreds of requests, verifying big trees costs real compute and can even slow things down. Measure with your own prompts, since acceptance on chat, code and math can differ a lot.' },
       ],
+    },
+    {
+      id: "dynamic-tree-by-hand",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The dynamic tree is easier to believe once we grow one by hand. Our coding assistant has written `for i in`. The drafter's confidences below are made up for illustration. We expand the top 2 nodes at each depth, go 3 levels deep, and may keep 5 nodes in the final tree." },
+        { type: "steps", title: "Growing and pruning one tree", items: [
+          { title: "Depth 1", text: "The drafter offers A with confidence 0.90 and B with 0.08. Their path values are the same numbers, because the path has one step." },
+          { title: "Depth 2", text: "We expand both. Under A: C with 0.70 and D with 0.20, so the path values are 0.90 × 0.70 = 0.63 and 0.90 × 0.20 = 0.18. Under B: E with 0.60 and F with 0.30, giving 0.048 and 0.024." },
+          { title: "Pick what to expand next", text: "The top 2 path values at depth 2 are A→C (0.63) and A→D (0.18). The nodes under B are not expanded, even though E looked confident on its own (0.60)." },
+          { title: "Depth 3", text: "Under A→C: G with 0.80 → 0.504, and H with 0.10 → 0.063. Under A→D: I with 0.50 → 0.09, and J with 0.40 → 0.072." },
+          { title: "Rerank all ten nodes", text: "Sorted by path value: A 0.90, A→C 0.63, A→C→G 0.504, A→D 0.18, A→D→I 0.09, then B 0.08 and the rest. With a budget of 5 we keep the first five." }
+        ] },
+        { type: "table", caption: "All ten drafted nodes, ranked by path value (illustrative numbers)", head: ["Node", "Own confidence", "Path value", "Kept?"], rows: [
+          ["A", "0.90", "0.90", "Yes"],
+          ["A→C", "0.70", "0.63", "Yes"],
+          ["A→C→G", "0.80", "0.504", "Yes"],
+          ["A→D", "0.20", "0.18", "Yes"],
+          ["A→D→I", "0.50", "0.09", "Yes"],
+          ["B", "0.08", "0.08", "No"],
+          ["A→D→J", "0.40", "0.072", "No"],
+          ["A→C→H", "0.10", "0.063", "No"],
+          ["B→E", "0.60", "0.048", "No"],
+          ["B→F", "0.30", "0.024", "No"]
+        ] },
+        { type: "p", text: "Two things to notice. B→E has a higher own confidence than A→D, yet it ranks far lower, because a node is only useful if the whole path to it is accepted. And the kept tree is deep and narrow: it follows A three levels down and drops B completely. That is the shape we want when the first token is nearly certain." },
+        { type: "p", text: "The kept set is always a proper tree. A confidence is never above 1, so a parent's path value is never below its child's. If a child makes the cut, its parent does too." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will code the expand-and-rerank loop and run it in two contexts: a predictable one, where the drafter is 90% sure of its first guess, and an uncertain one, where its confidence is spread over three guesses. The drafter is a toy that returns the same three confidences at every node. We print which nodes are kept and how deep they are." },
+        { type: "code", lang: "python", title: "practice_dynamic_tree.py", code: `# Growing a draft tree from path values, as the lesson describes for EAGLE-2.
+import heapq
+
+def guesses(sharp):
+    # Toy drafter: confidences of its top-3 next tokens (illustrative).
+    # sharp=True is a predictable context, sharp=False an uncertain one.
+    return [0.90, 0.06, 0.02] if sharp else [0.40, 0.30, 0.20]
+
+def build_tree(sharp, depth=3, expand=2, budget=6):
+    frontier = [((), 1.0)]              # (path, path value); () is the real context
+    nodes = []
+    for _ in range(depth):
+        best = heapq.nlargest(expand, frontier, key=lambda n: n[1])  # expand top few
+        frontier = []
+        for path, value in best:
+            for i, conf in enumerate(guesses(sharp)):
+                frontier.append((path + (i,), value * conf))  # multiply along the path
+        nodes += frontier
+    return heapq.nlargest(budget, nodes, key=lambda n: n[1])  # rerank, keep the best
+
+for name, sharp in [("predictable", True), ("uncertain", False)]:
+    kept = build_tree(sharp)
+    depths = sorted(len(path) for path, _ in kept)
+    print(f"{name}: node depths {depths}, "
+          f"expected accepted drafts {sum(v for _, v in kept):.2f}")
+    for path, value in kept:
+        print(f"   path {path}  value {value:.3f}")`, output: `predictable: node depths [1, 1, 2, 2, 2, 3], expected accepted drafts 2.61
+   path (0,)  value 0.900
+   path (0, 0)  value 0.810
+   path (0, 0, 0)  value 0.729
+   path (1,)  value 0.060
+   path (0, 1)  value 0.054
+   path (1, 0)  value 0.054
+uncertain: node depths [1, 1, 1, 2, 2, 2], expected accepted drafts 1.30
+   path (0,)  value 0.400
+   path (1,)  value 0.300
+   path (2,)  value 0.200
+   path (0, 0)  value 0.160
+   path (0, 1)  value 0.120
+   path (1, 0)  value 0.120`, walkthrough: [
+          { lines: [1, 7], note: "A toy drafter. In a predictable context one guess dominates. In an uncertain one, three guesses are all plausible." },
+          { lines: [9, 19], note: "Expand: at each depth take the nodes with the highest path values, add their children, and multiply confidences along the path. Rerank: keep the best nodes overall, up to the budget." },
+          { lines: [21, 27], note: "Build one tree per context. If confidences are good estimates of acceptance, the sum of the kept path values estimates how many drafted tokens will be accepted." }
+        ] },
+        { type: "p", text: "With the same budget of 6 nodes, the predictable context reaches depth 3 and expects about 2.6 accepted drafts. The uncertain context spends its nodes on three first guesses, never gets past depth 2, and expects about 1.3. Now change it:" },
+        { type: "list", items: [
+          "Set `budget=3`. Predict the shape of each tree before you run it: which one becomes a single chain, and which one becomes three siblings?",
+          "Set `expand=1`, so only the single best node is expanded at each depth. Predict what happens to the uncertain tree's expected accepted drafts, and why the predictable tree hardly changes.",
+          "Make the uncertain drafter even flatter: `[0.25, 0.25, 0.25]`. Predict the expected accepted drafts. Is a tree still worth verifying here?"
+        ] },
+        { type: "check", question: "In the worked example, node B→E has a confidence of 0.60 and node A→D only 0.20. Why does the tree keep A→D and drop B→E?", answer: "A drafted token only helps if every token before it on its path is accepted. B→E needs B first, and B is accepted only about 8% of the time, so its path value is 0.08 × 0.60 = 0.048. A→D needs A, which is accepted about 90% of the time: 0.90 × 0.20 = 0.18. The tree ranks by the chance of the whole path." },
+        { type: "check", question: "Suppose a drafter is badly over-confident: it reports 0.9 for tokens the target accepts only half the time. What happens to the tree, to the speed, and to the output?", answer: "The path values stay high, so the tree grows deep and narrow, like our predictable case. But the target rejects early on that single path, and there are few sibling nodes to fall back on, so each pass confirms fewer tokens and is slower than a wider tree would have been. The output does not change, because every token is still checked by the target. This is why the lesson stresses that the drafter is well calibrated." }
+      ]
     },
     {
       id: 'quick-summary',

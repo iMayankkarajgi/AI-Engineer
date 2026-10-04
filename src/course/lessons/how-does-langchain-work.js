@@ -1,6 +1,6 @@
 export default {
   id: "how-does-langchain-work",
-  minutes: 22,
+  minutes: 27,
   hook: "Every LLM app needs the same plumbing (prompts, model calls, parsing, memory, retrieval, tools), so why write it from scratch every time?",
   summary: "LangChain is an open-source framework (Python and JavaScript) that gives standard building blocks for LLM apps: models, prompt templates, output parsers, retrievers, memory helpers and tools, all sharing one interface so they can be snapped together into chains with the `|` operator. Under the hood a chain is just function composition: each component's output becomes the next one's input. We will see real LangChain code and then rebuild the core idea in 30 lines of plain Python.",
   sections: [
@@ -204,6 +204,66 @@ print(result["messages"][-1].content)`, walkthrough: [
           { lines: [9, 10], note: "Build an agent from a model id, a list of tools and a system prompt." },
           { lines: [11, 12], note: "Invoke with messages; the agent may call the tool, then answers. The last message is the reply." }
         ] }
+      ]
+    },
+    {
+      id: "follow-the-types",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "Most chain bugs are type bugs: one link hands the next link something it did not expect. The mini version from this lesson is small enough to trace by hand, so let us follow one value through it." },
+        { type: "table", caption: "The value at each link of `retriever | prompt | FakeLLM() | JsonParser()` for the input `\"kettle\"`", head: ["Link", "Receives", "Returns"], rows: [["retriever", "the string `kettle`", "a dict with `question` and `context`"], ["prompt", "that dict", "one filled-in prompt string"], ["FakeLLM", "the prompt string", "chatty text with JSON inside"], ["JsonParser", "the chatty text", "a Python dict"]] },
+        { type: "p", text: "Now let us break it on purpose, in our heads." },
+        { type: "table", caption: "Three ways to break the mini chain", head: ["Change", "What happens", "Why"], rows: [["Swap the last two links, so the parser comes before the model", "The parser fails: the prompt string has no `{` to find", "The parser was built for model text and received a prompt"], ["The retriever returns only the `question` key", "The template fails on the missing `context`", "The template has a blank that nothing filled"], ["Drop the parser", "No error at all. The caller gets a string and fails later, when it reads `eta_days`", "The chain ran fine; the type at its end is wrong"]] },
+        { type: "steps", title: "Finding the broken link", items: [{ title: "Run the first link alone", text: "Invoke the retriever by itself and look at the value and its type." }, { title: "Add one link at a time", text: "A chain is itself a Runnable, so `(retriever | prompt)` can be invoked too. Print what comes out." }, { title: "Stop at the first surprise", text: "The first link whose output is not what the next link expects is the bug. Everything after it is only a symptom." }] },
+        { type: "p", text: "The third row of the table is the dangerous one. A failure that raises an error is found at once. A wrong type that flows on quietly is found by a user." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build memory the way this lesson describes it: a wrapper around a chain that loads the stored history for a session before the call and saves the new messages after it. The chain is plain function composition, and the model is a scripted stand-in." },
+        { type: "code", lang: "python", title: "practice_session_memory.py", code: `# Memory as a wrapper: load history before the call, save new messages after.
+def pipe(*steps):
+    # Function composition: each step's output is the next step's input
+    def chain(x):
+        for step in steps:
+            x = step(x)
+        return x
+    return chain
+
+def prompt(variables):
+    lines = ["system: You are a shop assistant."] + variables["history"]
+    return lines + ["human: " + variables["question"]]
+
+def fake_llm(messages):            # stands in for a chat model call
+    seen = " ".join(messages).lower()
+    product = "kettle" if "kettle" in seen else "unknown product"
+    return f"ai: ({len(messages)} messages seen) You mean the {product}."
+
+chain = pipe(prompt, fake_llm)
+store = {}                         # session id -> list of past messages
+
+def with_history(chain, keep_last=4):
+    def invoke(question, session_id):
+        history = store.setdefault(session_id, [])
+        reply = chain({"history": history[-keep_last:], "question": question})
+        history += ["human: " + question, reply]      # save after the call
+        return reply
+    return invoke
+
+chat = with_history(chain)
+print(chat("Do you sell a kettle?", "alice"))
+print(chat("How much water does it hold?", "alice"))
+print(chat("How much water does it hold?", "bob"))
+print("stored:", {sid: len(msgs) for sid, msgs in store.items()})`, output: `ai: (2 messages seen) You mean the kettle.
+ai: (4 messages seen) You mean the kettle.
+ai: (2 messages seen) You mean the unknown product.
+stored: {'alice': 4, 'bob': 2}`, walkthrough: [{ lines: [2, 8], note: "`pipe` composes functions: the output of each step is the input of the next. It plays the role of `|`." }, { lines: [10, 17], note: "A prompt step that puts the history between the system line and the new question, and a fake model that reports how many messages it saw." }, { lines: [22, 28], note: "The memory wrapper: look up the session's history, pass the last few messages into the chain, then save the question and the reply." }, { lines: [30, 34], note: "Two sessions. Alice asks a follow-up that only makes sense with history; Bob asks the same question with none." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Set `keep_last=1`. Predict how many messages the model sees on Alice's second question, and whether it still names the product.", "Add two more questions from Alice. Predict the “messages seen” number for each. Where does it stop growing, and why?", "Give Bob the session id `\"alice\"`. Predict his reply. Why would this be a serious bug in a real shop?"] },
+        { type: "check", question: "Bob asked the same question as Alice and got “unknown product”. The model function is the same for both. What is different?", answer: "The input. Memory is stored per session id, and Bob's session has no earlier messages, so his prompt held only the system line and his question. The model has no state of its own. It seemed to remember the kettle for Alice only because the wrapper sent her earlier messages again. Change what the wrapper sends, and we change what the model appears to know." },
+        { type: "check", question: "`with_history` saves the new messages *after* the chain returns. Suppose the chain raises an error halfway. What ends up in the store, and is that the behaviour we want?", answer: "Nothing new is saved, because the line that extends the history is never reached. That is usually what we want: a question with no answer would leave the history unbalanced and could confuse the next call. The price is that the failed question is forgotten, so the app should show the error and let the user ask again." }
       ]
     },
     {

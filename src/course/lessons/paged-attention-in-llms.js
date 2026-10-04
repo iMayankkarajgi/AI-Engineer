@@ -1,6 +1,6 @@
 export default {
   id: "paged-attention-in-llms",
-  minutes: 21,
+  minutes: 26,
   hook: "Why could an LLM server with plenty of free GPU memory still refuse new users, and how did borrowing an idea from 1960s operating systems fix it?",
   summary: "Early LLM servers reserved one big contiguous chunk of GPU memory per request for its KV cache, sized for the longest possible answer, and wasted most of it. PagedAttention splits each request's KV cache into small fixed-size blocks that can live anywhere in memory, tracked by a block table, just like virtual memory pages in an operating system. Waste drops to a fraction of one block per request, more requests fit in a batch, and blocks can even be shared between requests.",
   sections: [
@@ -124,6 +124,87 @@ token 37 -> logical block 2, offset 5 -> physical block 308`, walkthrough: [
         { type: "callout", tone: "example", title: "Our support chatbot", text: "Every conversation starts with the same 1,600-token system prompt (100 blocks of 16). With 50 active users, contiguous storage would hold 50 copies; with shared blocks it holds one, freeing room for many more conversations." },
         { type: "check", question: "Four samples share a prompt whose last block holds 10 of 16 tokens. Sample A generates its first token. What happens?", answer: "The last block has reference count 4, so A gets a private copy of that block (copy-on-write), writes its token into slot 10 of the copy, and the original's count drops to 3. The full earlier blocks remain shared." },
         { type: "callout", tone: "warn", title: "Common misconceptions", text: "PagedAttention does not compress the KV cache or change the model's outputs: it stores exactly the same numbers with less waste. It also does not by itself move the cache to CPU memory; that is a separate technique (offloading/swapping), though vLLM can swap blocks out under memory pressure. When memory runs out, the server still has to queue or preempt requests." }
+      ]
+    },
+    {
+      id: "block-size-worked-example",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The lesson said block size is a trade-off. Let us put numbers on it. Take one request that ends at 600 tokens and try four block sizes. For each we count the blocks, which is also the number of block table entries, and the empty slots left in the last block." },
+        { type: "steps", title: "One 600-token request, four block sizes", items: [
+          { title: "Block size 1", text: "600 blocks and 0 wasted slots. No waste at all, but the table has 600 entries and the kernel must follow a pointer for every single token." },
+          { title: "Block size 16", text: "ceil(600 ÷ 16) = 38 blocks = 608 slots. 8 slots are empty. The table has 38 entries." },
+          { title: "Block size 64", text: "ceil(600 ÷ 64) = 10 blocks = 640 slots. 40 slots are empty." },
+          { title: "Block size 256", text: "ceil(600 ÷ 256) = 3 blocks = 768 slots. 168 slots are empty, which is 22% of what we allocated." },
+          { title: "Turn slots into bytes", text: "At 512 KiB per token, 8 empty slots cost 4 MiB and 168 empty slots cost 84 MiB. That is per request, so 100 requests with 256-token blocks could waste several GiB." }
+        ] },
+        { type: "table", caption: "A 600-token request under different block sizes (computed)", head: ["Block size", "Blocks (table entries)", "Slots allocated", "Empty slots", "Worst case empty"], rows: [
+          ["1", "600", "600", "0", "0"],
+          ["16", "38", "608", "8", "15"],
+          ["64", "10", "640", "40", "63"],
+          ["256", "3", "768", "168", "255"]
+        ] },
+        { type: "p", text: "The worst case is always one slot short of a full block, and on average a request wastes about half a block. So waste grows with block size, while table length and pointer-chasing shrink. A middle value keeps both small." },
+        { type: "p", text: "Paging also changes **how a server fails**. With contiguous reservation, a request is refused at the door if its full reservation does not fit. With paging, a request is admitted as soon as its prompt fits, and memory can run out later, in the middle of generation, when many requests ask for their next block at once. That is why a paged server still needs a policy for that moment: make new requests wait, or pause a running one and give its blocks to the others." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the block manager from the memory sharing section in about 35 lines: a free list, a reference count per block, on-demand allocation and copy-on-write. Blocks hold only 4 tokens so that we can follow every move by eye. Two samples, A and B, share one 6-token prompt." },
+        { type: "code", lang: "python", title: "practice_block_manager.py", code: `# A tiny paged KV block manager with reference counts and copy-on-write.
+BLOCK = 4                        # tokens per block (tiny, so we can see it)
+free = list(range(8))            # 8 physical blocks: 0..7
+refs = {}                        # physical block -> how many sequences use it
+fill = {}                        # physical block -> token slots already written
+
+def alloc():
+    b = free.pop(0)
+    refs[b], fill[b] = 1, 0
+    return b
+
+def append_token(table):         # table = one sequence's list of physical blocks
+    if not table or fill[table[-1]] == BLOCK:    # last block full: take a new one
+        table.append(alloc())
+    elif refs[table[-1]] > 1:                    # last block shared: copy-on-write
+        old, new = table[-1], alloc()
+        fill[new] = fill[old]                    # copy the slots written so far
+        refs[old] -= 1
+        table[-1] = new
+    fill[table[-1]] += 1
+
+def fork(table):                 # a second sequence shares every block
+    for b in table:
+        refs[b] += 1
+    return list(table)
+
+a = []
+for _ in range(6):               # a 6-token prompt needs 2 blocks
+    append_token(a)
+b = fork(a)
+print("after fork:", "A", a, "B", b, "refs", refs)
+append_token(a)                  # A writes into a shared block
+print("A writes  :", "A", a, "B", b, "refs", refs)
+append_token(b)                  # B is now the only owner of block 1
+print("B writes  :", "A", a, "B", b, "refs", refs)
+print("blocks in use:", len(refs), "| with two full copies:", 4)`, output: `after fork: A [0, 1] B [0, 1] refs {0: 2, 1: 2}
+A writes  : A [0, 2] B [0, 1] refs {0: 2, 1: 1, 2: 1}
+B writes  : A [0, 2] B [0, 1] refs {0: 2, 1: 1, 2: 1}
+blocks in use: 3 | with two full copies: 4`, walkthrough: [
+          { lines: [1, 10], note: "The state: a free list of 8 physical blocks, a reference count for each block in use, and how many slots of each block are written." },
+          { lines: [12, 20], note: "Appending one token. A full last block means we take a new block. A shared last block means we copy it first, then write into our private copy." },
+          { lines: [22, 25], note: "Forking copies only the block table and raises each block's reference count. No keys or values are copied." },
+          { lines: [27, 36], note: "Fill a 6-token prompt, fork it, then let each sample write one token and print the tables and counts." }
+        ] },
+        { type: "p", text: "After the fork both tables are `[0, 1]`. A's write copies block 1 into block 2. B's write copies nothing. Three blocks hold what two full copies would store in four. Now change it:" },
+        { type: "list", items: [
+          "Make the prompt 8 tokens long (`range(8)`), so its last block is full. Predict whether A's first write causes a copy, and which block A gets.",
+          "Add a third sample with `c = fork(a)` right after `b = fork(a)`, and let C write last. Predict the reference counts after all three writes, and how many copies happen in total.",
+          "Write a `release(table)` function that lowers each block's count and puts blocks that reach zero back on `free`. Release A at the end. Predict which blocks become free and which do not."
+        ] },
+        { type: "check", question: "In the practice run, block 1 was shared when A wrote, so A had to copy it. A moment later B wrote into block 1 with no copy. Why?", answer: "Copy-on-write depends on the reference count at the time of the write. When A moved to its private copy, block 1's count dropped from 2 to 1. B was then its only owner, so writing into it could not disturb anyone else." },
+        { type: "check", question: "Fifty chats share the 100 blocks of one system prompt. One chat ends. How many of those 100 blocks return to the free list?", answer: "None. Each shared block's reference count drops from 50 to 49, and a block is freed only when its count reaches zero. Only the blocks that belonged to that chat alone are freed." }
       ]
     }
   ],

@@ -1,6 +1,6 @@
 export default {
   id: "harness-engineering-in-ai",
-  minutes: 20,
+  minutes: 25,
   hook: "If two teams use the exact same model and one ships a reliable agent while the other ships a toy, what is actually different between them?",
   summary: "A model on its own only turns text into text. The harness is all the code around it: the instructions, tools, context, memory, loop, safety checks, verification and logs that turn that text engine into a working agent or a trustworthy evaluation. Harness engineering is the practice of designing that surrounding system on purpose, because in practice it decides most of the reliability we see.",
   sections: [
@@ -165,6 +165,69 @@ score = 80%`, walkthrough: [
         ] },
         { type: "callout", tone: "warn", title: "The common mistake", text: "Blaming the model and switching to a bigger one when the real bug is in the harness: a missing fact in the context, a vague tool description, an unchecked “done”. Before upgrading the model, read the trace of a failing case end to end. Most of the time the fix is a few lines of harness code." },
         { type: "p", text: "**When not to build a heavy harness:** a single summarisation or translation call does not need tools, loops or memory. Adding them adds latency and cost and new failure modes. Start with the smallest harness that meets the definition of done and grow it when real failures show where it is weak." }
+      ]
+    },
+    {
+      id: "reading-a-trace",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We keep saying “read the trace”. Here is what that looks like. A customer wrote “Where is order 42?” and our agent replied “I could not find that order.” The order exists. Below is the trace of that run, with illustrative numbers." },
+        { type: "table", caption: "One failing run, as logged by the harness", head: ["Step", "What happened", "Tokens", "Time"], rows: [["1. Assemble context", "System prompt + 10 messages + tool definitions", "1,850 in", "5 ms"], ["2. Model", "Asks for `get_order(order_id=\"#42\")`", "40 out", "900 ms"], ["3. Tool runner", "The order API answers `error: id must be a number`", "–", "120 ms"], ["4. Feed back", "The harness appends `Tool failed.`", "3 in", "1 ms"], ["5. Model", "Writes “I could not find that order.”", "25 out", "700 ms"]] },
+        { type: "steps", title: "Reading it from top to bottom", items: [{ title: "Was the fact available?", text: "Step 1 shows the customer's message, with “order 42”, in the context. Context assembly did its job." }, { title: "Was the decision sensible?", text: "Step 2 picked the right tool. Only the argument is off: `\"#42\"` instead of `42`." }, { title: "What did the harness do with the bad argument?", text: "Nothing. It passed the string straight to the API. There was no schema check." }, { title: "What did the model learn from the failure?", text: "Step 4 says only “Tool failed.” The real reason was thrown away, so the model could not correct itself." }, { title: "Name the fixes", text: "Validate arguments before running a tool, and feed the full error text back. Both are a few lines of harness code. A bigger model would have faced the same blank error message." }] },
+        { type: "p", text: "The habit to build: for each step, ask which harness component owned it and whether that component did its job. The first step where the answer is “no” is where we fix." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the tool-running part of an agent harness. A scripted model proposes tool calls, and some of them are bad. The harness validates each call, applies a permission rule, runs the real function, and lets the reply claim a return only if the return tool truly succeeded." },
+        { type: "code", lang: "python", title: "practice_tool_runner.py", code: `# A tiny agent harness: validate, permit, run, verify. The "model" is scripted.
+ORDERS = {42: {"item": "kettle", "price": 39}, 77: {"item": "sofa", "price": 450}}
+
+def get_order(order_id):    return ORDERS[order_id]
+def start_return(order_id): return {"ok": True, "label": f"RET-{order_id}"}
+
+TOOLS = {"get_order": get_order, "start_return": start_return}
+APPROVAL_OVER = 200                # policy: big refunds need a human
+
+def harness(tool_calls):
+    log, returned = [], False
+    for name, arg in tool_calls:
+        if name not in TOOLS:                               # unknown tool
+            log.append(f"{name}: REJECTED unknown tool"); continue
+        if not isinstance(arg, int) or arg not in ORDERS:   # validate arguments
+            log.append(f"{name}({arg!r}): REJECTED bad argument"); continue
+        if name == "start_return" and ORDERS[arg]["price"] > APPROVAL_OVER:
+            log.append(f"{name}({arg}): BLOCKED needs human approval"); continue
+        result = TOOLS[name](arg)                           # run the real function
+        returned = returned or (name == "start_return" and result["ok"])
+        log.append(f"{name}({arg}): ran -> {result}")
+    # Verification: only claim a return if the tool really succeeded
+    reply = "Your return is started." if returned else "I have passed this to a colleague."
+    return log, reply
+
+runs = {"kettle ticket": [("get_order", "42"), ("get_order", 42), ("start_return", 42)],
+        "sofa ticket":   [("get_order", 77), ("start_return", 77), ("delete_order", 77)]}
+for ticket, calls in runs.items():
+    log, reply = harness(calls)
+    print(ticket)
+    for line in log:
+        print("  ", line)
+    print("   reply:", reply)`, output: `kettle ticket
+   get_order('42'): REJECTED bad argument
+   get_order(42): ran -> {'item': 'kettle', 'price': 39}
+   start_return(42): ran -> {'ok': True, 'label': 'RET-42'}
+   reply: Your return is started.
+sofa ticket
+   get_order(77): ran -> {'item': 'sofa', 'price': 450}
+   start_return(77): BLOCKED needs human approval
+   delete_order: REJECTED unknown tool
+   reply: I have passed this to a colleague.`, walkthrough: [{ lines: [2, 8], note: "A tiny order database, two real tools, the tool registry and one policy: returns over 200 need a human." }, { lines: [13, 18], note: "Three checks before anything runs: is the tool known, are the arguments valid, and is the action permitted?" }, { lines: [19, 24], note: "Run the tool, record whether a return really succeeded, and build the reply from that fact, not from what the model said." }, { lines: [26, 33], note: "Two scripted tickets. Each one contains a call that the harness must stop." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Raise `APPROVAL_OVER` to 500. Predict the log and the reply for the sofa ticket.", "Make `start_return` return `{\"ok\": False}` for every order. Predict the kettle reply. Which line of the harness stops a false claim?", "Add a `cancel_order` tool that always needs approval. Decide where that rule belongs, then predict the log line for the call `(\"cancel_order\", 42)`."] },
+        { type: "check", question: "In the kettle ticket, the first call `get_order('42')` was rejected, yet the ticket still ended well. In a real agent, what should the harness do with that rejection so that the model can recover?", answer: "Send it back to the model as a readable error, for example “order_id must be an integer, got the string '42'”. In our script the next call happened to be correct. A real model corrects itself only if it sees what was wrong. A rejection that is logged but never shown to the model protects the API and still leaves the agent stuck." },
+        { type: "check", question: "The sofa reply says “I have passed this to a colleague”, although the scripted model asked for a return. Which two harness parts shaped that reply, and why is neither of them a prompt?", answer: "The permission rule blocked `start_return(77)`, because 450 is over the 200 limit. Then the verification step saw that no return had succeeded, so it refused to claim one. Both are code that runs whatever the model wrote. A prompt can ask a model to respect a limit; only the harness can make the limit impossible to cross." }
       ]
     },
     {

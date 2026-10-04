@@ -1,6 +1,6 @@
 export default {
   id: "what-are-embeddings",
-  minutes: 22,
+  minutes: 27,
   hook: "How can a computer know that “puppy” is closer to “dog” than to “invoice” when, to it, every word is just a string of characters?",
   summary: "An embedding is a list of numbers (a vector) that represents a piece of data, such as a word, a sentence, an image or a product, so that similar things get similar numbers. We measure how close two embeddings are with cosine similarity or distance, which lets computers compare meaning. Embeddings are learned by neural networks from data, power search, RAG, recommendations and clustering, and come with real pitfalls: bias, model mismatch and domain gaps.",
   sections: [
@@ -183,6 +183,81 @@ king - man + woman = [0.9 0.  0.9 0. ]
         ] },
         { type: "callout", tone: "warn", title: "The most common mistake", text: "Embedding documents with one model and queries with another (or upgrading the model for new documents only). Results quietly get worse with no error message. Store the model name and version with every vector." },
         { type: "check", question: "Our search returns the right topic but misses queries that contain an exact order number like “ORD-55812”. What should we add?", answer: "Keyword search (for example BM25) alongside the embedding search, a combination called hybrid search. Embeddings capture meaning but are weak at matching exact rare strings such as IDs and codes." },
+      ],
+    },
+    {
+      id: "worked-example-sentence-vector",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "A model produces one vector per token. So how does a whole sentence become a single vector? A common recipe is **mean pooling**: average the token vectors. Let us do it by hand for the question “parcel never arrived”, using made-up 2-D vectors whose dimensions we call *delivery* and *payment* (illustrative numbers)." },
+        { type: "flow", title: "From tokens to one sentence vector", nodes: [
+          { label: "Token vectors", detail: "parcel = [0.9, 0.1], never = [0.3, 0.2], arrived = [0.9, 0.3]. One vector per token." },
+          { label: "Add", detail: "Add them dimension by dimension: [0.9 + 0.3 + 0.9, 0.1 + 0.2 + 0.3] = [2.1, 0.6]." },
+          { label: "Average", detail: "Divide by the number of tokens, 3: the sentence vector is [0.7, 0.2]. It points strongly along delivery." },
+          { label: "Compare", detail: "Article A “missing delivery” = [0.8, 0.2]. Article B “card details” = [0.2, 0.9]. Take the cosine with each." },
+          { label: "Rank", detail: "cos with A ≈ 1.00, cos with B ≈ 0.48. Article A wins by a wide margin." },
+        ] },
+        { type: "p", text: "The cosine with A in full: dot product = 0.7×0.8 + 0.2×0.2 = 0.60. Lengths: √(0.49 + 0.04) ≈ 0.728 and √(0.64 + 0.04) ≈ 0.825. So 0.60 / (0.728 × 0.825) ≈ 1.00. For B: 0.32 / (0.728 × 0.922) ≈ 0.48." },
+        { type: "table", caption: "What plain averaging keeps and what it loses.", head: ["Property", "After mean pooling"], rows: [
+          ["Overall topic", "Kept: the strong delivery signal survives the average"],
+          ["Sentence length", "Removed: we divide by the token count"],
+          ["Word order", "Lost if token vectors are fixed: “dog bites man” and “man bites dog” average to the same vector"],
+          ["One rare but vital word", "Diluted: in a long text, one token is a small share of the average"],
+        ] },
+        { type: "p", text: "The word-order problem is why modern embedding models pool **contextual** token vectors. Each token's vector has already been shaped by its neighbours inside the Transformer, so the average of “dog bites man” differs from “man bites dog”. The dilution problem is one more reason to split long documents into chunks before embedding them." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build the core of our help-centre search: score four articles against one question, first with a raw dot product and then with cosine similarity, and return the top two." },
+        { type: "code", lang: "python", title: "practice_semantic_search.py", code: `import numpy as np
+
+# Hand-made 3-D embeddings (illustrative). Dimensions: delivery, payment, account
+titles = [
+    "What to do if your delivery is missing",
+    "How to update your card details",
+    "Reset your password",
+    "Track a parcel",
+]
+docs = np.array([
+    [0.9, 0.1, 0.1],
+    [0.1, 0.9, 0.2],
+    [0.0, 0.1, 0.9],
+    [1.4, 0.9, 0.1],   # also about delivery, but a much longer vector
+])
+query = np.array([0.8, 0.2, 0.1])   # "my parcel never arrived"
+
+# Raw dot product rewards long vectors
+print("dot    :", np.round(docs @ query, 2))
+
+# Normalise every vector to length 1; now dot product = cosine similarity
+docs_n = docs / np.linalg.norm(docs, axis=1, keepdims=True)
+query_n = query / np.linalg.norm(query)
+scores = docs_n @ query_n            # one matrix-vector product scores all articles
+print("cosine :", np.round(scores, 2))
+
+# Top-2 search: sort scores from high to low and keep the first two
+for rank, i in enumerate(np.argsort(-scores)[:2], start=1):
+    print(f"{rank}. {titles[i]}  (cos = {scores[i]:.2f})")`, output: `dot    : [0.75 0.28 0.11 1.31]
+cosine : [0.99 0.36 0.15 0.95]
+1. What to do if your delivery is missing  (cos = 0.99)
+2. Track a parcel  (cos = 0.95)`,
+          walkthrough: [
+            { lines: [3, 16], note: "Four article titles, one 3-D vector per article, and a query vector. The fourth article is on topic but its vector is much longer than the others." },
+            { lines: [18, 19], note: "Raw dot product. “Track a parcel” scores highest (1.31), mostly because its vector is long." },
+            { lines: [21, 25], note: "Divide each vector by its length. One matrix-vector product now gives the cosine of the query with every article at once." },
+            { lines: [27, 29], note: "`argsort` on the negated scores sorts from best to worst. We keep the first two and print them." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Multiply the query by 10: `query = 10 * np.array([0.8, 0.2, 0.1])`. Predict first: which printed line changes and which stays the same?",
+          "Change the query to `[0.1, 0.9, 0.1]` (“my card was declined”). Predict the new top-2 before running.",
+          "Add a fifth article “Delivery and payment FAQ” with vector `[0.6, 0.6, 0.1]`. Predict where it ranks for the original query.",
+        ] },
+        { type: "check", question: "The dot product ranks “Track a parcel” first (1.31 against 0.75), but cosine ranks it second (0.95 against 0.99). Which ranking should our search trust, and why?", answer: "Cosine. The dot product grew because the vector is long, not because the meaning is closer. Its direction also leans a little towards payment, which the question barely mentions. Cosine removes length and judges direction only, which is what “similar meaning” should mean here." },
+        { type: "check", question: "“Reset your password” still gets a score of 0.15, not 0. If we asked for the top 4, it would be returned. What does this tell us about using search results?", answer: "A similarity score is always *some* number, so “it was returned” does not mean “it is relevant”. Top-k always fills k slots, even with poor matches. Real systems keep k small or add a minimum score, and the right cut-off must be tuned on real questions because score ranges differ between models." },
       ],
     },
     {

@@ -4,6 +4,7 @@ export const vizUsage = {
   "six-words-of-ai-engineering",
   "math-behind-cross-entropy-loss",
   "what-is-generative-ai",
+  "scaling-dot-product-attention",
   "how-does-temperature-control-llm-output",
   "small-language-models-slms",
   "how-does-knowledge-distillation-work",
@@ -129,6 +130,7 @@ export const vizUsage = {
  ],
  "attention-heatmap": [
   "encoder-vs-decoder-in-transformers",
+  "self-attention-in-transformers",
   "evolution-of-llm-architecture",
   "how-do-attention-sinks-work",
   "how-does-prefix-tuning-work"

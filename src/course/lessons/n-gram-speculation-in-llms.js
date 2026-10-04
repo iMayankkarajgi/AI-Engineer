@@ -1,6 +1,6 @@
 export default {
   id: "n-gram-speculation-in-llms",
-  minutes: 20,
+  minutes: 25,
   hook: "When an LLM is rewriting your code and most of the answer is copied from the prompt, why should it generate every copied token the slow way?",
   summary: "Speculative decoding speeds up generation by letting cheap guesses be verified by the big model in one pass, but a separate draft model costs memory, engineering and compute. N-gram speculation drops the draft model: it finds the last few generated tokens earlier in the text (usually the prompt) and proposes whatever followed them there. The big model verifies the guesses as usual, so the output is unchanged, and on copy-heavy tasks like code editing, summarisation with quotes or RAG answers, many tokens arrive per pass almost for free.",
   sections: [
@@ -152,6 +152,78 @@ output identical: True
         ], rows: [["Drafting cost", "Negligible", "k small-model passes"], ["Extra memory", "None", "Draft weights + its KV cache"], ["Output", "Identical to target", "Identical to target"]], verdict: "Start with n-gram speculation when outputs echo inputs; it is free to try. Add a draft model (or heads like EAGLE/Medusa) when your outputs are mostly new text." },
         { type: "callout", tone: "example", title: "Related ideas", text: "LLMA (“Inference with Reference”, 2023) copies spans from retrieved reference documents. Lookahead decoding builds its pool of n-grams from the model's own parallel guesses rather than from the prompt. Both share the idea of cheap drafting plus exact verification." },
         { type: "check", question: "Our RAG bot answers by quoting policy documents, and we cannot spare GPU memory for a draft model. Which drafting method fits, and why?", answer: "N-gram speculation (prompt lookup): the answers copy long spans from the retrieved documents in the prompt, so matches are frequent, and it needs no extra GPU memory." }
+      ]
+    },
+    {
+      id: "choosing-the-key-length",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "The key length n is the main setting we control, and the trace of `prompt_lookup.py` already showed why it matters. Pass 4 used the 2-token key `: s`. That key appears twice in the prompt: in `) : s = 0` and in `items : s += x.price`. The search took the most recent one, which was the wrong one, and the whole draft was rejected." },
+        { type: "steps", title: "Replaying pass 4 with a longer key", items: [
+          { title: "Use three tokens", text: "With n = 3 the key is `) : s`. This appears only once in the prompt." },
+          { title: "Copy what follows", text: "The draft becomes `= 0 ; for`, which is exactly what the target writes next. A rejected round turns into a fully accepted one." },
+          { title: "The price of a long key", text: "Right after the fix, the text ends in `* x.qty ;`. No 3-token or 2-token key ending there exists in the prompt, because `x.qty` is new. A long key finds nothing." },
+          { title: "Fall back", text: "So we try the long key first and shorten it only when there is no match: n = 3, then 2, then 1. The 1-token key `;` does match, and we get a guess where we would otherwise have none." },
+          { title: "Trust short keys less", text: "A 1-token key matches almost anywhere, so its guess is often from the wrong place. It is worth trying only because a wrong draft costs little." }
+        ] },
+        { type: "table", caption: "How key length changes the drafter's behaviour", head: ["Key length n", "How often it finds a match", "How often the match is the right place", "What goes wrong"], rows: [
+          ["1", "Almost always", "Often wrong", "Common tokens such as `;` or `the` appear in many places"],
+          ["2", "Often", "Usually right", "Repeated phrases still collide, as `: s` did"],
+          ["3 or more", "Less often", "Nearly always right", "Finds nothing just after new text"]
+        ] },
+        { type: "p", text: "There is a second choice hidden in the search: **which** occurrence to copy from when there are several. Our code took the most recent one. In text that repeats a pattern with small changes, such as similar functions one after another, the most recent occurrence is often the closest match, but in pass 4 it was the wrong one. Neither choice is always right, which is another reason to measure acceptance on real traffic." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will measure the drafter on its own, with no verification loop. A support bot must quote a refund policy from its prompt. For each token of the answer we ask: does the key find a match in the prompt, and is the first copied token the one the target will write? We repeat this for key lengths 1, 2 and 3. To keep it short, the index covers only the prompt." },
+        { type: "code", lang: "python", title: "practice_ngram_index.py", code: `# How good is an n-gram drafter's FIRST guess, for different key lengths n?
+from collections import defaultdict
+context = ("policy : refunds are issued within 14 days of purchase . "
+           "exchanges are sent within 30 days of purchase . "
+           "question : when are refunds issued ? answer :").split()
+answer = "refunds are issued within 14 days of purchase .".split()
+
+def build_index(tokens, n):
+    # map every n-gram to the positions of the token that follows it
+    index = defaultdict(list)
+    for i in range(len(tokens) - n):
+        index[tuple(tokens[i:i + n])].append(i + n)
+    return index
+
+print("n  lookups  hits  correct  wrong")
+for n in (1, 2, 3):
+    index = build_index(context, n)
+    seq, hits, correct, wrong = list(context), 0, 0, []
+    for tok in answer:                       # tok = what the target will write
+        key = tuple(seq[-n:])
+        if key in index:                     # the key appears in the prompt
+            hits += 1
+            guess = context[index[key][-1]]  # use the most recent occurrence
+            if guess == tok:
+                correct += 1
+            else:
+                wrong.append(f"{' '.join(key)} -> {guess}")
+        seq.append(tok)
+    print(f"{n}  {len(answer):7d}  {hits:4d}  {correct:7d}  {wrong}")`, output: `n  lookups  hits  correct  wrong
+1        9     9        4  [': -> when', 'refunds -> issued', 'are -> refunds', 'issued -> ?', 'within -> 30']
+2        9     8        8  []
+3        9     7        7  []`, walkthrough: [
+          { lines: [1, 6], note: "The prompt holds a policy with two similar sentences and a question. The answer quotes the first sentence." },
+          { lines: [8, 13], note: "Build a lookup table: every n-gram in the prompt points to the positions of the token that came after it." },
+          { lines: [15, 28], note: "Walk through the answer. At each step, look up the last n tokens, take the most recent occurrence, and compare its next token with what the target writes." },
+          { lines: [29, 29], note: "Print how many lookups hit, how many guesses were right, and each wrong guess." }
+        ] },
+        { type: "p", text: "A 1-token key hits on all 9 lookups but is right only 4 times. A 2-token key hits 8 times and is right every time. A 3-token key is also always right but hits only 7 times. Now change it:" },
+        { type: "list", items: [
+          "Change `index[key][-1]` to `index[key][0]` to copy from the earliest occurrence. Predict which of the wrong n = 1 guesses become right.",
+          "Replace `answer` with new text that is not in the policy, such as `\"you will get your money back soon .\".split()`. Predict the hits and correct counts for each n.",
+          "Add fallback: for each token try n = 3, then 2, then 1, and use the first key that hits. Predict the total hits and how many guesses are right, compared with the best single n."
+        ] },
+        { type: "check", question: "A wrong draft only costs a little wasted verification. So why not always use n = 1, which finds a match every time?", answer: "Because its guess often replaces a better one. When a longer key would have matched the right place, n = 1 may copy from the wrong place, the first draft token is rejected, and the pass yields one token instead of several. Short keys are useful only as a fallback, when longer keys find nothing." },
+        { type: "check", question: "Our practice index covers only the prompt. The real method also searches the text generated so far. Give a case where that matters.", answer: "When the model repeats something it wrote itself that is not in the prompt: a new variable name it uses again, or a phrase it repeats in each item of a list. The first use must be generated the slow way, but every later use can be copied from the earlier output." }
       ]
     }
   ],

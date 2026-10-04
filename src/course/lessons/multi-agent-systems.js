@@ -1,6 +1,6 @@
 export default {
   id: 'multi-agent-systems',
-  minutes: 17,
+  minutes: 22,
   hook: 'If one AI agent is good, are five agents five times better, or five times the bill and five times the confusion?',
   summary: 'A multi-agent system is a group of LLM agents, each with its own role, context and tools, that communicate and coordinate to finish a task none of them handles as well alone. It shines when work splits into independent parts that can run in parallel or need separate expertise, but it costs more tokens, adds latency for coordination and creates new ways to fail. Start with one agent and add more only when you can name the reason.',
   sections: [
@@ -178,6 +178,105 @@ majority of 3, correlated : 0.707`, walkthrough: [
         { type: 'callout', tone: 'example', title: 'Where you see it in practice', text: 'Deep-research features in AI assistants use a lead agent that spawns parallel search agents. Coding assistants delegate exploration of a large codebase to helper agents and keep the main conversation clean. Customer-service platforms hand a conversation from a triage agent to a billing or technical specialist.' },
         { type: 'check', question: 'A team wants three agents to co-write one 200-line function: one for the first part, one for the middle, one for the end. Good idea?', answer: 'Probably not. The parts are tightly coupled (shared variables, shared assumptions), so separate contexts will drift apart. One agent, perhaps with a separate reviewer agent, is the better design.' },
       ],
+    },
+    {
+      id: "worked-example-delegation",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The mistakes list says “vague delegation leads to duplicated or missing work”. Let us watch that happen with small made-up numbers, and then fix it. The lead agent in our scooter example sends two researchers out with one-line tasks: “research prices” and “research battery range”." },
+        { type: "table", caption: "What the two researchers returned (made-up values)",
+          head: ["Maker", "Price researcher", "Range researcher"],
+          rows: [
+            ["Zip", "400", "30"],
+            ["Volt", "599", "28"],
+            ["Glide", "430", "38"]
+          ] },
+        { type: "p", text: "The table looks complete, so the lead writes: “Volt costs the most and has the shortest range.” Both claims are wrong, and no agent made a search error." },
+        { type: "steps", title: "Finding the hidden disagreement",
+          items: [
+            { title: "Different units", text: "The range researcher reported Zip and Glide in kilometres but copied Volt's figure in miles from a US page. 28 miles is about 45 km, the longest range of the three, not the shortest." },
+            { title: "Different currencies", text: "The price researcher mixed euros and dollars in the same way. Volt's 599 is in dollars; the others are in euros." },
+            { title: "Different product lists", text: "The price researcher looked at each maker's cheapest model; the range researcher looked at each maker's best-selling model. The two columns describe different scooters." },
+            { title: "Why nobody noticed", text: "Each researcher worked in its own context and returned bare numbers. The decisions that mattered (which model, which unit) stayed inside each worker and were lost at the handoff." }
+          ] },
+        { type: "p", text: "The fix is not a smarter model. It is a shared contract written by the lead and sent in every brief, so that separate contexts still make the same choices." },
+        { type: "compare", title: "The same task, two briefs",
+          options: [
+            { name: "Vague brief", summary: "“Research battery range for the top scooter makers.”", pros: ["Quick to write"], cons: ["Worker must guess the model, the unit and the format", "Results cannot be merged safely"], bestFor: "Nothing that will be merged with another agent's work" },
+            { name: "Brief with a contract", summary: "“For the best-selling model of Zip, Volt and Glide, report range in km. Return maker, model name, value, unit, source. At most 10 searches. If a value is missing, say so; do not estimate.”", pros: ["Same model list for every worker", "Units stated and returned", "Missing data is visible"], cons: ["Takes the lead a few more sentences"], bestFor: "Any subtask whose output joins a shared table" }
+          ],
+          rows: [
+            ["Which scooters", "Worker decides", "Fixed by the lead"],
+            ["Units", "Whatever the page used", "Stated, and echoed in the result"],
+            ["When data is missing", "Worker may guess", "Reported as missing"]
+          ],
+          verdict: "Decisions that two workers must agree on belong in the brief, not in each worker's head." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code measured trade-offs with arithmetic. Here we run the supervisor pattern itself, in miniature: a lead with a plan, two researcher agents with private notes, a critic with a fresh view, and a budget of one re-delegation. The agents are scripted functions; the coordination around them is real." },
+        { type: "code", lang: "python", title: "practice_supervisor.py", code: `# Supervisor pattern: plan -> delegate -> merge -> critic -> one re-delegation.
+MAKERS = ["Zip", "Volt", "Glide"]
+WEB = {("price", "Zip"): 400, ("price", "Volt"): 550, ("price", "Glide"): 480,
+       ("range_km", "Zip"): 30, ("range_km", "Volt"): 45}
+DEEP_WEB = {("range_km", "Glide"): 38}       # only found with a deeper search
+
+def researcher(topic, makers, deep=False):
+    """A worker agent. Its notes are its private context; it returns a summary."""
+    notes, found = [], {}
+    for maker in makers:
+        value = WEB.get((topic, maker))
+        if value is None and deep:
+            value = DEEP_WEB.get((topic, maker))
+        notes.append(f"searched {topic} for {maker}: {value}")   # never leaves the worker
+        if value is not None:
+            found[maker] = value
+    return found, len(notes)
+
+def critic(table):
+    """A reviewer with a fresh context: lists every missing cell."""
+    return [(topic, m) for topic in table for m in MAKERS if m not in table[topic]]
+
+messages, table = 0, {}
+plan = ["price", "range_km"]                 # the lead agent's plan (scripted)
+for topic in plan:                           # independent, so they could run in parallel
+    table[topic], searches = researcher(topic, MAKERS)
+    messages += 2                            # one task out, one result back
+    print(f"researcher({topic}): {searches} private notes -> returned {table[topic]}")
+
+gaps = critic(table)
+messages += 2
+print("critic found gaps:", gaps)
+for topic, maker in gaps[:1]:                # budget: at most one re-delegation
+    fix, _ = researcher(topic, [maker], deep=True)
+    table[topic].update(fix)
+    messages += 2
+    print(f"re-delegated {topic}/{maker} -> {fix}")
+print("final table:", table)
+print("gaps left:", critic(table), "| messages through the lead:", messages)`, output: `researcher(price): 3 private notes -> returned {'Zip': 400, 'Volt': 550, 'Glide': 480}
+researcher(range_km): 3 private notes -> returned {'Zip': 30, 'Volt': 45}
+critic found gaps: [('range_km', 'Glide')]
+re-delegated range_km/Glide -> {'Glide': 38}
+final table: {'price': {'Zip': 400, 'Volt': 550, 'Glide': 480}, 'range_km': {'Zip': 30, 'Volt': 45, 'Glide': 38}}
+gaps left: [] | messages through the lead: 8`,
+          walkthrough: [
+            { lines: [2, 5], note: "The environment: a toy “web” of facts. One fact, Glide's range, is only in `DEEP_WEB`, so a normal search misses it." },
+            { lines: [7, 17], note: "A researcher agent. It keeps private notes while it works and returns only a condensed result plus a count of its notes." },
+            { lines: [19, 21], note: "The critic knows only the makers list and the merged table. It reports every empty cell." },
+            { lines: [23, 39], note: "The lead: delegate each topic, merge, ask the critic, re-delegate at most one gap with a deeper search, then report. Every exchange goes through the lead and is counted." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Delete the `(\"price\", \"Volt\"): 550` entry from `WEB`. Predict what the critic finds, which gap gets re-delegated, and what “gaps left” shows at the end.",
+          "Change `gaps[:1]` to `gaps[:0]` (no re-delegation budget). Predict the final table and the message count.",
+          "Add `\"recalls\"` to `plan`, with no recall data in `WEB`. Predict how many gaps the critic reports and how many are left at the end. What does this say about a critic paired with a tight budget?"
+        ] },
+        { type: "check", question: "Each researcher wrote 3 private notes, but the lead only ever saw a small dictionary. What is gained by that, and what could be lost?", answer: "Gained: the lead's context stays small and focused, however much searching each worker did. With real agents those notes could be thousands of tokens of search results. Lost: anything the worker saw but did not put in its result, such as “the Glide page showed two different ranges”. That is why results should carry sources and open questions, and why the worker's full notes should still be logged for debugging." },
+        { type: "check", question: "The critic found the missing Glide range, but it could not have found a *wrong* Volt price. Why not, and what would a critic need in order to catch that?", answer: "This critic only checks that every cell is filled. A wrong number fills its cell just as well as a right one. To catch wrong values the critic needs evidence to check against: the sources behind each number, a second independent lookup, or rules such as “a price must be in the stated currency”. A reviewer is only as strong as the standard it checks against." }
+      ]
     },
     {
       id: 'quick-summary',

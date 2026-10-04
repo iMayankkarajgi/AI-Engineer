@@ -1,6 +1,6 @@
 export default {
   id: 'what-are-agent-skills',
-  minutes: 18,
+  minutes: 23,
   hook: 'How can one agent know how to fill PDF forms, follow your brand guide and run your release checklist, without stuffing all of that into every prompt?',
   summary: 'An Agent Skill is a folder with a `SKILL.md` file (a short name and description, then instructions) plus any scripts or reference files the task needs. The agent sees only each skill\'s name and description at first, and opens the full instructions and files only when a task needs them. This "progressive disclosure" lets one agent carry many skills while keeping its context window small.',
   sections: [
@@ -210,6 +210,95 @@ Level 2 loads: pdf-forms -> 2065 tokens`, walkthrough: [
         ] },
         { type: 'p', text: '**When not to use a skill**: for a one-off task, just write the instruction in the chat. For reaching a live external system, you need a tool or MCP server (possibly plus a skill). For changing the model\'s core behaviour across everything, a system prompt or fine-tuning may fit better.' },
       ],
+    },
+    {
+      id: "common-mistakes-triggering",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Most skill problems are trigger problems, and they come in two kinds. A skill **under-triggers** when a request needed it and the agent did not load it. A skill **over-triggers** when it is loaded for a request that had nothing to do with it. Both are invisible unless we test for them." },
+        { type: "p", text: "The test is simple: write a short list of prompts, note which skill each one *should* load (or none), run them, and compare. Here is such a test for our office agent with three skills: `pdf-forms`, `brand-slides` and `release-notes`. The results are illustrative." },
+        { type: "table", caption: "A small trigger test (illustrative results)",
+          head: ["Prompt", "Should load", "Did load", "Verdict"],
+          rows: [
+            ["“Fill this PDF form with my address”", "pdf-forms", "pdf-forms", "Correct"],
+            ["“Complete the attached tax document”", "pdf-forms", "none", "Under-trigger: the user said “document”, the description only says “form”"],
+            ["“Make a deck for Monday's meeting”", "brand-slides", "brand-slides", "Correct"],
+            ["“Summarise this PDF report”", "none", "pdf-forms", "Over-trigger: the description says “read PDF”, which is too broad"],
+            ["“Write a changelog for version 2.3”", "release-notes", "release-notes", "Correct"],
+            ["“Hello, how are you?”", "none", "none", "Correct"]
+          ] },
+        { type: "steps", title: "Diagnosing a failed row",
+          items: [
+            { title: "Did the right skill load at all?", text: "If not, the body is not the problem; it was never read. Look only at the description." },
+            { title: "Under-trigger: add the user's words", text: "The description lacked the words real users type. Add them: “Use for PDF forms, applications, or documents with fields to fill in.”" },
+            { title: "Over-trigger: narrow the claim", text: "The description promised more than the skill does. Say what it is *not* for: “Not for summarising or reading ordinary PDFs.”" },
+            { title: "Two skills fight for one prompt", text: "If both load, or the wrong one wins, their descriptions overlap. Rewrite them so each names a different task." },
+            { title: "Right skill, wrong result", text: "Only now look at the body: unclear steps, a missing example, or a script that fails without an execution environment." },
+            { title: "Re-run the whole list", text: "A wider description can fix one row and break another. Always run every prompt again after a change." }
+          ] },
+        { type: "p", text: "In this test, 4 of 6 prompts behaved correctly. Both failures point at one description, so one careful edit to `pdf-forms` may fix both. Keep the prompt list next to the skill in git; it is the cheapest test suite we will ever write." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code compared Level 1 and Level 2. Now we follow one request through all three levels, including the part that is easy to miss: a script is *run*, and only its output enters the context. We keep a small skill folder in memory and print the context size after every load. We count words, as a rough stand-in for tokens." },
+        { type: "code", lang: "python", title: "practice_skill_levels.py", code: `import re
+# A skill folder held in memory. We track every word that enters the context.
+FILES = {
+    "date-check/SKILL.md": "---\\nname: date-check\\n"
+        "description: Check dates in a form. Use when the user asks to validate dates.\\n---\\n"
+        "1. Run scripts/check.py on the dates.\\n"
+        "2. Only if a date fails, read reference/rules.md and explain the rule.",
+    "date-check/reference/rules.md": "Dates must be DD/MM/YYYY. " + "Another finance rule. " * 40,
+    "date-check/scripts/check.py": "# imagine careful date parsing here\\n" * 60,
+}
+
+def run_script(path, dates):             # stands in for a sandbox running the file
+    bad = [d for d in dates if not re.fullmatch(r"\\d\\d/\\d\\d/\\d{4}", d)]
+    return f"{len(dates) - len(bad)} ok, bad: {bad}"
+
+context = []                             # everything the model has read so far
+def load(label, text):
+    context.append(text)
+    total = sum(len(c.split()) for c in context)
+    print(f"{label:30s} +{len(text.split()):3d} words  (context now {total})")
+
+_, front, body = FILES["date-check/SKILL.md"].split("---\\n")
+meta = dict(line.split(": ", 1) for line in front.strip().splitlines())
+assert re.fullmatch(r"[a-z0-9-]{1,64}", meta["name"])      # the naming rule
+
+# The steps below are the choices a model would make; here they are scripted.
+dates = ["03/04/2026", "2026-04-05"]
+load("Level 1: name + description", f"{meta['name']}: {meta['description']}")
+load("user request", "Please validate these dates: " + " ".join(dates))
+load("Level 2: SKILL.md body", body)                       # the description matched
+result = run_script("date-check/scripts/check.py", dates)  # body step 1
+load("Level 3: script output", result)
+if "bad: []" not in result:                                # body step 2: only if needed
+    load("Level 3: reference/rules.md", FILES["date-check/reference/rules.md"])
+print("words in scripts/check.py, never loaded:", len(FILES["date-check/scripts/check.py"].split()))`, output: `Level 1: name + description    + 14 words  (context now 14)
+user request                   +  6 words  (context now 20)
+Level 2: SKILL.md body         + 18 words  (context now 38)
+Level 3: script output         +  4 words  (context now 42)
+Level 3: reference/rules.md    +124 words  (context now 166)
+words in scripts/check.py, never loaded: 360`,
+          walkthrough: [
+            { lines: [3, 10], note: "The skill folder as a dictionary: `SKILL.md` with frontmatter and a two-step body, a long reference file, and a long script file." },
+            { lines: [12, 20], note: "`run_script` stands in for a sandbox: it does the exact work and returns one short line. `load` adds text to the context and prints the running total." },
+            { lines: [22, 24], note: "Split `SKILL.md` into frontmatter and body, parse the metadata, and check the name against the naming rule." },
+            { lines: [27, 35], note: "The request moves through the levels. The reference file is loaded only because a date failed. The script's 360 words are never added." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Make both dates valid: change the second date to `\"05/04/2026\"`. Predict which line disappears from the output and the final context size.",
+          "Change `name: date-check` to `name: Date Check` inside the SKILL.md text. Predict what happens and on which line. Why is it helpful that this fails at load time and not during a task?",
+          "Pretend there is no execution environment: replace the `run_script` call with `result = FILES[\"date-check/scripts/check.py\"]`, so the model has to read the code instead. Predict the size of the “script output” load. What else is lost besides context space?"
+        ] },
+        { type: "check", question: "The final context holds 166 words, and 124 of them came from one file. If this skill were used a hundred times a day, what one change to the skill would save the most context, and what is the trade-off?", answer: "Shorten what gets loaded when a date fails: split `rules.md` so the date rule sits in its own tiny file, or have the script print the rule that was broken. Then a failed date costs a few words instead of 124. The trade-off is more files or a smarter script to maintain. This is progressive disclosure applied inside Level 3: load the smallest piece that answers the need." },
+        { type: "check", question: "The script is 360 words and the reference file is 124 words, yet only the reference file ever enters the context. Why is that the right way round?", answer: "A script is meant to be executed: the agent needs its result, not its text, and the result is 4 words. A reference file is meant to be read: its value is the information itself, so it has to enter the context to be used. That is the reason exact, repeatable work belongs in scripts and explanations belong in reference files." }
+      ]
     },
     {
       id: 'summary',

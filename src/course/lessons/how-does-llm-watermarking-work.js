@@ -1,6 +1,6 @@
 export default {
   id: "how-does-llm-watermarking-work",
-  minutes: 20,
+  minutes: 25,
   hook: "Can we hide an invisible signature in AI-written text using nothing but the choice of words, so that only someone with a secret key can find it?",
   summary: "LLM watermarking hides a statistical signal in generated text. At each step, a secret key and the previous token pick a random “preferred” (green) subset of the vocabulary, and the model's scores for those tokens are nudged up slightly. Any single word looks normal, but over hundreds of words the text contains far more green tokens than chance would give, which a detector with the key can measure with a simple z-score. It works well on long, unedited text and weakens with short texts and heavy paraphrasing.",
   sections: [
@@ -183,6 +183,83 @@ wm, first 16    tokens= 16  green=0.62  z= 3.46  flagged=False`,
           ["Robust to light edits, cropping and copy-paste", "Low-entropy text (code, facts, lists) carries a weaker signal"],
           ["Keys can be kept private to resist forgery", "Key management and who may run detection raise trust and privacy questions"]
         ] }
+      ]
+    },
+    {
+      id: "choosing-the-threshold",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "We used a threshold of z = 4 without saying where it comes from. The threshold is a choice about how often we are willing to accuse text that carries no watermark. For such text, the z-score behaves roughly like a standard bell curve, so each threshold maps to a chance of a false flag (using the normal approximation)." },
+        { type: "table", caption: "What a threshold means when many texts are checked (normal approximation)", head: ["Threshold z", "Chance that one unwatermarked text is flagged", "Expected false flags in 1,000,000 texts"], rows: [
+          ["2", "about 1 in 44", "about 22,750"],
+          ["4", "about 1 in 31,600", "about 32"],
+          ["6", "about 1 in 1 billion", "about 0.001"]
+        ] },
+        { type: "p", text: "A threshold of 2 sounds strict for a single text, but at the scale of a platform it wrongly flags tens of thousands of writers. That is why detectors use high thresholds, and why a high threshold in turn needs longer texts." },
+        { type: "steps", title: "Dilution: AI text mixed into human text", items: [
+          { title: "Set up", text: "A 1,000-token document. Human-written tokens are green 25% of the time (pure chance); watermarked tokens 67% of the time, as in our run. Chance predicts 250 green tokens with a standard deviation of √(1000 × 0.25 × 0.75) ≈ 13.7." },
+          { title: "300 AI tokens, 700 human", text: "Green count ≈ 0.67 × 300 + 0.25 × 700 = 201 + 175 = 376. z = (376 − 250) / 13.7 ≈ 9.2. Still clearly flagged." },
+          { title: "100 AI tokens, 900 human", text: "Green count ≈ 67 + 225 = 292. z = (292 − 250) / 13.7 ≈ 3.1. Below the threshold: the watermark is there, but it is drowned out." },
+          { title: "What a detector can do", text: "Score sliding sections of the document instead of the whole. The 100 AI tokens alone would give z = (67 − 25) / √(100 × 0.1875) ≈ 9.7." }
+        ] },
+        { type: "p", text: "So a low score for a whole document does not rule out a watermarked passage inside it, and scoring many sections brings back the first problem: every extra test is another chance of a false flag, so the threshold has to rise with the number of sections checked." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a small detector calculator using only the z-score formula. It answers three practical questions: how strong is the evidence for a given green count, how often does a threshold accuse unwatermarked text, and how many tokens do we need before a watermark of a given strength can be detected?" },
+        { type: "code", lang: "python", title: "practice_watermark_calculator.py", code: `import math
+
+GAMMA = 0.25                      # share of the vocabulary that is green
+
+def z_score(green_hits, total):
+    return (green_hits - GAMMA * total) / math.sqrt(total * GAMMA * (1 - GAMMA))
+
+def false_positive_rate(z):
+    # chance that unwatermarked text scores above z (normal approximation)
+    return 0.5 * math.erfc(z / math.sqrt(2))
+
+def tokens_needed(green_rate, threshold=4.0):
+    # smallest T whose expected z-score reaches the threshold
+    t = 1
+    while z_score(green_rate * t, t) < threshold:
+        t += 1
+    return t
+
+for hits, total in [(9, 20), (45, 100), (90, 200)]:      # all are 45% green
+    print(f"{hits:>3}/{total:<3} green -> z={z_score(hits, total):5.2f}")
+
+for z in [2, 4, 6]:
+    print(f"threshold z={z}: about 1 in {1 / false_positive_rate(z):,.0f} "
+          f"unwatermarked texts flagged")
+
+for rate in [0.70, 0.50, 0.40, 0.30]:
+    print(f"green rate {rate:.2f}: about {tokens_needed(rate)} tokens to reach z=4")`, output: `  9/20  green -> z= 2.07
+ 45/100 green -> z= 4.62
+ 90/200 green -> z= 6.53
+threshold z=2: about 1 in 44 unwatermarked texts flagged
+threshold z=4: about 1 in 31,574 unwatermarked texts flagged
+threshold z=6: about 1 in 1,013,594,692 unwatermarked texts flagged
+green rate 0.70: about 15 tokens to reach z=4
+green rate 0.50: about 48 tokens to reach z=4
+green rate 0.40: about 134 tokens to reach z=4
+green rate 0.30: about 1200 tokens to reach z=4`,
+          walkthrough: [
+            { lines: [3, 6], note: "The z-score formula from the detection section, with γ = 0.25." },
+            { lines: [8, 10], note: "The chance that text with no watermark scores above z, from the tail of a bell curve. This is what makes the false-positive rate controllable." },
+            { lines: [12, 17], note: "Search for the smallest text length at which a given green rate is expected to reach the threshold." },
+            { lines: [19, 27], note: "Three experiments: the same 45% green rate at three lengths, the meaning of three thresholds, and the length needed for four watermark strengths." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `GAMMA = 0.5`. Predict the sign of the z-score for `45/100` before running, and explain it.",
+          "Call `tokens_needed(0.40, threshold=5.0)`. Predict whether it needs a few more tokens or many more than the 134 needed for z = 4.",
+          "Add the case `(25, 100)` to the first loop. Predict its z-score without computing anything."
+        ] },
+        { type: "check", question: "At a 70% green rate, 15 tokens are enough to reach z = 4. At 30%, it takes about 1,200. Why does a weaker watermark cost so many more tokens?", answer: "What counts is the excess over chance. At 70% the excess is 45 points; at 30% it is only 5 points, 9 times smaller. The z-score grows with the excess times √T, so the length needed grows with 1 / excess². A 9 times smaller excess needs 81 times more tokens: 15 × 81 ≈ 1,200." },
+        { type: "check", question: "A platform scores 1,000,000 human-written posts a day with a threshold of z = 2. Roughly how many are wrongly flagged, and what is the trade-off in fixing it?", answer: "About 1 in 44, so roughly 22,750 posts a day. Raising the threshold to 4 cuts that to about 32. The trade-off is sensitivity: a higher threshold needs more tokens or a stronger watermark to be reached, so short or heavily edited watermarked texts will more often go undetected." }
       ]
     }
   ],

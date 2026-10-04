@@ -1,6 +1,6 @@
 export default {
   id: "prefill-decode-disaggregation",
-  minutes: 21,
+  minutes: 26,
   hook: "What if the GPU that reads your prompt and the GPU that writes your answer were two different machines, and that made both faster?",
   summary: "Prefill is compute-heavy and decode is memory-heavy, so when both share one GPU they get in each other's way: a long prompt arriving can freeze everyone else's token stream. Prefill-decode disaggregation runs the two phases on separate GPU pools and ships the KV cache between them. It gives steadier TTFT and TPOT and lets each pool be tuned on its own, at the cost of KV transfer, a fast network and more operational complexity.",
   sections: [
@@ -138,6 +138,76 @@ disaggregated avg TPOT 20 ms, worst 20 ms (+5 ms one-time KV transfer on TTFT)`,
         { type: "callout", tone: "example", title: "Real-world use", text: "Research systems DistServe and Splitwise (both 2024) showed the benefits of separating phases, and Moonshot AI described Mooncake, a KV-cache-centric disaggregated architecture serving its Kimi chatbot. Open-source frameworks have added support: NVIDIA Dynamo is built around disaggregated serving, and vLLM and SGLang offer PD-disaggregation modes. Exact features change quickly, so check current docs." },
         { type: "callout", tone: "warn", title: "Where it is overkill", text: "If you serve a small model on one or two GPUs, prompts are short, or traffic is light, disaggregation adds a transfer hop and moving parts for little gain. Short prompts mean short prefills, so there is little interference to remove. Measure p99 TPOT spikes first; if chunked prefill already meets your targets, stay co-located." },
         { type: "check", question: "Our chatbot's prompts get much shorter after we add retrieval that sends only the relevant 1,000 tokens. Does the case for disaggregation get stronger or weaker?", answer: "Weaker. Shorter prompts mean shorter prefills that interrupt decode less, and a smaller KV cache to transfer, so the benefit shrinks relative to the added complexity." }
+      ]
+    },
+    {
+      id: "sizing-the-two-pools",
+      title: "Going one level deeper",
+      blocks: [
+        { type: "p", text: "The comparison above says the pool ratio must track the traffic mix. Let us see what that means with small numbers. All figures here are illustrative. Our chatbot receives 10 requests per second. Each prefill keeps one prefill worker busy for 0.25 s. Each answer is 200 tokens at 20 ms per step, so a request spends 4 s in decode. One decode worker can hold 32 requests in its batch." },
+        { type: "steps", title: "How many workers of each kind?", items: [
+          { title: "Prefill work per second", text: "10 requests × 0.25 s = 2.5 seconds of prefill work arrive every second. One worker can do 1 second of work per second, so we need 3 prefill workers (2.5 rounded up)." },
+          { title: "Requests in decode at once", text: "10 requests arrive per second and each stays 4 s, so about 10 × 4 = 40 requests are decoding at any moment." },
+          { title: "Decode workers", text: "40 requests ÷ 32 per worker = 1.25, so we need 2 decode workers." },
+          { title: "The ratio", text: "3 prefill workers to 2 decode workers. This ratio comes from the traffic, not from the model." },
+          { title: "Change the traffic", text: "If prompts double in length, prefill work doubles to 5 seconds per second: 5 prefill workers, decode unchanged. If answers double in length, 80 requests decode at once: 3 decode workers, prefill unchanged." }
+        ] },
+        { type: "table", caption: "Workers needed as the traffic mix changes (illustrative numbers from the steps above)", head: ["Traffic", "Prefill workers", "Decode workers"], rows: [
+          ["Baseline: 10 requests/s", "3", "2"],
+          ["Prompts twice as long", "5", "2"],
+          ["Answers twice as long", "3", "3"],
+          ["Twice as many requests", "5", "3"]
+        ] },
+        { type: "p", text: "Now the failure cases. If the **prefill pool is too small**, requests queue before prefill: TTFT climbs while TPOT stays perfectly smooth. If the **decode pool is too small**, finished prefills wait for a free slot, or caches no longer fit in memory: prefill workers look idle, yet first tokens are still late. If the **link between pools is slow**, every TTFT grows by the same extra amount, and it grows with prompt length because a longer prompt has a bigger cache to copy." },
+        { type: "p", text: "So when a disaggregated cluster misses its targets, we first ask which number is bad and where the requests are waiting. Adding workers to the wrong pool changes nothing." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will simulate the prefill pool on its own. Long prompts arrive at a steady pace, each one waits for the next free prefill worker, runs its prefill, and then pays a short KV transfer. We print every request's TTFT for one, two and three prefill workers. The timings are illustrative." },
+        { type: "code", lang: "python", title: "practice_prefill_pool.py", code: `# Sizing the prefill pool: how many prefill workers keep TTFT steady?
+# Times in ms, illustrative.
+import heapq
+PREFILL, TRANSFER = 250, 10         # one long prompt; KV copy to a decode worker
+ARRIVAL_GAP, N_REQUESTS = 100, 12   # a new request arrives every 100 ms
+
+def ttfts(n_workers):
+    free_at = [0] * n_workers       # time at which each prefill worker is free
+    heapq.heapify(free_at)
+    out = []
+    for i in range(N_REQUESTS):
+        arrive = i * ARRIVAL_GAP
+        start = max(arrive, heapq.heappop(free_at))   # wait for the next free worker
+        done = start + PREFILL
+        heapq.heappush(free_at, done)
+        out.append(done + TRANSFER - arrive)          # queue + prefill + transfer
+    return out
+
+for workers in (1, 2, 3):
+    t = ttfts(workers)
+    load = PREFILL / (ARRIVAL_GAP * workers)          # work arriving / capacity
+    print(f"{workers} prefill worker(s): load={load:.2f}  "
+          f"TTFT first={t[0]} ms, last={t[-1]} ms")
+    print("   all TTFTs:", t)`, output: `1 prefill worker(s): load=2.50  TTFT first=260 ms, last=1910 ms
+   all TTFTs: [260, 410, 560, 710, 860, 1010, 1160, 1310, 1460, 1610, 1760, 1910]
+2 prefill worker(s): load=1.25  TTFT first=260 ms, last=510 ms
+   all TTFTs: [260, 260, 310, 310, 360, 360, 410, 410, 460, 460, 510, 510]
+3 prefill worker(s): load=0.83  TTFT first=260 ms, last=260 ms
+   all TTFTs: [260, 260, 260, 260, 260, 260, 260, 260, 260, 260, 260, 260]`, walkthrough: [
+          { lines: [1, 5], note: "The setup: a 250 ms prefill, a 10 ms KV transfer, and a new request every 100 ms." },
+          { lines: [7, 17], note: "A small queue simulation. A heap holds the time at which each worker becomes free. Each request takes the earliest free worker and waits if needed." },
+          { lines: [19, 24], note: "Try three pool sizes. Load is the prefill work arriving per second divided by what the pool can do. Above 1.0 the pool cannot keep up." }
+        ] },
+        { type: "p", text: "With one or two workers the load is above 1.0 and TTFT rises with every new request. With three workers every request gets 260 ms: the prefill plus the transfer and no queueing. Now change it:" },
+        { type: "list", items: [
+          "Set `PREFILL = 190`. Predict the load for two workers, and whether two workers are now enough, before you run it.",
+          "Set `TRANSFER = 200` to model a slow link. Predict what happens to the three-worker TTFTs. Does adding a fourth worker help?",
+          "Set `N_REQUESTS = 40` with the original timings. Predict the last TTFT for two workers. Does the queue settle at some level or keep growing?"
+        ] },
+        { type: "check", question: "With two workers the load is 1.25. Why does TTFT keep rising instead of settling at a higher but steady value?", answer: "A load above 1.0 means work arrives faster than the pool can finish it. Every new request finds a slightly longer queue than the one before, so the wait grows without limit. Here each request adds 25 ms: the pool finishes one prefill every 125 ms on average, but one arrives every 100 ms." },
+        { type: "check", question: "After moving to two pools, our TPOT is smooth, but during a burst of long pasted logs the first token arrives late. A teammate wants to add decode workers. Is that the right fix?", answer: "No. Smooth TPOT says the decode pool is coping. Late first tokens during a burst of long prompts point to queueing in the prefill pool, or to slow KV transfers. We should add prefill workers or check the link, not add decode workers." }
       ]
     }
   ],

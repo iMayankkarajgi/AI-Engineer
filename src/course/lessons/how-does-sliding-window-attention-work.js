@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-sliding-window-attention-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'If each token may only look at its last few thousand neighbours, how can a model still connect ideas that are a hundred thousand tokens apart?',
   summary: 'Sliding window attention lets each token attend only to the previous W tokens instead of the whole sequence. That turns attention cost from quadratic to linear in sequence length and caps the KV cache at W entries per layer. Because layers are stacked, information can still hop W tokens per layer, so distant tokens are reachable indirectly, and many modern models mix sliding-window layers with a few full-attention layers.',
   sections: [
@@ -155,6 +155,78 @@ KV cache kept per layer: full grows with n, sliding stays at 4096`,
           '**Trade-off: eviction effects.** Simply dropping the oldest tokens during streaming can destabilise the model because of attention sinks; the next lesson explains why and how to fix it.',
         ] },
         { type: 'check', question: 'We must build a contract-review tool that quotes exact clause numbers from anywhere in 200-page contracts. Should we use a pure sliding-window model?', answer: 'Probably not. Exact long-range recall is the weak spot of pure SWA. Prefer a model with full-attention layers (or a hybrid with global layers), possibly with retrieval to fetch relevant clauses.' },
+      ],
+    },
+    {
+      id: 'worked-example-relay-and-hybrid',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: "Two questions come up whenever we design with sliding windows: how many layers does a fact need to travel a given distance, and how much cache does a mix of local and global layers really save? Let us work both out with small numbers." },
+        { type: 'steps', title: "Relaying a fact 9 tokens back with W = 4", items: [
+          { title: "Layer 1", text: "The fact sits at token 0. Token 9 sees only tokens 6 to 9, so it sees nothing of it. But token 3 sees tokens 0 to 3 and mixes the fact into its own output." },
+          { title: "Layer 2", text: "Token 6 sees tokens 3 to 6. It reads token 3's layer-1 output, which now carries a blend that includes the fact." },
+          { title: "Layer 3", text: "Token 9 sees tokens 6 to 9. It reads token 6's layer-2 output. The fact has arrived, after 3 hops and 3 rounds of mixing." },
+          { title: "The rule", text: "Layers needed = ⌈distance / (W − 1)⌉. Here ⌈9 / 3⌉ = 3." },
+          { title: "Real scale", text: "In our support log the order number is 30,000 tokens back. With W = 4,096 that is ⌈30,000 / 4,095⌉ = 8 layers of relaying. A single full-attention layer does it in 1 hop." },
+        ] },
+        { type: 'table', caption: "KV cache entries for a 12-layer model reading 50,000 tokens (the layer mix is illustrative)", head: ['Layer mix', 'Calculation', 'Entries kept'], rows: [
+          ['All full attention', '12 × 50,000', '600,000'],
+          ['All sliding, W = 4,096', '12 × 4,096', '49,152'],
+          ['10 sliding + 2 full', '10 × 4,096 + 2 × 50,000', '140,960'],
+        ] },
+        { type: 'p', text: "The hybrid keeps about 23% of the full cache. Notice where that cache goes: the 2 global layers hold 100,000 of the 140,960 entries. So in a hybrid model, the number of global layers decides the memory bill, and the window size matters much less." },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: "We will build the rolling buffer cache from this lesson in plain Python. Each new token overwrites the slot `i mod W`. We print which token gets evicted and which positions the new token can still see." },
+        { type: 'code', lang: 'python', title: 'practice_rolling_buffer.py', code: `# A rolling-buffer KV cache: the entry for position i lives in slot i mod W
+W = 4
+buffer = [None] * W
+tokens = "order 7419 arrived late so please refund it".split()
+
+for i, tok in enumerate(tokens):
+    slot = i % W
+    evicted = buffer[slot][1] if buffer[slot] else "-"
+    buffer[slot] = (i, tok)                      # overwrite the oldest entry
+    # the token at position i can attend to whatever is in the buffer now
+    visible = sorted(pos for pos, _ in (b for b in buffer if b))
+    print(f"i={i} {tok:<8} slot={slot} evicts={evicted:<8} sees positions {visible}")
+
+# Work and memory for the whole sequence
+n = len(tokens)
+full = n * (n + 1) // 2
+slide = sum(min(i + 1, W) for i in range(n))
+print(f"n={n}: full causal scores={full}, sliding scores={slide}")
+print(f"cache entries per layer: full={n}, sliding={W}")
+in_cache = [tok for _, tok in buffer]
+print("still cached:", in_cache, "| is '7419' cached?", "7419" in in_cache)`, output: `i=0 order    slot=0 evicts=-        sees positions [0]
+i=1 7419     slot=1 evicts=-        sees positions [0, 1]
+i=2 arrived  slot=2 evicts=-        sees positions [0, 1, 2]
+i=3 late     slot=3 evicts=-        sees positions [0, 1, 2, 3]
+i=4 so       slot=0 evicts=order    sees positions [1, 2, 3, 4]
+i=5 please   slot=1 evicts=7419     sees positions [2, 3, 4, 5]
+i=6 refund   slot=2 evicts=arrived  sees positions [3, 4, 5, 6]
+i=7 it       slot=3 evicts=late     sees positions [4, 5, 6, 7]
+n=8: full causal scores=36, sliding scores=26
+cache entries per layer: full=8, sliding=4
+still cached: ['so', 'please', 'refund', 'it'] | is '7419' cached? False`,
+          walkthrough: [
+            { lines: [1, 4], note: "A buffer with W = 4 slots and an 8-token message that contains an order number near the start." },
+            { lines: [6, 9], note: "The whole cache policy: compute the slot as i mod W, note what was there, and overwrite it. Nothing is shifted or copied." },
+            { lines: [10, 12], note: "Whatever is in the buffer is what the new token may attend to. From token 4 on, that is always exactly the last 4 positions." },
+            { lines: [14, 21], note: "Count the work (26 scores instead of 36) and the memory (4 entries instead of 8), then check what survived. The order number left the cache when `please` arrived." },
+          ] },
+        { type: 'p', text: "Now change it:" },
+        { type: 'list', items: [
+          "Set `W = 8`. Predict the sliding score count and whether `7419` is still cached at the end.",
+          "Set `W = 2`. Predict which token evicts `7419`, and the new sliding score count, before running.",
+          "Add four more words to the sentence. Predict the slot of the last token and the list of cached tokens at the end.",
+        ] },
+        { type: 'check', question: "In the output, `please` evicts `7419` at i = 5. Can a later token in this layer still be influenced by the order number?", answer: "Not directly: its key and value are gone from this layer's cache. Indirectly, yes. Tokens 1 to 4 attended to it while it was cached, so their outputs carry a blend of it, and later tokens can read those outputs in the next layer. That is the relay effect, and it is why far-back details arrive blurred." },
+        { type: 'check', question: "Why store position i in slot i mod W instead of shifting every entry one place to the left when a new token arrives?", answer: "Shifting copies W entries for every new token; the modulo trick overwrites one entry in place. The order of entries inside the buffer does not matter, because attention treats them as a set and position information is carried separately. Same visible tokens, far less memory traffic." },
       ],
     },
   ],

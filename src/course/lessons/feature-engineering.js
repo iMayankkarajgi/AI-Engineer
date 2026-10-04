@@ -1,6 +1,6 @@
 export default {
   id: 'feature-engineering',
-  minutes: 18,
+  minutes: 23,
   hook: 'Why can the same simple model go from an average error of 40.8 to 6.7 without changing a single line of the algorithm, just by changing how we describe the data?',
   summary: 'Feature engineering is turning raw data into input columns (features) that make the pattern easy for a model to learn: filling missing values, encoding categories, scaling numbers, transforming skewed values, and creating new features from domain knowledge. Good features often matter more than the choice of algorithm, especially for tabular data. Deep learning learns many features automatically, but feature engineering still matters in production AI systems.',
   sections: [
@@ -141,6 +141,89 @@ one-hot rows for Pune, Mumbai, Nagpur: [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]`, wa
           '**Over-engineering for deep models.** For images, audio and long text, hand-made features rarely beat good pre-trained models; spend effort on data quality instead.',
         ] },
         { type: 'check', question: 'We standardise a feature using the mean and std of all 10,000 rows, then split into train and test. What is wrong?', answer: 'The test rows influenced the scaling statistics, which is a mild form of data leakage. The correct order is: split first, compute mean and std on the training rows only, then apply those same numbers to the test rows (and later to live data).' },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us take one raw record and turn it into model features by hand. We switch to a new example for this: a single online order that a fraud model must score. The raw record has four fields, and one of them is empty.' },
+        { type: 'table', caption: 'One illustrative raw order', head: ['Field', 'Raw value', 'Problem for a model'], rows: [
+          ['timestamp', '2026-03-14 22:40', 'A string. The useful parts (hour, weekday) are hidden inside it'],
+          ['amount', '4,800', 'Amounts are skewed: most are small, a few are huge'],
+          ['city', 'Pune', 'Text, not a number'],
+          ['customer_age', '(missing)', 'Most models cannot take an empty value'],
+        ] },
+        { type: 'steps', title: 'From raw record to feature row', items: [
+          { title: 'Fill the gap, and remember it', text: 'Suppose the median age in the training data is 34. We set `age = 34` and add `age_was_missing = 1`.' },
+          { title: 'Compress the amount', text: 'log₁₀(4,800) ≈ 3.68. On the log scale, 480, 4,800 and 48,000 are evenly spaced, one unit apart.' },
+          { title: 'Scale it', text: 'Suppose the training mean of log-amount is 3.2 and the standard deviation is 0.5. Then z = (3.68 − 3.2) / 0.5 ≈ 0.96: about one standard deviation above a typical order.' },
+          { title: 'Unpack the timestamp', text: 'The hour is 22, so `is_night = 1`. 14 March 2026 is a Saturday, so `is_weekend = 1`.' },
+          { title: 'Encode the city', text: 'With Pune as the reference category, the one-hot columns are `is_Mumbai = 0` and `is_Nagpur = 0`.' },
+          { title: 'Assemble the row', text: 'The model finally sees `[34, 1, 0.96, 1, 1, 0, 0]`: seven plain numbers, each with a clear meaning.' },
+        ] },
+        { type: 'p', text: 'The values 34, 3.2 and 0.5 are illustrative. What matters is where they come from: all three were computed on the **training data** and stored. At prediction time we only look them up.' },
+        { type: 'callout', tone: 'note', title: 'A trap inside time features', text: 'If we feed the raw hour (0 to 23) to a model, it sees 23:00 and 00:00 as far apart, although they are one hour apart on the clock. A common fix is to place the hour on a circle with two features: `sin(2π · hour / 24)` and `cos(2π · hour / 24)`. For hour 23 these are about (−0.26, 0.97), and for hour 0 they are (0, 1). The two points are now neighbours. The same trick works for weekday and month.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will build a tiny, leak-free feature pipeline with two functions. `fit` learns statistics from training rows. `transform` applies them to any row, including a live one that arrives later. The data has two classic problems: missing ages and one very large income.' },
+        { type: 'code', lang: 'python', title: 'practice_feature_pipeline.py', code: `import math
+import statistics
+
+# Training rows: (age or None, yearly income). Income is heavily skewed.
+train = [(25, 30_000), (None, 42_000), (41, 55_000), (33, 38_000),
+         (52, 900_000), (29, 47_000), (None, 61_000), (38, 51_000)]
+
+def fit(rows):
+    """Learn every statistic from the TRAINING rows only."""
+    ages = [a for a, _ in rows if a is not None]
+    logs = [math.log10(inc) for _, inc in rows]
+    return {"age_median": statistics.median(ages),
+            "log_mean": statistics.mean(logs),
+            "log_std": statistics.pstdev(logs)}
+
+def transform(row, s):
+    """Turn one raw row into model features using the stored statistics."""
+    age, income = row
+    age_missing = 1 if age is None else 0          # the gap itself is a signal
+    age_filled = s["age_median"] if age is None else age
+    log_z = (math.log10(income) - s["log_mean"]) / s["log_std"]
+    return [age_filled, age_missing, round(log_z, 2)]
+
+stats = fit(train)
+print("stats learned from training rows:")
+for name, value in stats.items():
+    print(f"  {name} = {value:.3f}")
+print("features: [age_filled, age_missing, log_income_z]")
+for row in train[:2] + [train[4]]:
+    print(f"  train row {row} -> {transform(row, stats)}")
+live = (None, 75_000)                              # a new customer at prediction time
+print(f"  live row  {live} -> {transform(live, stats)}")`, output: `stats learned from training rows:
+  age_median = 35.500
+  log_mean = 4.817
+  log_std = 0.439
+features: [age_filled, age_missing, log_income_z]
+  train row (25, 30000) -> [25, 0, -0.78]
+  train row (None, 42000) -> [35.5, 1, -0.44]
+  train row (52, 900000) -> [52, 0, 2.59]
+  live row  (None, 75000) -> [35.5, 1, 0.13]`, walkthrough: [
+          { lines: [4, 6], note: 'Eight training rows. Two ages are missing, and one income (900,000) is far larger than the rest.' },
+          { lines: [8, 14], note: '`fit` computes the median age and the mean and standard deviation of log-income. It only ever sees training rows.' },
+          { lines: [16, 22], note: '`transform` fills a missing age with the stored median, adds a missing flag, and standardises the log-income with the stored mean and std.' },
+          { lines: [24, 32], note: 'Fit once on the training rows, then reuse the same statistics for training rows and for a brand-new live row.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Remove the log: use `inc` instead of `math.log10(inc)` in `fit` and `income` instead of `math.log10(income)` in `transform`. Predict the sign of the live customer\'s z-score before you run it. (Hint: what does one huge income do to the mean?)',
+          'Change the outlier income `900_000` to `60_000`. Predict whether `log_std` goes up or down, and whether the live customer\'s z-score moves towards or away from zero.',
+          'Change `stats = fit(train)` to `stats = fit(train + [live])` (move the `live` line above it). Predict which statistics change. Then explain why this is leakage even though the numbers barely move.',
+        ] },
+        { type: 'check', question: 'The live customer earns 75,000, more than seven of the eight training customers. Why is their `log_income_z` only 0.13 and not a large positive number?', answer: 'Because the one 900,000 income pulls the average up and makes the spread wide. The mean of log-income is 4.817, which is about 65,600 in plain money, and log₁₀(75,000) ≈ 4.875 is only a little above it. Standardised features measure distance from the mean in units of spread, and a single outlier changes both. The log already softens this a lot; without it the effect is far worse.' },
+        { type: 'check', question: 'Why does `transform` receive the statistics as an argument, instead of computing a median and a mean from the row it is given?', answer: 'A single live row has no median or standard deviation to compute. More importantly, the model learned its weights from features built with the training statistics. If we scaled live rows with different numbers, the same raw customer would get different feature values in training and in production. That is train/serve skew. Passing stored statistics guarantees both use exactly the same transform.' },
       ],
     },
   ],

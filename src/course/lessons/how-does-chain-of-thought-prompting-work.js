@@ -1,6 +1,6 @@
 export default {
   id: "how-does-chain-of-thought-prompting-work",
-  minutes: 18,
+  minutes: 23,
   hook: "Why does adding one sentence, “Let's think step by step”, make a language model noticeably better at word problems?",
   summary: "Chain-of-Thought (CoT) prompting asks a language model to write out its intermediate reasoning before giving the final answer. Because every generated token is extra computation the model can build on, writing the steps down turns one hard leap into many small, easier steps. We can trigger it with a short instruction (zero-shot) or with worked examples (few-shot), and we can make it more reliable by sampling several chains and taking a vote.",
   sections: [
@@ -191,6 +191,66 @@ Self-consistency vote: 9 (4 of 5 chains)`,
           "**Reasoning models change the picture.** Models trained to think before answering (for example OpenAI's o-series, DeepSeek-R1, and the extended-thinking modes of Claude and Gemini) already produce a hidden or visible chain of thought. Adding “think step by step” to them usually adds little, and some vendors advise against prescribing the steps. Give them a clear goal instead.",
           "**Skip it for one-step tasks.** If the task has no intermediate steps, CoT costs more and may even overthink."
         ] }
+      ]
+    },
+    {
+      id: "cot-mistakes",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Most CoT failures look the same from the outside: a wrong final answer. The written chain is what lets us tell them apart. Here are three patterns we meet often, shown on our cafe problem." },
+        { type: "table", caption: "Three ways a chain of thought goes wrong", head: ["Mistake", "What we see", "Why it happens", "Fix"], rows: [["Answer first, reasons after", "A number, then a tidy explanation that may not match it", "The answer was written before any step existed, so the steps could not help it", "Ask for the steps first and the answer on the last line"], ["Cascading slip", "`23 − 20 = 13`, then `13 + 6 = 19`", "Every later step trusts the earlier line", "Re-check each line with code, or vote over several chains"], ["Wrong number parsed", "The chain is right, but our code returns 23 or 6", "The parser grabs the first number it finds, not the answer line", "Demand a fixed last line such as `Answer: 9` and parse only that"]] },
+        { type: "p", text: "The first row surprises many people. A model writes from left to right. Text that comes *after* the answer cannot change the answer. So a prompt that says “give the answer, then explain” gets almost none of the benefit of CoT, even though the output looks like reasoning." },
+        { type: "steps", title: "Diagnosing one wrong chain", items: [{ title: "Find the answer line", text: "Check that our code parsed the line we meant. If it did not, we have a parsing bug, not a reasoning bug." }, { title: "Re-compute each step", text: "Walk down the chain and redo each small operation. The first line that does not hold is where the error began." }, { title: "Pick the fix", text: "A slip that changes from run to run calls for a vote or a verification step. The same misreading on every run calls for a clearer prompt or a worked example." }] }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a toy “model” that can do only one arithmetic operation per pass. Asked for a direct answer, it runs out of room after the first operation. Allowed to write each result on a scratchpad and read it back, it reaches the multi-step answer. We also add a checker that finds the first wrong line in a chain." },
+        { type: "code", lang: "python", title: "practice_scratchpad.py", code: `# Toy model: each "forward pass" can do only ONE arithmetic operation.
+OPS = {"+": lambda a, b: a + b, "-": lambda a, b: a - b, "*": lambda a, b: a * b}
+
+def one_pass(start, steps):
+    # Direct answer: a single pass, so only the first operation gets done
+    op, n = steps[0]
+    return OPS[op](start, n)
+
+def chain_of_thought(start, steps, slip_at=None):
+    # One operation per pass; each result is written down and read back
+    pad, value = [], start
+    for i, (op, n) in enumerate(steps):
+        result = OPS[op](value, n)
+        if i == slip_at:
+            result += 10                    # inject an arithmetic slip
+        pad.append((value, op, n, result))  # one scratchpad line
+        value = result                      # the next pass reads this line
+    return value, pad
+
+def first_bad_line(pad):
+    # The steps are written down, so code can re-check each one
+    for i, (a, op, n, result) in enumerate(pad, 1):
+        if OPS[op](a, n) != result:
+            return i
+    return None
+
+steps = [("-", 20), ("+", 6), ("*", 2)]    # 23 apples: use 20, buy 6, double
+print("direct answer:", one_pass(23, steps), "(the truth is 18)")
+answer, pad = chain_of_thought(23, steps)
+for a, op, n, r in pad:
+    print(f"  {a} {op} {n} = {r}")
+print("chain answer:", answer, "| passes used:", len(pad))
+answer, pad = chain_of_thought(23, steps, slip_at=1)
+print("with a slip:", answer, "| first bad line:", first_bad_line(pad))`, output: `direct answer: 3 (the truth is 18)
+  23 - 20 = 3
+  3 + 6 = 9
+  9 * 2 = 18
+chain answer: 18 | passes used: 3
+with a slip: 38 | first bad line: 2`, walkthrough: [{ lines: [1, 7], note: "The toy model. `one_pass` answers directly, so it has room for only the first operation: 23 − 20." }, { lines: [9, 18], note: "The chain: one operation per pass. Each result is stored as a scratchpad line, and the next pass starts from it. `slip_at` lets us inject one arithmetic slip." }, { lines: [20, 25], note: "A checker that redoes each written step and returns the first line that does not hold." }, { lines: [27, 34], note: "Run it three ways: a direct answer, a clean chain, and a chain with a slip in its second step." }] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: ["Add a fourth step, `(\"-\", 4)`, to `steps`. Before running, predict the chain answer and the number of passes. Does the direct answer change?", "Change `slip_at=1` to `slip_at=0`. Predict the final answer and the line that `first_bad_line` reports.", "Give `one_pass` a `budget` argument so it applies the first `budget` operations. Predict the smallest budget that returns 18, and say what that budget stands for in a real model."] },
+        { type: "check", question: "In the slip run, the second and third scratchpad lines both hold wrong values (19 and 38), yet `first_bad_line` reports only line 2. Why is line 3 not flagged?", answer: "Line 3 is `19 * 2 = 38`, which is correct arithmetic on a wrong input. The checker tests each step on its own, so it flags only the step where the error was made. This is what a cascade looks like: one bad step, then correct steps that carry the bad value forward. Fix the first bad line and the later lines repair themselves." },
+        { type: "check", question: "A teammate changes the prompt to “Reply with the final number first, then show your working.” The working looks neat, but accuracy falls back to the no-CoT level. What happened?", answer: "The answer is now generated before any step is written. A model writes left to right, so the working cannot feed into a number that is already on the page. The extra computation helps only when the steps come first and the answer comes last." }
       ]
     }
   ],

@@ -1,6 +1,6 @@
 export default {
   id: 'how-ai-agents-communicate',
-  minutes: 16,
+  minutes: 21,
   hook: 'When a billing agent and a tech-support agent need to work on the same customer, how do they actually talk: free text, JSON, a shared database, or a chat room?',
   summary: 'Agents communicate by exchanging messages or by reading and writing shared state. The four basic patterns are direct (one to one), centralized (through a hub), broadcast (one to all) and shared memory (a common blackboard). Good communication needs a clear message format, agreed rules (a protocol) and safeguards against lost context, loops and untrusted content.',
   sections: [
@@ -207,6 +207,94 @@ shared memory messages: 0, notify read: done`, walkthrough: [
         { type: 'check', question: 'Two agents keep sending each other "Can you clarify?" and the bill grows. Name two fixes.', answer: 'Add a hop or turn limit per conversation so it stops, and make messages more complete (include ids, context and the expected answer format) so clarification is rarely needed. A hub that can detect and break cycles also helps.' },
       ],
     },
+    {
+      id: "worked-example-lost-update",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The shared-memory tab warned about “conflicts when two agents write the same key”. Let us trace one such conflict slowly, because it is easy to miss: nothing crashes, and every agent believes it did its job." },
+        { type: "p", text: "The blackboard holds one record for our customer's case: `order_1042 = {refund: pending, login: locked}`. Billing and tech both work on it at the same time. Each one reads the whole record, changes its own field, and writes the whole record back." },
+        { type: "table", caption: "A lost update, moment by moment",
+          head: ["Time", "Billing", "Tech", "Record on the blackboard"],
+          rows: [
+            ["1", "Reads the record", "", "refund: pending, login: locked"],
+            ["2", "", "Reads the record", "refund: pending, login: locked"],
+            ["3", "Writes back with refund: done", "", "refund: done, login: locked"],
+            ["4", "", "Writes back with login: unlocked", "refund: pending, login: unlocked"]
+          ] },
+        { type: "p", text: "At time 4, tech writes the copy it read at time 2, in which the refund was still pending. Billing's update is gone. Later, notify reads “refund: pending” and tells the customer to keep waiting for money that has already been sent." },
+        { type: "steps", title: "Three ways to prevent it",
+          items: [
+            { title: "Write only your own field", text: "Give each agent its own key: `order_1042.refund` for billing, `order_1042.login` for tech. They can no longer overwrite each other. This is the “define who may write each key” rule in practice." },
+            { title: "Check a version number before writing", text: "Store a version with the record. Each agent reads version 1 and writes “only if the version is still 1”, which bumps it to 2. Billing's write succeeds. Tech's write is refused because the version is now 2, so tech reads again and reapplies its change to the fresh record." },
+            { title: "Send changes through one owner", text: "Agents send small change requests such as “set login to unlocked” to a hub, and only the hub writes. Changes are applied one at a time, in order." }
+          ] },
+        { type: "p", text: "The same thinking covers the stale-read problem. A reader that acts on a value should know how old it is, so records usually carry a timestamp or version, and an agent about to do something costly reads again just before it acts." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code built messages. Now we build the thing that carries them: a small hub. It wraps every request in the same envelope, refuses receivers that do not exist, checks who is allowed to ask whom for what, caps the number of hops, and logs both the request and the reply. The agents are scripted, and one of them always asks for clarification, so we can watch the hop limit do its job." },
+        { type: "code", lang: "python", title: "practice_message_hub.py", code: `# A message hub: build the envelope, check permissions, cap hops, log everything.
+import itertools
+
+ids = itertools.count(1)
+log = []
+MAX_HOPS = 6
+# Who may ask whom for what. Anything not listed is refused.
+ALLOWED = {("triage", "billing"): {"refund_status"},
+           ("triage", "tech"): {"reset_password"}}
+
+def billing(msg):                    # scripted agent: answers directly
+    return {"status": "refunded"}
+def tech(msg):                       # scripted agent: always asks back (a loop risk)
+    return {"clarify": "which account?"}
+AGENTS = {"billing": billing, "tech": tech}
+
+def send(sender, to, task, hops=0):
+    """Every request goes through this hub."""
+    msg = {"id": next(ids), "from": sender, "to": to, "intent": "request",
+           "content": {"task": task}, "reply_to": None}
+    if to not in AGENTS:
+        return f"#{msg['id']} refused: unknown receiver '{to}'"
+    if task not in ALLOWED.get((sender, to), set()):
+        return f"#{msg['id']} refused: {sender} may not ask {to} for '{task}'"
+    if hops >= MAX_HOPS:
+        return f"#{msg['id']} stopped: hop limit {MAX_HOPS} reached"
+    reply = {"id": next(ids), "from": to, "to": sender, "intent": "inform",
+             "content": AGENTS[to](msg), "reply_to": msg["id"]}
+    log.extend([msg, reply])                       # both hops are recorded
+    if "clarify" in reply["content"]:              # scripted sender simply asks again
+        return send(sender, to, task, hops + 2)
+    return f"#{reply['id']} answers #{msg['id']}: {reply['content']}"
+
+print(send("triage", "billing", "refund_status"))
+print(send("tech", "billing", "issue_refund"))     # e.g. text injected via a ticket
+print(send("triage", "legal", "refund_status"))
+print(send("triage", "tech", "reset_password"))
+print("messages delivered and logged:", len(log))`, output: `#2 answers #1: {'status': 'refunded'}
+#3 refused: tech may not ask billing for 'issue_refund'
+#4 refused: unknown receiver 'legal'
+#11 stopped: hop limit 6 reached
+messages delivered and logged: 8`,
+          walkthrough: [
+            { lines: [4, 9], note: "An id counter, the log, the hop limit, and the permission table. A pair that is not listed may not ask for anything." },
+            { lines: [11, 15], note: "Two scripted agents. Billing answers. Tech never answers: it always asks a question back." },
+            { lines: [17, 26], note: "The hub builds the envelope and then runs three checks in order: does the receiver exist, is this request allowed, and is the conversation within its hop limit." },
+            { lines: [27, 32], note: "Deliver, build a reply whose `reply_to` points at the request, and log both. If the reply is a clarification, the scripted sender asks again and two more hops are counted." },
+            { lines: [34, 38], note: "Four conversations: a normal one, a forbidden one, one to a missing agent, and one that loops." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `MAX_HOPS = 2`. Predict the id shown in the “stopped” line and the final count of logged messages.",
+          "Allow the forbidden request: add `(\"tech\", \"billing\"): {\"issue_refund\"}` to `ALLOWED`. Predict the new second line of output. Then explain why a permission table is safer than telling billing's prompt to “only obey trusted agents”.",
+          "Make tech answer properly: return `{\"done\": True}` instead of the clarification. Predict the fourth output line and the final message count."
+        ] },
+        { type: "check", question: "The refused messages got ids (#3 and #4) but do not appear in the log count. Is that a good design? What would you change for a production system?", answer: "Giving refused messages an id is useful, because the sender can be told exactly which request was refused. Not logging them is a weakness. A refused request is often the most interesting event in the system: it may be a bug in an agent or an injection attempt. A production hub would log refusals too, with the reason, in the same trace as delivered messages." },
+        { type: "check", question: "The loop with tech was stopped after 3 round trips. The hub did not understand that the conversation was stuck; it only counted. What are the strength and the weakness of a plain counter?", answer: "Strength: it always works, whatever the agents say, and it costs nothing. It guarantees that a conversation ends. Weakness: it cannot tell a stuck loop from a long but healthy exchange, so a limit that is too low cuts off real work and one that is too high wastes money before it triggers. That is why counters are paired with better messages (so fewer clarifications are needed) and sometimes with a check for repeated identical requests." }
+      ]
+    }
   ],
   quiz: [
     { q: 'In shared memory communication, how does information get from one agent to another?', options: ['The sender delivers a copy of the message to every agent', 'Every message is routed through one orchestrator agent', 'One agent writes to a common store; others read it later', 'The two agents call each other directly, point to point'], answer: 2, explain: 'Shared memory (a blackboard) decouples agents: writers update a store, readers read it when they run. No direct message is needed. The other options describe broadcast, centralized and direct communication.' },

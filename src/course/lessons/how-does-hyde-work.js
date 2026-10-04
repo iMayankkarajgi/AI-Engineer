@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-hyde-work',
-  minutes: 18,
+  minutes: 23,
   hook: 'What if the best way to search for an answer is to first make one up, even a slightly wrong one, and then search for documents that look like it?',
   summary: 'HyDE (Hypothetical Document Embeddings) improves RAG retrieval by asking an LLM to write a fake answer to the question, embedding that fake answer instead of (or together with) the question, and searching for real documents near it. Answers look like other answers, so the fake one lands closer to the real passage than a short question does. It costs an extra LLM call per query and can mislead search when the LLM has no idea about the topic.',
   sections: [
@@ -121,6 +121,83 @@ average      scores=[0.4 0.  0.2]  best=doc0`,
         { type: 'p', text: '**Advantages.** No labelled data or fine-tuning; it is pure prompting at query time. It works with any embedding model and vector database. It shines for short, vague or oddly worded questions and in specialised domains where the user\'s words differ from the documents\' words. The paper reported large improvements over the same unsupervised encoder used without HyDE across several benchmarks.' },
         { type: 'p', text: '**Disadvantages.** Each query needs an LLM generation, adding latency (often the largest cost) and money. If the LLM does not know the topic (private product names, internal codes, very recent events), it may write a confident fake answer about the wrong thing, dragging search toward wrong documents. The fake answer can carry the LLM\'s biases. Exact identifiers in the question can be paraphrased away. And modern retrievers trained on question-answer data already handle much of the mismatch, so the benefit shrinks.' },
         { type: 'callout', tone: 'warn', title: 'The classic failure', text: 'A user asks "What does error ZX-77 on the K9 controller mean?" The LLM has never heard of ZX-77 and writes a generic text about network errors. HyDE then retrieves network-error articles instead of the one page that mentions ZX-77. Fix: combine HyDE with keyword search (hybrid), keep the original query in the average, or skip HyDE for queries containing codes.' },
+      ],
+    },
+    {
+      id: 'common-mistakes-in-practice',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'HyDE fails quietly. Search still returns passages; they are just the wrong ones. The way to catch this is simple: **log the hypothetical text** next to the passages it retrieved, and read a sample. Most problems are visible in the fake answer itself.' },
+        { type: 'table', caption: 'What the logs show, and what to do about it.', head: ['What we see in the log', 'What happened', 'Fix'], rows: [
+          ['The fake answer never repeats the code or name from the question', 'The LLM paraphrased an exact identifier away', 'Keep the question in the average; add keyword search'],
+          ['The fake answer is fluent but about another topic', 'The LLM does not know this domain', 'Skip HyDE for such queries, or average several hypotheses'],
+          ['The fake answer is a long essay; our documents are short FAQ entries', 'Length and style differ from the corpus, which pulls the vector away', 'Ask for one short passage written like our documents'],
+          ['The same question retrieves different passages on different days', 'Randomness in generation', 'Lower the temperature, or cache the hypothetical text'],
+        ] },
+        { type: 'p', text: 'Latency is the other thing to measure. With illustrative numbers: plain search is one embedding (20 ms) plus one vector lookup (10 ms), so 30 ms. HyDE adds a generation of about 80 tokens. At 100 tokens per second that is 800 ms, for a total of 830 ms before the real answer even starts. Capping the fake answer at 40 tokens halves the added time, and a short passage is often enough to carry the topic.' },
+        { type: 'steps', title: 'A small A/B test', items: [
+          { title: 'Collect questions', text: 'Take about 30 real questions for which we know the passage that answers each.' },
+          { title: 'Run plain search', text: 'Note the rank of the right passage for every question.' },
+          { title: 'Run HyDE', text: 'Note the rank again, and save the fake answer.' },
+          { title: 'Count', text: 'For example: 12 questions better, 15 the same, 3 worse (illustrative).' },
+          { title: 'Read the losses', text: 'If the 3 worse cases share a pattern, such as all containing product codes, send that kind of query around HyDE.' },
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will code the averaging formula from this lesson, v = (E(q) + ∑ E(hᵢ)) / (N + 1), and test how it copes when one of the fake answers is **off-topic**. The embeddings are pretend 3-number vectors with readable axes (baking, cookware, fitness), so we can see where each text points.' },
+        { type: 'code', lang: 'python', title: 'practice_hyde_average.py', code: `import numpy as np
+
+def unit(v):
+    v = np.array(v, dtype=float)
+    return v / np.linalg.norm(v)
+
+# Pretend embeddings over 3 axes: [baking, cookware, fitness]. Illustrative.
+docs = {"dense bread article":    unit([0.95, 0.10, 0.05]),
+        "cast iron pan article":  unit([0.20, 0.95, 0.05]),
+        "weight lifting article": unit([0.05, 0.10, 0.95])}
+
+question = unit([0.40, 0.50, 0.30])          # "why is my loaf so heavy" (vague)
+hypotheses = {                               # three LLM-written fake answers
+    "h1 (dough did not rise)": unit([0.90, 0.20, 0.10]),
+    "h2 (old yeast)":          unit([0.85, 0.10, 0.20]),
+    "h3 (misread: lifting)":   unit([0.10, 0.20, 0.95]),
+}
+
+def best_doc(v):
+    scores = {name: float(d @ v) for name, d in docs.items()}
+    top = max(scores, key=scores.get)
+    return f"{top:22} (cos = {scores[top]:.2f})"
+
+print(f"{'question only':24} ->", best_doc(question))
+for name, h in hypotheses.items():
+    print(f"{name:24} ->", best_doc(h))
+
+# HyDE vector: v = (E(q) + sum of E(h_i)) / (N + 1), then scale to length 1
+stack = [question] + list(hypotheses.values())
+v = unit(np.mean(stack, axis=0))
+print(f"{'average of q + 3 fakes':24} ->", best_doc(v))`, output: `question only            -> cast iron pan article  (cos = 0.83)
+h1 (dough did not rise)  -> dense bread article    (cos = 0.99)
+h2 (old yeast)           -> dense bread article    (cos = 0.98)
+h3 (misread: lifting)    -> weight lifting article (cos = 0.99)
+average of q + 3 fakes   -> dense bread article    (cos = 0.83)`,
+          walkthrough: [
+            { lines: [7, 17], note: 'Three documents, a vague question vector that leans towards cookware, and three hypothetical answers. Two are about baking; the third misread "heavy" as weight lifting.' },
+            { lines: [19, 22], note: 'Find the document with the highest cosine similarity to a search vector.' },
+            { lines: [24, 26], note: 'Search with the question alone, then with each fake answer alone.' },
+            { lines: [28, 31], note: 'The HyDE vector: the mean of the question and all three hypotheses, scaled back to length 1, then one search.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Replace h2 with a second misread, `unit([0.10, 0.10, 0.90])`. Now two of three hypotheses are wrong. Predict which article the average finds.',
+          'Leave the question out of the average: `stack = list(hypotheses.values())`. Predict whether the winner changes and whether its cosine goes up or down.',
+          'Keep only the bad hypothesis: `stack = [question, hypotheses["h3 (misread: lifting)"]]`. Predict the winner, and say what that means for running HyDE with a single hypothesis.',
+        ] },
+        { type: 'check', question: 'On its own, h3 finds the weight lifting article with a cosine of 0.99. In the average, the bread article still wins. Why did the bad hypothesis not drag the search away?', answer: 'Two of the three hypotheses point towards baking, and their directions add up. The single odd one is outvoted. Averaging only protects us while most hypotheses are on topic; if the LLM misreads the question most of the time, the average is wrong too.' },
+        { type: 'check', question: 'The averaged vector finds the bread article with a cosine of 0.83, lower than the 0.99 that h1 reaches alone. Is the lower number a problem?', answer: 'Not for the ranking, which is what search uses: the bread article is still first. But it is a warning. The question and the bad hypothesis pulled the vector towards cookware and fitness, so the lead over the other articles got smaller. Bad hypotheses always cost some safety margin, even when the right document still wins.' },
       ],
     },
     {

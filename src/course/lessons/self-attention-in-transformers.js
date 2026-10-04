@@ -1,6 +1,6 @@
 export default {
   id: "self-attention-in-transformers",
-  minutes: 24,
+  minutes: 29,
   hook: "In “The animal didn't cross the street because it was too tired”, how does a model work out that “it” means the animal and not the street?",
   summary: "Self-attention lets every token in a sequence look at every other token and build a new, context-aware version of itself. Each token produces a query, a key and a value; queries are compared with keys by dot product, scaled by √dₖ, turned into weights with softmax, and used to average the values. Running several of these in parallel (multi-head attention) lets a Transformer capture many kinds of relationships at once.",
   sections: [
@@ -173,6 +173,75 @@ output[mat] = [0.29 0.42]`,
           ["Science", "Attention over protein sequences and residue pairs", "AlphaFold 2"],
         ] },
         { type: "callout", tone: "example", title: "Back to “it was too tired”", text: "In a trained model, some heads in middle layers give the token “it” high weight on “animal”. If we change the sentence to “…because it was too wide”, the weight shifts towards “street”. Nothing about the layer changed; only the input did. That is the power of content-based weights." },
+      ],
+    },
+    {
+      id: "common-mistakes-diagnosis",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Self-attention is only a few lines of code, and that makes its bugs sneaky. The code still runs and still returns numbers of the right shape. Here are the slips we see most often when someone writes it by hand, with a quick test for each." },
+        { type: "table", caption: "Typical self-attention bugs and how to catch them.", head: ["Mistake", "What we observe", "Quick test"], rows: [
+          ["Softmax over columns instead of rows", "Columns sum to 1, rows do not", "Sum each row of the weights; every sum must be 1"],
+          ["Forgot to divide by √dₖ", "Weights are almost one-hot from the first training step; learning is slow", "Print the largest weight per row; values near 1.00 everywhere are a warning"],
+          ["Mask applied after softmax", "Rows sum to less than 1", "Sum each row again after masking"],
+          ["Q and K swapped", "The score matrix is transposed: token i's row holds how others look at it", "Check a pair we understand: does the row of “it” point at “animal”?"],
+          ["No positional information", "Shuffled input gives the same outputs, shuffled", "Feed a sentence and its reverse; compare one token's output"],
+        ] },
+        { type: "p", text: "Two of these are worth doing with numbers. **Wrong axis**: in our hand-computed weight matrix, each row sums to 1, but the first column sums to 0.50 + 0.77 + 0.28 = 1.55. If a test on the columns passes, the softmax ran in the wrong direction." },
+        { type: "p", text: "**Masking too late**: suppose one row of weights is [0.5, 0.3, 0.2] and the third token must be hidden. Zeroing it after softmax leaves [0.5, 0.3, 0], which sums to 0.8, so the output is no longer a proper average. Setting its score to −∞ *before* softmax gives [0.625, 0.375, 0]. The two visible tokens keep their 5 : 3 ratio and the row sums to 1 again." },
+        { type: "steps", title: "A three-step sanity check for any attention code", items: [
+          { title: "Check the shapes", text: "With n tokens, the scores and weights must be n × n and the output must be n × the value size." },
+          { title: "Check the rows", text: "Every row of weights is positive and sums to 1. Masked cells are exactly 0." },
+          { title: "Check a case we can predict", text: "Make all scores equal. Every output must then be the plain average of the visible value vectors." },
+        ] },
+        { type: "viz", name: "attention-heatmap", caption: "Click a token to see its row of weights over the sentence. Each row is one token's view and always adds up to 100%, with or without the causal mask." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "Random weights never show *why* attention works. So we will set the weights by hand. We build a three-token example where the query of “it” is designed to find an animate noun, and check that the output of “it” really picks up the features of “animal”." },
+        { type: "code", lang: "python", title: "practice_it_finds_animal.py", code: `import numpy as np
+np.set_printoptions(precision=2, suppress=True)
+
+tokens = ["animal", "street", "it"]
+# Hand-made features (illustrative): [is_animate, is_place, is_pronoun]
+X = np.array([[1.0, 0.0, 0.0],
+              [0.0, 1.0, 0.0],
+              [0.0, 0.0, 1.0]])
+
+# Hand-set projections instead of learned ones (d_k = 1 keeps it readable)
+W_q = np.array([[0.0], [0.0], [1.5]])    # only the pronoun asks a question
+W_k = np.array([[2.0], [-2.0], [0.0]])   # animate says "yes", place says "no"
+W_v = np.eye(3)                          # values pass the features on unchanged
+
+Q, K, V = X @ W_q, X @ W_k, X @ W_v
+scores = Q @ K.T / np.sqrt(K.shape[1])   # 3 x 3: every query against every key
+weights = np.exp(scores - scores.max(1, keepdims=True))
+weights /= weights.sum(1, keepdims=True) # softmax per row
+out = weights @ V                        # blend the values
+
+print("scores for 'it':", scores[2])
+for t, w, o in zip(tokens, weights, out):
+    print(f"{t:6s} weights={w}  output={o}")`, output: `scores for 'it': [ 3. -3.  0.]
+animal weights=[0.33 0.33 0.33]  output=[0.33 0.33 0.33]
+street weights=[0.33 0.33 0.33]  output=[0.33 0.33 0.33]
+it     weights=[0.95 0.   0.05]  output=[0.95 0.   0.05]`,
+          walkthrough: [
+            { lines: [4, 8], note: "Each token is described by three made-up features: animate, place, pronoun. One token per row." },
+            { lines: [10, 13], note: "We choose the projections ourselves. The query only fires for pronouns. The key is positive for animate things and negative for places. Values copy the features." },
+            { lines: [15, 19], note: "The usual pipeline: project, score every query against every key, scale, softmax per row, blend the values." },
+            { lines: [21, 23], note: "“it” scores 3 for animal, −3 for street and 0 for itself, which softmax turns into 95%, 0% and 5%. Its output is now mostly “animate”." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Flip the key signs to `[[-2.0], [2.0], [0.0]]`, as if the sentence ended “because it was too wide”. Predict the new weights for “it”.",
+          "Change `1.5` in `W_q` to `0.0`. Predict the weights and output for “it” when it asks no question at all.",
+          "Set the pronoun's key to `2.0` (the last row of `W_k`). Predict how “it” now splits its weight between “animal” and itself.",
+        ] },
+        { type: "check", question: "The score of “it” for “street” is −3, yet its weight is 0.00, not a negative number. And “it” itself, with score 0, still gets 0.05. What does this tell us about how to read attention scores?", answer: "Only the differences between scores in a row matter. Softmax always returns positive weights that sum to 1, so a negative score just means “much less than the best match”, never negative attention. A score of 0 is not “no attention” either: it is 3 below the top score, which leaves a small share. Adding the same number to every score in a row would change nothing." },
+        { type: "check", question: "The output for “it” is [0.95, 0, 0.05]. Its own “pronoun” feature fell from 1 to 0.05. Has the model forgotten that “it” is a pronoun?", answer: "The attention output alone nearly has. But in a Transformer layer this output is *added* to the token's original vector through the residual connection, so “it” keeps its own features and gains the animate signal on top. Attention supplies the context; the residual path keeps the identity." },
       ],
     },
   ],

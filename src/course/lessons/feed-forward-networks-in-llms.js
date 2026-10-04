@@ -1,6 +1,6 @@
 export default {
   id: 'feed-forward-networks-in-llms',
-  minutes: 22,
+  minutes: 27,
   hook: 'Attention gets all the fame, yet about two thirds of a typical LLM\'s parameters sit somewhere else. What is that "somewhere else" doing?',
   summary: 'Every Transformer layer has two parts: attention, which moves information between tokens, and a feed-forward network (FFN), which processes each token on its own. The FFN expands each token vector to a wider hidden layer (typically about 4× wider, or about 2.7× with three matrices in SwiGLU), applies a non-linear activation, and contracts it back. It holds most of the parameters and is widely believed to store much of the model\'s learned knowledge; in Mixture-of-Experts models, it is the part that gets split into experts.',
   sections: [
@@ -163,6 +163,81 @@ attention 67.1M, FFN 135.3M, FFN share 67%`,
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Thinking the FFN mixes tokens (it never does; only attention does). Forgetting that SwiGLU needs three matrices, so a 4× hidden size would add about 50% more FFN parameters than intended. Assuming "FFNs store facts" means you can find one neuron per fact; knowledge is distributed. And estimating memory from attention alone: when sizing or quantizing a model, the FFN weights are the biggest block.' },
         { type: 'check', question: 'A layer has d_model = 2,048 and a classic 2-matrix FFN with d_ff = 8,192. How many FFN weight parameters is that, compared with attention\'s 4·d²?', answer: 'FFN: 2 × 2,048 × 8,192 ≈ 33.6M. Attention: 4 × 2,048² ≈ 16.8M. The FFN is twice the attention, i.e. two thirds of the layer.' },
+      ],
+    },
+    {
+      id: "worked-example-absolute-value",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "We said two linear layers without an activation collapse into one. Let us watch that happen, and then watch ReLU prevent it, on the smallest FFN we can build. The input is a single number x. The hidden layer has two units. The goal is to output |x|, the size of x without its sign. No single linear layer can do this, because a straight line cannot bend at zero." },
+        { type: "steps", title: "A two-unit FFN that computes |x|", items: [
+          { title: "Expand", text: "W₁ = [1, −1], no bias. The hidden values are h = [x, −x]. One unit looks for “x is positive”, the other for “x is negative”." },
+          { title: "Activate", text: "ReLU keeps the positive one and zeroes the other. For x = 3: [3, −3] → [3, 0]. For x = −2: [−2, 2] → [0, 2]." },
+          { title: "Contract", text: "W₂ = [1, 1]: add the two hidden values. For x = 3 the output is 3 + 0 = 3. For x = −2 it is 0 + 2 = 2." },
+          { title: "Remove ReLU and try again", text: "Now the output is x + (−x) = 0 for every input. The two matrices have collapsed into the single number W₂·W₁ = 1·1 + 1·(−1) = 0." },
+        ] },
+        { type: "table", caption: "The same two matrices, with and without the activation.", head: ["x", "Hidden h = [x, −x]", "After ReLU", "Output with ReLU", "Output without ReLU"], rows: [
+          ["−2", "[−2, 2]", "[0, 2]", "2", "0"],
+          ["−1", "[−1, 1]", "[0, 1]", "1", "0"],
+          ["0", "[0, 0]", "[0, 0]", "0", "0"],
+          ["1", "[1, −1]", "[1, 0]", "1", "0"],
+          ["3", "[3, −3]", "[3, 0]", "3", "0"],
+        ] },
+        { type: "chart", kind: "line", title: "Output of the two-unit FFN", xLabel: "Input x", yLabel: "Output", series: [ { name: "With ReLU", points: [[-3, 3], [-2, 2], [-1, 1], [0, 0], [1, 1], [2, 2], [3, 3]] }, { name: "Without ReLU", points: [[-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0]] } ], caption: "Computed by hand from W₁ = [1, −1] and W₂ = [1, 1]. ReLU adds one bend, at x = 0." },
+        { type: "p", text: "Each hidden ReLU unit can add one bend like this. A bias moves the bend: ReLU(x − 1) stays at zero until x passes 1. So with many hidden units, the FFN can put many bends in many places and build a detailed shape out of straight pieces. This is the plain reason for the wide hidden layer: more units, more bends, more distinct cases the layer can treat differently." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will build a tiny key-value memory by hand. Two hidden units each detect a *combination* of features (“mentions Paris **and** asks for a country”) and write an answer. The trick that makes “and” work is a negative bias followed by ReLU." },
+        { type: "code", lang: "python", title: "practice_ffn_memory.py", code: `import numpy as np
+
+# Token features (illustrative): [mentions_paris, mentions_berlin, asks_country]
+names = ["Paris + country?", "Berlin + country?", "Paris only", "country? only"]
+X = np.array([[1, 0, 1],
+              [0, 1, 1],
+              [1, 0, 0],
+              [0, 0, 1]], dtype=float)
+
+# W1 columns are KEYS: the pattern each hidden unit looks for
+W1 = np.array([[1, 0],
+               [0, 1],
+               [1, 1]], dtype=float)
+b1 = np.array([-1.5, -1.5])   # a unit only fires if BOTH of its features are on
+
+# W2 rows are VALUES: what each unit writes. Output dims: [france, germany]
+W2 = np.array([[2, 0],
+               [0, 2]], dtype=float)
+
+h = X @ W1 + b1               # detector scores
+a = np.maximum(0, h)          # ReLU switches weak matches off
+y = a @ W2                    # each active unit writes its value
+
+for name, hi, ai, yi in zip(names, h, a, y):
+    print(f"{name:17s} hidden={hi}  after ReLU={ai}  writes={yi}")
+
+# Without ReLU, partial matches leak through as unwanted writes
+print("no ReLU, 'Paris only' writes:", (X[2] @ W1 + b1) @ W2)`, output: `Paris + country?  hidden=[ 0.5 -0.5]  after ReLU=[0.5 0. ]  writes=[1. 0.]
+Berlin + country? hidden=[-0.5  0.5]  after ReLU=[0.  0.5]  writes=[0. 1.]
+Paris only        hidden=[-0.5 -1.5]  after ReLU=[0. 0.]  writes=[0. 0.]
+country? only     hidden=[-0.5 -0.5]  after ReLU=[0. 0.]  writes=[0. 0.]
+no ReLU, 'Paris only' writes: [-1. -3.]`,
+          walkthrough: [
+            { lines: [3, 8], note: "Four token vectors with three made-up yes/no features. Only the first two contain a full question." },
+            { lines: [10, 18], note: "The keys (columns of W₁) say which features each unit adds up. The bias of −1.5 means one feature alone (score 1) is not enough; two together (score 2) are. The values (rows of W₂) say what to write." },
+            { lines: [20, 22], note: "Expand, ReLU, contract. A full match gives a hidden value of 0.5, which W₂ turns into a write of 1." },
+            { lines: [24, 28], note: "Only the two complete questions write an answer. The last line shows that without ReLU, a half match would write negative numbers into the token." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Set `b1` to `[0.0, 0.0]`. Predict first: which of the four rows now write something, and what does “country? only” write?",
+          "Add a fifth token `[1, 1, 1]` (mentions both cities and asks for a country), with a name. Predict what it writes.",
+          "Change the first row of `W2` to `[2, -2]`, so the Paris unit also pushes “germany” down. Predict the write for “Paris + country?”.",
+        ] },
+        { type: "check", question: "“Paris only” and “country? only” both get negative hidden values and write nothing. What job is the bias of −1.5 doing, and what would be lost with a bias of 0?", answer: "The bias sets a threshold. Each present feature adds 1, so one feature gives 1 − 1.5 = −0.5 (off after ReLU) and two give 2 − 1.5 = 0.5 (on). That turns a sum into an “and”. With a bias of 0, a single feature would already fire the unit: “Paris only” would write “france”, and “country? only” would write both countries. The unit would no longer detect the combination." },
+        { type: "check", question: "The |x| network has 2 hidden units and one bend. Our memory has 2 hidden units and stores 2 facts. What does this suggest about why real FFNs use thousands of hidden units per layer?", answer: "Each hidden unit is one detector with one thing to write, or seen as a shape, one bend. Two units can hold about two simple cases. To react differently to a huge variety of token patterns, the layer needs a huge number of detectors, so the hidden layer is made several times wider than the token vector. In real models units are not this tidy and facts are spread over many units, but the capacity argument is the same." },
       ],
     },
   ],

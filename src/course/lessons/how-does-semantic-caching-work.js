@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-semantic-caching-work',
-  minutes: 18,
+  minutes: 23,
   hook: '"How do I get a refund?" and "Can I get my money back?" are different strings but the same question. Why pay an LLM twice to answer it?',
   summary: 'A semantic cache stores past LLM answers together with the embedding of the question that produced them. When a new question arrives, we embed it and look for a stored question whose embedding is similar enough (above a threshold); if found, we return the stored answer instead of calling the LLM. It saves cost and latency on repeated questions, but the threshold must be tuned carefully, because a too-low threshold returns answers to questions that only look similar.',
   sections: [
@@ -152,6 +152,79 @@ How do I cancel my subscription?   HIT  0.963 -> reuse answer to 'How do I cance
         ] },
         { type: 'check', question: 'Our bank chatbot caches "What is my current balance?" and a second user asking the same thing receives the first user\'s balance. What went wrong, and how do we fix it?', answer: 'The answer is personal, so it must not be shared between users. Either exclude personal or account-specific questions from the cache, or scope cache entries by user (include the user ID in the lookup), and avoid caching answers that came from live account data.' },
         { type: 'p', text: 'Semantic caching is a simple, powerful idea: remember answers by meaning. It works best when many people ask the same stable questions in different words, with a carefully tuned threshold and clear rules about what may be cached.' },
+      ],
+    },
+    {
+      id: 'worked-example-break-even',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'A semantic cache is not free. Every request pays for an embedding and a vector search, whether it ends in a hit or not. So when does the cache pay for itself? Let us work it out with illustrative prices and timings.' },
+        { type: 'steps', title: 'Finding the break-even point', items: [
+          { title: 'Write down the costs', text: 'One LLM call: $0.01 and 2,000 ms. One cache check (embedding plus search): $0.0001 and 30 ms.' },
+          { title: 'Cost per request', text: 'With a cache: check + (1 − h) × LLM, where h is the hit rate. Without a cache: just the LLM cost.' },
+          { title: 'Break-even', text: 'The cache wins when h × LLM cost is more than the check cost: h > 0.0001 / 0.01 = 1%.' },
+          { title: 'A support bot, h = 30%', text: 'Per 10,000 requests: no cache costs $100. With the cache: $1 for checks + 7,000 × $0.01 = $71. We save $29.' },
+          { title: 'A creative-writing app, h = 0.5%', text: '$1 for checks + 9,950 × $0.01 = $100.50. The cache now costs more than having none.' },
+          { title: 'Latency', text: 'Average = 30 + (1 − h) × 2,000 ms. At h = 30% that is 1,430 ms instead of 2,000. Note that every miss got 30 ms slower.' },
+        ] },
+        { type: 'table', caption: 'Per 10,000 requests, with the illustrative prices above.', head: ['Hit rate', 'Total cost', 'Average latency'], rows: [
+          ['No cache', '$100.00', '2,000 ms'],
+          ['0.5%', '$100.50', '2,020 ms'],
+          ['10%', '$91.00', '1,830 ms'],
+          ['30%', '$71.00', '1,430 ms'],
+          ['60%', '$41.00', '830 ms'],
+        ] },
+        { type: 'p', text: 'One cost is missing from the table: **false hits**. Suppose a wrong answer leads to a support escalation worth $5 (illustrative). At h = 30% we serve 3,000 answers from the cache. If 1% of them are false hits, that is 30 wrong answers, or $150 of damage, against $29 saved. This is why we fix the threshold for safety first and only then look at the hit rate.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'The lesson said: label real question pairs, then pick the threshold that keeps false hits low enough. Now we code that. We take 15 labelled pairs, sweep six thresholds, count good hits and false hits at each, and choose the lowest threshold that stays within our tolerance.' },
+        { type: 'code', lang: 'python', title: 'practice_threshold_sweep.py', code: `# Labelled pairs from (pretend) logs: the similarity of a new question to its
+# nearest cached question, and whether the cached answer really was the right one.
+# Illustrative numbers.
+pairs = [
+    (0.99, True), (0.98, True), (0.97, True), (0.96, False), (0.96, True),
+    (0.95, True), (0.94, False), (0.93, True), (0.91, False), (0.90, True),
+    (0.88, False), (0.86, False), (0.82, False), (0.75, False), (0.60, False),
+]
+MAX_FALSE_HITS = 0                  # how many wrong answers we tolerate in this sample
+
+def evaluate(threshold):
+    hits = [same for sim, same in pairs if sim >= threshold]
+    good = sum(hits)                # True counts as 1
+    return len(hits) / len(pairs), good, len(hits) - good
+
+best = None
+print("threshold  hit rate  good hits  false hits")
+for t in [0.85, 0.90, 0.93, 0.95, 0.97, 0.99]:
+    hit_rate, good, false_hits = evaluate(t)
+    print(f"   {t:.2f}     {hit_rate:6.0%}  {good:9}  {false_hits:10}")
+    if best is None and false_hits <= MAX_FALSE_HITS:
+        best = t                    # lowest threshold that is still safe
+print("chosen threshold:", best)`, output: `threshold  hit rate  good hits  false hits
+   0.85        80%          7           5
+   0.90        67%          7           3
+   0.93        53%          6           2
+   0.95        40%          5           1
+   0.97        20%          3           0
+   0.99         7%          1           0
+chosen threshold: 0.97`,
+          walkthrough: [
+            { lines: [1, 9], note: 'Each pair holds a similarity and a label: True if the cached answer was right for the new question, False if it was not. We tolerate zero false hits.' },
+            { lines: [11, 14], note: 'For one threshold: every pair at or above it is a hit. Hits labelled True are good; the rest are false hits.' },
+            { lines: [16, 23], note: 'Sweep the thresholds from low to high, print a row for each, and remember the first one that meets the tolerance.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Set `MAX_FALSE_HITS = 1`. Read the table in the output and predict the chosen threshold before you run it.',
+          'Add one more pair to the list: `(0.98, False)`. Predict the new chosen threshold and the hit rate we are left with.',
+          'Add `0.96` to the list of thresholds to try. Predict the number of false hits in that row.',
+        ] },
+        { type: 'check', question: 'At 0.95 there is 1 false hit and the hit rate is 40%. At 0.97 there are none and the hit rate is 20%. A teammate wants 0.95 "because it doubles the savings". What two things should we ask before agreeing?', answer: 'First: what does one wrong answer cost compared with one LLM call? If a false hit can mislead a customer about refunds, a few saved cents do not cover it. Second: is the sample big enough? Fifteen pairs is tiny. Zero false hits in 15 does not prove the rate is zero, so we should label many more pairs before trusting either threshold.' },
+        { type: 'check', question: 'The list contains (0.96, True) and (0.96, False): the same similarity with opposite labels. What does that tell us about what a threshold can and cannot do?', answer: 'No threshold can separate those two pairs, because similarity is the only thing it looks at. To tell them apart we need another signal: scoping entries by user or product, checking that key terms match (order against subscription), or a second, more careful check on borderline hits.' },
       ],
     },
   ],

@@ -1,6 +1,6 @@
 export default {
   id: 'decoding-sakana-fugu',
-  minutes: 20,
+  minutes: 25,
   hook: 'What if, instead of training one giant model to be best at everything, we trained a model whose only skill is knowing which other model to ask, and how to make them work together?',
   summary: 'Sakana Fugu is an orchestration model from Sakana AI: a trained language model that sits in front of a pool of other LLMs and decides who should handle each request. Fugu routes each query to a single best worker using a small "selection head", trained first with supervised fine-tuning and then polished with evolutionary strategies. Fugu-Ultra writes whole multi-agent workflows in natural language, is trained with reinforcement learning (GRPO), and controls what each agent can see so agents do not simply copy each other.',
   sections: [
@@ -181,6 +181,101 @@ after ES polishing:            0.82`, walkthrough: [
         { type: 'p', text: 'These are familiar human-designed patterns from the orchestration lesson. The interesting part is that a trained orchestrator chose *when* to use each one, per question.' },
         { type: 'callout', tone: 'warn', title: 'Do not over-read "it discovered strategies"', text: 'Emergent here means the strategies were not hard-coded, not that the model invented new science. RL rediscovers what works on its training tasks, and it can also overfit to benchmarks. Real-world gains depend on whether your tasks look like those it was trained on.' },
       ],
+    },
+    {
+      id: "worked-example-soft-target",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The training section said that measured success rates are turned into a soft target with a softmax, and that the head is trained to reduce the KL divergence to that target. Let us do both by hand for one query. These are toy numbers of our own, chosen to be easy to follow; they are not from the report." },
+        { type: "p", text: "Suppose we tried three workers on one training query and measured success rates of 0.9, 0.7 and 0.5." },
+        { type: "steps", title: "From success rates to a soft target",
+          items: [
+            { title: "Divide by the temperature", text: "With temperature 0.1, the rates become 9, 7 and 5. A small temperature stretches the gaps between workers." },
+            { title: "Exponentiate", text: "Only the gaps to the best worker matter: e⁰ = 1, e⁻² ≈ 0.135 and e⁻⁴ ≈ 0.018." },
+            { title: "Normalise", text: "The sum is about 1.154. Dividing gives the soft target [0.867, 0.117, 0.016]. The best worker gets most of the weight, the second still gets some, the third almost none." },
+            { title: "Try a higher temperature", text: "With temperature 0.5 the same rates give [0.472, 0.316, 0.212]: much flatter. The ranking is the same, but the target now says “all three are fairly close”." }
+          ] },
+        { type: "chart", kind: "bar", title: "Soft targets for success rates 0.9, 0.7, 0.5 (toy numbers)", yLabel: "Target probability",
+          labels: ["Worker 1 (0.9)", "Worker 2 (0.7)", "Worker 3 (0.5)"],
+          series: [
+            { name: "Temperature 0.1", values: [0.867, 0.117, 0.016] },
+            { name: "Temperature 0.5", values: [0.472, 0.316, 0.212] }
+          ],
+          caption: "Computed with softmax(rate / temperature). Lower temperature gives a sharper target, closer to a hard label." },
+        { type: "p", text: "Now the loss. KL divergence compares the target T with the head's prediction Q as ∑ Tᵢ · ln(Tᵢ / Qᵢ). It is 0 when they match and grows as they differ. Using the temperature 0.1 target:" },
+        { type: "table", caption: "KL divergence from the target [0.867, 0.117, 0.016] to three predictions",
+          head: ["Head's prediction Q", "What it means", "KL(T ‖ Q)"],
+          rows: [
+            ["[0.34, 0.33, 0.33]", "An untrained head: no idea who is best", "0.642"],
+            ["[0.60, 0.30, 0.10]", "Right ranking, not confident enough", "0.180"],
+            ["[0.85, 0.12, 0.03]", "Close to the target", "0.004"]
+          ] },
+        { type: "p", text: "Training pushes the head down this table. Notice that the middle row already picks the right worker: taking the top score gives worker 1. The remaining loss is about *confidence*, not about the choice. That is one reason a loss on per-query targets and the end-to-end success we care about are not the same thing, which is the gap the second training stage is there to close." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The earlier code trained a toy selection head, the Fugu side of the story. Here we explore the Fugu-Ultra side: a workflow made of steps, where each step has a subtask, an assigned worker and an access list. We write a small executor that enforces the access lists, and scripted workers that copy any earlier answer they are allowed to see. This is our own sketch for learning, not Sakana's implementation." },
+        { type: "code", lang: "python", title: "practice_access_lists.py", code: `# Toy workflow executor with access lists (our own sketch, not Sakana's code).
+from collections import Counter
+
+ALONE = {"A": "41", "B": "42", "C": "42"}     # each worker's own answer; 42 is correct
+
+def solver(name, visible):
+    """Scripted worker: if it can see an earlier answer, it follows the first one."""
+    return visible[0] if visible else ALONE[name]
+
+def judge(name, visible):
+    """Scripted judge: picks the most common answer among those it may see."""
+    return Counter(visible).most_common(1)[0][0]
+
+def run(title, workflow):
+    outputs = []
+    for number, step in enumerate(workflow, start=1):
+        assert all(n < number for n in step["access"])       # only earlier steps
+        visible = [outputs[n - 1] for n in step["access"]]   # isolation is enforced here
+        role = judge if step["task"] == "decide" else solver
+        outputs.append(role(step["worker"], visible))
+        print(f"  step {number} {step['worker']} sees {visible} -> {outputs[-1]}")
+    print(f"{title}: final answer {outputs[-1]}, distinct opinions {len(set(outputs[:3]))}")
+
+# Each step: a subtask, an assigned worker, and an access list of earlier steps.
+shared = [{"task": "solve", "worker": "A", "access": []},
+          {"task": "solve", "worker": "B", "access": [1]},
+          {"task": "solve", "worker": "C", "access": [1, 2]},
+          {"task": "decide", "worker": "D", "access": [1, 2, 3]}]
+isolated = [{"task": "solve", "worker": "A", "access": []},
+            {"task": "solve", "worker": "B", "access": []},
+            {"task": "solve", "worker": "C", "access": []},
+            {"task": "decide", "worker": "D", "access": [1, 2, 3]}]
+run("everyone sees everything", shared)
+run("independent, then combine", isolated)`, output: `  step 1 A sees [] -> 41
+  step 2 B sees ['41'] -> 41
+  step 3 C sees ['41', '41'] -> 41
+  step 4 D sees ['41', '41', '41'] -> 41
+everyone sees everything: final answer 41, distinct opinions 1
+  step 1 A sees [] -> 41
+  step 2 B sees [] -> 42
+  step 3 C sees [] -> 42
+  step 4 D sees ['41', '42', '42'] -> 42
+independent, then combine: final answer 42, distinct opinions 2`,
+          walkthrough: [
+            { lines: [4, 12], note: "Three scripted solvers and a judge. Alone, worker A is wrong and B and C are right. A solver that can see an earlier answer simply follows the first one. The judge takes a majority vote." },
+            { lines: [14, 22], note: "The executor. For each step it builds `visible` from the access list and nothing else. That one line is the isolation: a worker cannot read what it was not granted." },
+            { lines: [24, 32], note: "Two workflows with the same workers and the same subtasks. Only the access lists differ." },
+            { lines: [33, 34], note: "Run both and compare the final answer and the number of distinct opinions among the three solvers." }
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "In `shared`, reorder the solvers so that B goes first and A second (keep the access lists as they are). Predict the final answer. Is the shared workflow now “good”, or just lucky?",
+          "In `isolated`, change the judge's access list to `[1]`. Predict the final answer. What does this say about the combining step?",
+          "Make the pool less diverse: set `ALONE = {\"A\": \"41\", \"B\": \"41\", \"C\": \"42\"}`. Predict the result of the isolated workflow. Does isolation help when most workers share the same mistake?"
+        ] },
+        { type: "check", question: "In the shared workflow, the judge saw three answers that all agreed. Why is that agreement worth less than it looks?", answer: "The three answers are not three opinions. B and C copied A, so the judge is really looking at one opinion repeated three times; the output even reports 1 distinct opinion. Agreement only counts as evidence when the answers were formed independently. In the isolated workflow the judge sees a real 2-to-1 split and can outvote the one wrong worker." },
+        { type: "check", question: "Using the GRPO idea from the lesson: suppose these two workflows were sampled in one group for this question, with reward 1 for a correct final answer and 0 otherwise. Which one gets the positive advantage, and what would the orchestrator slowly learn?", answer: "The rewards are [0, 1] for [shared, isolated]. The mean is 0.5, so the isolated workflow is above average and gets the positive advantage, and the shared one gets the negative. Over many such questions, workflows that keep solvers apart and combine afterwards would become more likely. Nobody has to hard-code “isolate first”; it is favoured because it scores better than its siblings. (This holds in our toy, where workers copy what they see.)" }
+      ]
     },
     {
       id: 'quick-summary',

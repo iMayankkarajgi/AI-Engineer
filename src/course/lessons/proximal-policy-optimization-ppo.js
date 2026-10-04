@@ -1,6 +1,6 @@
 export default {
   id: 'proximal-policy-optimization-ppo',
-  minutes: 21,
+  minutes: 26,
   hook: 'One overly eager update can wreck a policy that took days to train; how does PPO let a model learn from its own experience without taking that kind of leap?',
   summary: 'PPO (Proximal Policy Optimization) is a reinforcement learning algorithm that improves a policy in small, safe steps. It compares how likely an action is under the new policy versus the old one (the probability ratio), multiplies by the advantage (how much better than expected the action was), and clips the ratio to a narrow band such as [0.8, 1.2] so no single update can move the policy too far. It is simple, stable and was the standard RL algorithm in RLHF for language models.',
   sections: [
@@ -173,6 +173,82 @@ advantage = reward - V(s) = +0.3`, walkthrough: [
         ] },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Running too many epochs on one batch so the policy drifts far beyond the clip range anyway; forgetting to normalise advantages; computing ratios from probabilities instead of log-probabilities (numerical issues); and using stale log π_old values. In LLMs, also watch KL to the reference model and response length for signs of reward hacking.' },
         { type: 'p', text: '**When not to use PPO:** if we only have a fixed set of preference pairs, DPO is simpler; if rewards are verifiable and memory is tight, GRPO avoids the value model; and if good demonstrations exist, plain supervised fine-tuning may be enough.' },
+      ],
+    },
+    {
+      id: 'worked-example-mini-batch',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us run the PPO objective by hand on a mini-batch of **three replies** from our support assistant. The reward model scored them 9, 7 and 8. We use `ε = 0.2`, so the safe band for the ratio is `[0.8, 1.2]`. All numbers are illustrative.' },
+        { type: 'steps', title: 'From rewards to one objective value', items: [
+          { title: 'Advantages', text: 'The value model expected 8 for each prompt. Advantages: `9 − 8 = +1`, `7 − 8 = −1`, `8 − 8 = 0`. One good reply, one bad, one as expected.' },
+          { title: 'Ratios after a few gradient steps', text: 'We have already updated the policy a little on this batch. The new policy makes the three replies 1.3, 0.9 and 1.1 times as likely as the old one did.' },
+          { title: 'Reply 1 (A = +1, ratio 1.3)', text: 'Unclipped: `1.3 × 1 = 1.3`. Clipped: `1.2 × 1 = 1.2`. The minimum is **1.2**. We have already passed the band, so there is no extra credit for going further.' },
+          { title: 'Reply 2 (A = −1, ratio 0.9)', text: 'Unclipped: `0.9 × −1 = −0.9`. The ratio is inside the band, so the clipped value is the same. The term is **−0.9**, and lowering the ratio further still helps.' },
+          { title: 'Reply 3 (A = 0, ratio 1.1)', text: '`1.1 × 0 = 0`. A reply that was exactly as good as expected gives no signal in either direction.' },
+          { title: 'Average', text: '`(1.2 − 0.9 + 0) / 3 = 0.1`. That is the value of L^CLIP for this batch. The next gradient step only comes from reply 2, the one still inside the band.' },
+        ] },
+        { type: 'p', text: 'While training we cannot inspect every sample like this, so we log a few summary numbers per update. They tell us whether the updates are too timid or too aggressive:' },
+        { type: 'table', caption: 'Three health checks for a PPO run', head: ['Number to log', 'What it is', 'How to read it'], rows: [
+          ['Clip fraction', 'Share of samples whose ratio is outside [1 − ε, 1 + ε]. In our batch: 1 of 3.', 'Near zero for many updates: steps are tiny, learning is slow. Most samples clipped: the policy is leaving the trusted region; use fewer epochs or a lower learning rate.'],
+          ['Approximate KL', 'Average distance between old and new policy on the batch', 'A sudden jump means one update moved too far. Many implementations stop the epochs early when it passes a limit.'],
+          ['Entropy', 'How spread out the policy’s choices are', 'A fast fall toward zero means the policy has stopped exploring and may be stuck on one behaviour.'],
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will train a three-action policy on **one fixed batch for 60 epochs**, once with the plain ratio objective and once with PPO’s clipped objective. Reusing a batch is exactly where clipping earns its place. To keep the code short, the gradient is computed numerically by nudging each logit.' },
+        { type: 'code', lang: 'python', title: 'practice_ppo_clip.py', code: `import numpy as np
+
+pi_old = np.array([0.5, 0.3, 0.2])     # old policy over 3 actions (one state)
+adv = np.array([-1.0, 0.5, 2.0])       # advantage of each action
+eps = 0.2
+
+def softmax(z):
+    e = np.exp(z - z.max())
+    return e / e.sum()
+
+def objective(logits, clip):
+    ratio = softmax(logits) / pi_old               # r = pi_new / pi_old
+    term = ratio * adv
+    if clip:                                       # PPO: pessimistic minimum
+        term = np.minimum(term, np.clip(ratio, 1 - eps, 1 + eps) * adv)
+    return float(np.sum(pi_old * term))            # expectation under pi_old
+
+def train(clip, epochs=60, lr=0.05, h=1e-5):
+    logits = np.log(pi_old)                        # start at the old policy
+    for _ in range(epochs):                        # reuse the same batch
+        grad = np.zeros(3)
+        for k in range(3):                         # numeric gradient per logit
+            step = np.zeros(3)
+            step[k] = h
+            grad[k] = (objective(logits + step, clip) - objective(logits - step, clip)) / (2 * h)
+        logits += lr * grad
+    return softmax(logits)
+
+for clip in (False, True):
+    pi_new = train(clip)
+    name = "clipped (PPO)" if clip else "unclipped    "
+    print(name, "new policy", pi_new.round(3), "ratios", (pi_new / pi_old).round(2))`, output: `unclipped     new policy [0.112 0.203 0.685] ratios [0.22 0.68 3.42]
+clipped (PPO) new policy [0.394 0.361 0.245] ratios [0.79 1.2  1.23]`,
+          walkthrough: [
+            { lines: [3, 5], note: 'The old policy, one advantage per action, and the clip range.' },
+            { lines: [11, 16], note: 'The objective: ratio × advantage, optionally replaced by the pessimistic minimum with the clipped version, averaged under the old policy.' },
+            { lines: [18, 27], note: 'Gradient ascent on the logits for 60 epochs, always on the same batch.' },
+            { lines: [29, 32], note: 'Run both versions and print the new policy and its ratios to the old one.' },
+          ] },
+        { type: 'p', text: 'Without clipping, the best action goes from 0.2 to 0.685, a ratio of 3.42. With clipping, every ratio stops close to the edge of `[0.8, 1.2]`. The small overshoot (0.79, 1.23) is real: clipping removes the *reason* to go further, it is not a wall.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Tighten the band: set `eps = 0.05` on line 5. Predict the clipped ratios before running. Does the unclipped row change?',
+          'Reuse the batch less: change `epochs=60` on line 18 to `epochs=5`. Predict: will the two rows differ at all? What does that say about when clipping matters?',
+          'Give every action the same advantage: set `adv` on line 4 to `[1.0, 1.0, 1.0]`. Predict the new policy. Why does a reward that is “good for everything” teach nothing?',
+        ] },
+        { type: 'check', question: 'In the unclipped row, action 1 has a *positive* advantage (+0.5), yet its ratio fell to 0.68. Why did a better-than-average action become less likely?', answer: 'Probabilities must sum to 1. Action 2 has a much larger advantage (+2.0), so raising it pays more, and that probability has to come from somewhere. Once the policy has shifted, +0.5 is below the new policy’s average, so action 1 loses out too. Clipping prevents this runaway: in the clipped row action 1 keeps its gain (ratio 1.2).' },
+        { type: 'check', question: 'The advantages were estimated from replies sampled by the *old* policy. Why does that make the unclipped result (a ratio of 3.42 for one action) risky rather than impressive?', answer: 'The numbers −1, +0.5 and +2 describe how actions performed near the old policy, from a limited sample. The further the new policy moves, the less those estimates apply, and any noise in them is amplified by every extra epoch. PPO’s clip keeps the update inside the region where the batch is still trustworthy, then collects fresh data and re-estimates.' },
       ],
     },
   ],

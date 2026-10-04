@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-a-reranker-work',
-  minutes: 20,
+  minutes: 25,
   hook: 'Vector search found 50 "relevant" passages in 20 milliseconds, but the one that actually answers the question is sitting at position 17. How do we get it to the top?',
   summary: 'A reranker is a second, more precise model that re-scores a short list of candidates from a fast first-stage search. First-stage retrievers (BM25, bi-encoders) score documents independently of the query, which is fast but loose; a cross-encoder reranker reads the query and each document together and judges relevance much more accurately, at a much higher cost per document. Two-stage retrieval gets most of the accuracy of the slow model at close to the speed of the fast one.',
   sections: [
@@ -140,6 +140,85 @@ rerank top 1000 precision@5 = 0.99   reranker calls/query = 1000`,
         { type: 'p', text: 'Why do rerankers matter so much for RAG specifically? An LLM\'s context is limited and costly, and LLMs tend to use information at the start and end of the context better than the middle. So **what we put in the top 3–5 slots** largely decides the answer quality. A reranker lets us retrieve generously (high recall) but pass only a few, highly relevant passages (high precision). It often also reduces hallucinations, because irrelevant but similar-looking passages are pushed out of the context.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Reranking too few candidates (the right document never reaches the reranker). Reranking too many (latency explodes). Feeding chunks longer than the reranker\'s max length, so the important part gets truncated. Using an English-only reranker on multilingual content. Assuming reranker scores are calibrated across queries. Never measuring: compare answer quality with and without the reranker on real questions.' },
         { type: 'p', text: 'When might we skip a reranker? If the first stage is already precise enough for the task (measure it), if latency budgets are extremely tight, or if the collection is tiny enough to send everything to the LLM. Otherwise, adding a reranker is one of the cheapest, most reliable upgrades to a RAG system.' },
+      ],
+    },
+    {
+      id: 'worked-example-shortlist-budget',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'How many candidates should we rerank? We do not have to guess. Two measurements, a latency budget and the recall of stage 1 at different depths, give the answer. All numbers here are illustrative.' },
+        { type: 'steps', title: 'Choosing the shortlist size', items: [
+          { title: 'Set the budget', text: 'Our HR assistant must have its passages ready within 200 ms, before the LLM starts writing. Stage 1 takes 30 ms, so the reranker may use 170 ms.' },
+          { title: 'Measure reranker speed', text: 'On our hardware the reranker scores 100 passages in 120 ms, so about 1.2 ms per passage. 170 / 1.2 ≈ 140 passages fit in the budget.' },
+          { title: 'Measure stage-1 recall by depth', text: 'On a test set, check how often the right passage is somewhere in the top N of stage 1, for several N. See the table.' },
+          { title: 'Read the ceiling', text: 'Stage-1 recall at N is a ceiling for the whole system. If the right passage is in the shortlist only 70% of the time, no reranker can do better than 70%.' },
+          { title: 'Pick N', text: 'Going from 20 to 50 buys 18 points of recall for 36 ms. Going from 100 to 200 buys 2 points for 120 ms and breaks the budget. We pick N = 100, or 50 if we want headroom.' },
+        ] },
+        { type: 'table', caption: 'Illustrative measurements for one system.', head: ['Shortlist N', 'Stage-1 recall at N', 'Rerank time'], rows: [
+          ['20', '0.70', '24 ms'],
+          ['50', '0.88', '60 ms'],
+          ['100', '0.93', '120 ms'],
+          ['200', '0.95', '240 ms'],
+        ] },
+        { type: 'p', text: 'One more thing to check while we are measuring: **truncation**. Suppose the reranker reads at most 512 tokens per pair. With a 20-token query and a few special tokens, only about the first 490 tokens of the passage are read. If our chunks are 800 tokens long and the carry-over rule sits in the last paragraph, the reranker never sees it and scores the chunk low. To spot this, log the token length of each pair. To fix it, use shorter chunks, or split a long chunk into pieces and keep the best piece score.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will run a complete two-stage search on five real sentences. Stage 1 uses pretend bi-encoder scores. Stage 2 is a tiny stand-in for a cross-encoder: it reads the query and the passage **together** and counts the short phrases (neighbouring word pairs) they share. A real cross-encoder is a neural network, but the shape of the pipeline is the same.' },
+        { type: 'code', lang: 'python', title: 'practice_two_stage.py', code: `query = "can i carry unused vacation days into next year"
+
+# (passage, pretend stage-1 cosine score from a bi-encoder). Illustrative numbers.
+candidates = [
+    ("how to request vacation days for next year", 0.84),
+    ("vacation days and sick days are tracked separately", 0.81),
+    ("unused vacation days carry into next year up to five days", 0.79),
+    ("public holidays for next year are in the calendar", 0.70),
+    ("parking permits are renewed every year", 0.35),
+]
+
+def pairs(text):                       # neighbouring word pairs = short phrases
+    w = text.split()
+    return set(zip(w, w[1:]))
+
+def careful_score(q, passage):         # stand-in cross-encoder: reads both together
+    return len(pairs(q) & pairs(passage))
+
+def two_stage(shortlist_size):
+    shortlist = sorted(candidates, key=lambda c: -c[1])[:shortlist_size]     # stage 1
+    reranked = sorted(shortlist, key=lambda c: -careful_score(query, c[0]))  # stage 2
+    return reranked[0][0], len(shortlist)
+
+for passage, s1 in candidates:
+    print(f"stage1={s1:.2f}  careful={careful_score(query, passage)}  {passage}")
+print("stage 1 only ->", candidates[0][0])
+for n in [2, 3, 5]:
+    best, calls = two_stage(n)
+    print(f"rerank top {n} -> {best}  ({calls} reranker calls)")`, output: `stage1=0.84  careful=2  how to request vacation days for next year
+stage1=0.81  careful=1  vacation days and sick days are tracked separately
+stage1=0.79  careful=4  unused vacation days carry into next year up to five days
+stage1=0.70  careful=1  public holidays for next year are in the calendar
+stage1=0.35  careful=0  parking permits are renewed every year
+stage 1 only -> how to request vacation days for next year
+rerank top 2 -> how to request vacation days for next year  (2 reranker calls)
+rerank top 3 -> unused vacation days carry into next year up to five days  (3 reranker calls)
+rerank top 5 -> unused vacation days carry into next year up to five days  (5 reranker calls)`,
+          walkthrough: [
+            { lines: [3, 10], note: 'Five passages with pretend stage-1 scores. The passage that answers the question is only third.' },
+            { lines: [12, 17], note: 'The careful scorer. It needs both texts at once: it counts word pairs such as ("vacation", "days") that appear in the query and in the passage.' },
+            { lines: [19, 22], note: 'Two stages: keep the best shortlist_size passages by stage-1 score, then reorder only those with the careful scorer.' },
+            { lines: [24, 29], note: 'Print both scores for every passage, then the top result with no reranker and with shortlists of 2, 3 and 5.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Change the stage-1 score of the carry-over passage from `0.79` to `0.60`. Predict the smallest shortlist size that still finds it.',
+          'Change the query to `"are sick days tracked separately"`. Work out the careful score of each passage by hand, then predict the winner when we rerank the top 5.',
+          'Replace the body of `careful_score` with a plain shared-word count: `len(set(q.split()) & set(passage.split()))`. Predict whether the right passage still wins, and which passages now tie.',
+        ] },
+        { type: 'check', question: 'Reranking the top 5 cost 5 calls and gave the same top result as reranking the top 3. Does that mean a shortlist of 3 is the right setting?', answer: 'Not from one query. Here the right passage happened to be third in stage 1. For the next query it may be 4th or 40th, and we cannot know in advance. The shortlist size should come from stage-1 recall measured over many queries, weighed against the latency budget.' },
+        { type: 'check', question: 'With a shortlist of 2 the pipeline returned the same wrong passage as stage 1 alone, even though the careful scorer gives the right passage the highest score of all (4). What does that tell us about where to look when a reranked system fails?', answer: 'Look at stage 1 first. The reranker never saw the right passage, so its quality did not matter. Before blaming or swapping the reranker, check whether the right passage is in the shortlist at all.' },
       ],
     },
   ],

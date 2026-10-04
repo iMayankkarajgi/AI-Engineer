@@ -1,6 +1,6 @@
 export default {
   id: 'how-does-hybrid-search-work',
-  minutes: 20,
+  minutes: 25,
   hook: 'Keyword search finds "E1042" but misses "my printer won\'t print bills"; semantic search does the opposite. What if we did not have to choose?',
   summary: 'Hybrid search runs keyword search (usually BM25) and semantic (vector) search on the same query and merges the two ranked lists into one. The most popular merge is Reciprocal Rank Fusion, which adds up 1 / (k + rank) from each list and ignores raw scores; the alternative is to normalise both score scales and blend them with a weight. The result catches both exact terms and paraphrases.',
   sections: [
@@ -158,6 +158,76 @@ alpha=.5: {'C': 1.0, 'A': 0.61, 'B': 0.26, 'D': 0.22}`,
         ] },
         { type: 'callout', tone: 'example', title: 'Hybrid search in practice', text: '**E-commerce** search mixes exact SKU and brand matches with descriptive queries like "warm waterproof jacket for kids". **Enterprise RAG** over manuals and tickets combines error codes with natural questions. **Legal and medical** search needs exact terms (statute numbers, drug names) plus concept matching. A common modern recipe is: hybrid retrieval of about 50–100 candidates, then a **reranker** to pick the final top 5–10.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Adding raw BM25 and cosine scores without normalising (one scale silently dominates). Returning only the top 5 from each retriever before fusing, so good candidates are cut early. Tuning α on a handful of queries. Forgetting that the keyword side needs proper text processing (lowercasing, stemming, language analysers). Letting the two indexes drift out of sync when documents are updated or deleted.' },
+      ],
+    },
+    {
+      id: 'common-mistakes-in-practice',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'Fusion bugs raise no error. The results just get quietly worse. Two of them are easy to see once we put small numbers on them.' },
+        { type: 'p', text: '**Mistake 1: one outlier flattens min-max.** A query contains an exact error code, so one document gets a huge BM25 score and the rest get ordinary ones (illustrative scores below).' },
+        { type: 'table', caption: 'Min-max with an outlier: (score − 2.7) / (12.0 − 2.7).', head: ['Document', 'BM25 score', 'After min-max'], rows: [
+          ['P', '12.0', '1.00'],
+          ['Q', '3.1', '0.043'],
+          ['R', '2.9', '0.022'],
+          ['S', '2.7', '0.00'],
+        ] },
+        { type: 'p', text: 'Q, R and S are squeezed into the range 0 to 0.04. In the blend, the keyword side now has almost no say in how those three are ordered; the vector side decides alone. That is fine when P truly is the answer. It hurts when P is a document that merely repeats a rare word. To spot it, print the normalised scores for a few queries: if all but one sit near 0, this is the cause. RRF does not have the problem, because it never looks at score sizes.' },
+        { type: 'p', text: '**Mistake 2: cutting candidates too early.** Suppose each retriever returns only its top 5, and the right document is 8th in both lists. It never reaches the fusion step. With 50 candidates each it would score 2 / (60 + 8) ≈ 0.0294, well above a document that is first in one list only (1 / 61 ≈ 0.0164).' },
+        { type: 'steps', title: 'A quick fusion health check', items: [
+          { title: 'Collect cases', text: 'Take about 20 real queries for which we know the right document.' },
+          { title: 'Record three ranks', text: 'For each query, note the rank of the right document in the BM25 list, in the vector list and in the fused list.' },
+          { title: 'Absent from both lists', text: 'Then fusion is innocent. The problem is retrieval itself or the candidate depth.' },
+          { title: 'Present in one list only', text: 'This is the case hybrid search exists for. Check that the fused rank is still good enough to reach the final top k.' },
+          { title: 'Fused rank worse than both lists', text: 'This usually points to the fusion step: unnormalised scores, an outlier, or a weight far from sensible.' },
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will write RRF as a small reusable function that takes any number of ranked lists, an adjustable `k` and optional weights per list. Then we feed it two lists that mostly disagree and watch how `k` decides between "agreement" and "a top spot".' },
+        { type: 'code', lang: 'python', title: 'practice_rrf.py', code: `# Reciprocal Rank Fusion for any number of ranked lists.
+def rrf(lists, k=60, weights=None):
+    weights = weights or [1.0] * len(lists)
+    scores = {}
+    for w, ranking in zip(weights, lists):
+        for rank, doc in enumerate(ranking, start=1):
+            scores[doc] = scores.get(doc, 0.0) + w / (k + rank)
+    return sorted(scores.items(), key=lambda item: -item[1])
+
+# Two retrievers that mostly disagree. Only doc D appears in both lists.
+bm25_list   = ["A", "B", "C", "D"]      # A = exact error-code match
+vector_list = ["E", "F", "G", "D"]      # E = best paraphrase match
+
+def show(label, fused, top=3):
+    print(f"{label:14}", [(doc, round(score, 4)) for doc, score in fused[:top]])
+
+show("k=60", rrf([bm25_list, vector_list], k=60))
+show("k=1", rrf([bm25_list, vector_list], k=1))
+show("k=60, bm25 x2", rrf([bm25_list, vector_list], k=60, weights=[2.0, 1.0]))
+
+# A document missing from one list simply gets nothing from that list.
+a_score = dict(rrf([bm25_list, vector_list]))["A"]
+print(f"A appears once: {a_score:.4f} = 1/61 = {1 / 61:.4f}")`, output: `k=60           [('D', 0.0312), ('A', 0.0164), ('E', 0.0164)]
+k=1            [('A', 0.5), ('E', 0.5), ('D', 0.4)]
+k=60, bm25 x2  [('D', 0.0469), ('A', 0.0328), ('B', 0.0323)]
+A appears once: 0.0164 = 1/61 = 0.0164`,
+          walkthrough: [
+            { lines: [2, 8], note: 'RRF for any number of lists. Each appearance of a document adds weight / (k + rank) to its total.' },
+            { lines: [10, 12], note: 'Two result lists. A is first for BM25, E is first for vector search, and only D appears in both, in last place each time.' },
+            { lines: [17, 19], note: 'Fuse three ways: the default k = 60, a tiny k = 1, and k = 60 with the BM25 list counted double.' },
+            { lines: [21, 23], note: 'A document that is missing from a list gets nothing from it: the score of A is exactly 1 / 61.' },
+          ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Move D to second place in the vector list: `["E", "D", "F", "G"]`. Work out the new k = 60 score of D by hand (1/64 + 1/62) before you run it.',
+          'Add a third list, `["D", "A"]`, as if a title-match retriever had run too, and pass all three lists to `rrf`. Predict which document is first at k = 1 now.',
+          'Call `rrf` with `k=0`. Predict the scores of A and D, and say why a k of 0 makes a single first place count for so much.',
+        ] },
+        { type: 'check', question: 'With k = 60, D wins although it is last in both lists. With k = 1, A and E beat it. What does k really control?', answer: 'How steeply the reward falls with rank. With a small k, first place is worth far more than fourth (1/2 against 1/5), so one top spot beats agreement. With a large k the curve is nearly flat (1/61 against 1/64), so appearing in two lists is worth almost double and agreement wins.' },
+        { type: 'check', question: 'With the BM25 list weighted 2, document B (second in BM25 only) is ranked above E (first in vector search). Is a weight of 2 a gentle nudge?', answer: 'No. At k = 60 all ranks earn nearly the same amount, so doubling one list makes every position in it worth more than first place in the other: 2/62 ≈ 0.0323 against 1/61 ≈ 0.0164. Weights in RRF are strong; small changes such as 1.2 are usually enough.' },
       ],
     },
   ],

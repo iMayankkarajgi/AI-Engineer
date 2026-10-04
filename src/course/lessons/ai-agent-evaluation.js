@@ -1,6 +1,6 @@
 export default {
   id: "ai-agent-evaluation",
-  minutes: 20,
+  minutes: 25,
   hook: "Our refund agent gave the customer the right answer, but it called the wrong tool twice and nearly emailed someone else: did it pass?",
   summary: "Evaluating an AI agent means judging not just its final answer but the whole multi-step process: whether the goal was reached in the real environment, which path it took, how it used tools, how well it planned, and what it cost. Because agents are non-deterministic and act on the world, we test them in sandboxed environments, run each task several times, and combine state checks, trajectory checks, LLM judges and human review.",
   sections: [
@@ -172,7 +172,88 @@ k=3: pass@k=1.00  pass^k=0.00`,
         ] },
         { type: "check", question: "Our agent has pass@3 = 0.95 but pass^3 = 0.40. It answers customers directly with no human picking the best attempt. Which number describes the customer experience better?", answer: "pass^3 (and pass^1). Customers get one attempt each; there is no one to choose the best of three. pass^k shows the agent is inconsistent, so we should work on reliability, not celebrate pass@3." }
       ]
-    }
+    },
+    {
+      id: 'one-level-deeper',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'We said that errors compound. Let us turn that into a tool for deciding **what to fix first**. If each step succeeds with probability `p` and a task needs `n` steps with no second chances, the task succeeds with probability `pⁿ`.' },
+        { type: 'chart', kind: 'line', title: 'Task success vs number of steps', xLabel: 'Steps in the task', yLabel: 'Task success rate',
+          series: [
+            { name: '99% per step', points: [[5, 0.951], [10, 0.904], [20, 0.818], [30, 0.740]] },
+            { name: '95% per step', points: [[5, 0.774], [10, 0.599], [20, 0.358], [30, 0.215]] },
+            { name: '90% per step', points: [[5, 0.590], [10, 0.349], [20, 0.122], [30, 0.042]] },
+          ],
+          caption: 'Computed from pⁿ. It assumes steps fail independently and the agent never recovers, which is a simplification.' },
+        { type: 'p', text: 'Real agents can notice a failed step and retry. Suppose the agent recovers from half of its step failures. The effective per-step rate becomes `0.95 + 0.05 × 0.5 = 0.975`, and a 10-step task goes from `0.95¹⁰ ≈ 0.60` to `0.975¹⁰ ≈ 0.78`. Recovery is worth measuring because it moves the whole curve.' },
+        { type: 'steps', title: 'Finding the step to fix (illustrative numbers)', items: [
+          { title: 'Run the task 100 times', text: 'Our refund agent succeeds in 65 runs and fails in 35.' },
+          { title: 'Record where each failed run first went wrong', text: 'From the trajectories: `search_orders` 2 runs, `get_order` 3, `issue_refund` 25, `send_email` 5. That adds up to 35.' },
+          { title: 'Read the pattern', text: 'One step causes 25 of the 35 failures. The agent is not “65% good” everywhere. It is very reliable at three steps and weak at one.' },
+          { title: 'Estimate the gain before doing the work', text: 'If a clearer tool description cuts `issue_refund` failures from 25 to 5, success rises from 65 to about 85 runs. Halving the failures of the other three steps together would gain only about 5.' },
+          { title: 'Re-run and re-count', text: 'After the fix, repeat the 100 runs. A new weakest step will appear. Agent improvement is this loop, repeated.' },
+        ] },
+        { type: 'p', text: 'This is why trajectory data matters even when the outcome check is the final judge. The outcome tells us *how often* the agent fails. The first failing step tells us *where* to spend the next day of work.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will write a small **layered grader** for the refund task. It checks three things in order of importance: the outcome in the database, a safety rule on refund size, and a step budget. Four recorded runs go through it, each with a different story.' },
+        { type: 'code', lang: 'python', title: 'practice_agent_grader.py', code: `# A tiny layered grader for the refund task: "refund order 1009, 40 dollars".
+REFUND_LIMIT = 50
+MAX_STEPS = 5
+
+runs = {   # each run: the tool calls made, then the final database state
+    "r1": ([("get_order", 1009), ("issue_refund", 1009, 40), ("send_email", 1009)],
+           {"refunded": {1009: 40}}),
+    "r2": ([("get_order", 1009), ("send_email", 1009)],
+           {"refunded": {}}),                       # said "done", did nothing
+    "r3": ([("get_order", 1009), ("issue_refund", 1009, 400), ("send_email", 1009)],
+           {"refunded": {1009: 400}}),              # refunded 10x too much
+    "r4": ([("search_orders", "helmet")] * 4 + [("get_order", 1009),
+           ("issue_refund", 1009, 40), ("send_email", 1009)],
+           {"refunded": {1009: 40}}),               # correct but wasteful
+}
+
+def grade(calls, state):
+    outcome = state["refunded"] == {1009: 40}       # check the world, not the words
+    refunds = [c for c in calls if c[0] == "issue_refund"]
+    safe = all(c[2] <= REFUND_LIMIT for c in refunds)
+    efficient = len(calls) <= MAX_STEPS
+    return outcome, safe, efficient
+
+print("run  outcome  safe   efficient  steps  verdict")
+passed = 0
+for name, (calls, state) in runs.items():
+    outcome, safe, efficient = grade(calls, state)
+    ok = outcome and safe                           # efficiency is only a warning
+    passed += ok
+    verdict = "PASS" if ok and efficient else "PASS (slow)" if ok else "FAIL"
+    print(f"{name}   {outcome!s:<7}  {safe!s:<5}  {efficient!s:<9}  {len(calls):>5}  {verdict}")
+print(f"task success rate: {passed}/{len(runs)} = {passed / len(runs):.2f}")`, output: `run  outcome  safe   efficient  steps  verdict
+r1   True     True   True           3  PASS
+r2   False    True   True           2  FAIL
+r3   False    False  True           3  FAIL
+r4   True     True   False          7  PASS (slow)
+task success rate: 2/4 = 0.50`,
+          walkthrough: [
+            { lines: [5, 15], note: 'Four runs. Each has the tool calls the agent made and the final state of the orders database.' },
+            { lines: [17, 22], note: 'The grader: outcome from the database state, safety from the refund amounts, efficiency from the number of calls.' },
+            { lines: [26, 32], note: 'Outcome and safety decide pass or fail. Efficiency only adds a warning. Then the success rate over all runs.' },
+          ] },
+        { type: 'p', text: 'Run r2 sent a confirmation email without refunding anything. A grader that trusted the email would have passed it. Run r3 did refund, but ten times too much.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Make the grader trust actions instead of state: replace line 18 with `outcome = ("send_email", 1009) in calls`. Predict which runs’ `outcome` value flips, and which run now passes that should not.',
+          'Add a run that refunds the wrong order: `"r5": ([("get_order", 1010), ("issue_refund", 1010, 40)], {"refunded": {1010: 40}})`. Predict its `outcome` and `safe` values. What does the safety rule fail to notice?',
+          'Loosen the step budget: set `MAX_STEPS = 10` on line 3. Predict what changes in the table and what does not change in the success rate.',
+        ] },
+        { type: 'check', question: 'Run r3 already fails the outcome check. Why keep a separate safety check at all?', answer: 'Because the two can come apart, and they are not equally serious. An agent could refund 400, notice, and correct it to 40: the final state passes, yet a forbidden action happened on the way. Or it could email another customer’s details and still complete the refund. Safety rules look at the *actions taken*, outcome checks look at the *end state*. We also want reports to separate “did not finish” from “did something it must never do”.' },
+        { type: 'check', question: 'Run r4 reached the goal but called `search_orders` four times first. Our grader passes it with a warning. When should that become a hard failure?', answer: 'When the extra steps carry a real cost or risk: a strict latency or cost budget, tools that charge per call or have side effects, or repeats that suggest the agent was stuck in a loop and escaped by luck. For read-only searches, a warning plus a tracked “steps per task” metric is usually right. Failing harmless detours would punish valid alternative paths.' },
+      ],
+    },
   ],
   quiz: [
     { q: "What does trajectory evaluation look at?", options: ["Only the wording of the agent's final answer to the user", "The steps, tool calls and decisions made during the run", "How quickly the underlying model generates its tokens", "The model's published score on public agent benchmarks"], answer: 1, explain: "A trajectory is the full path of a run. Trajectory evaluation checks whether that path was sensible, efficient and safe, beyond whether the outcome was right." },

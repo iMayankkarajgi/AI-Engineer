@@ -1,6 +1,6 @@
 export default {
   id: "kv-cache-compression",
-  minutes: 24,
+  minutes: 29,
   hook: "Can we throw away three quarters of an LLM's memory of a conversation and still get nearly the same answer? Sometimes yes, and it depends on which quarter we keep.",
   summary: "The KV cache stores a key and a value vector for every past token in every layer, and for long contexts it outgrows the model itself. KV cache compression shrinks it in four main ways: fewer bits per number (quantization), fewer tokens (eviction), fewer key/value heads (sharing across heads), or fewer dimensions per token (low-rank). This lesson measures the quality cost of each on real attention math and gives a decision guide.",
   sections: [
@@ -154,6 +154,72 @@ low-rank keys, rank  8:   error 0.345`, walkthrough: [
         { type: "callout", tone: "example", title: "Our legal-document assistant", text: "Users ask about any clause, so eviction is risky. We choose a GQA model with 8 KV heads (4×) and an FP8 cache (2×): 60,000 tokens drop from about 29 GiB to about 3.7 GiB per conversation, with every clause still in memory." },
         { type: "callout", tone: "warn", title: "Common mistakes", text: "Evaluating compression on short prompts or general benchmarks only; the damage appears on long-context retrieval. Quantizing keys with per-token scales and being surprised by outlier channels. And forgetting that compressed caches need kernel support in your serving engine, otherwise the dequantization overhead can eat the speed gain." },
         { type: "p", text: "When not to compress: if contexts are short and batches small, the cache is a minor share of memory. Spend effort on weight quantization or a smaller model first." }
+      ]
+    },
+    {
+      id: "common-mistakes-and-diagnosis",
+      title: "Common mistakes and how to spot them",
+      blocks: [
+        { type: "p", text: "Most compression surprises come from two habits: quoting the saving on one part of the cache as if it were the saving on all of it, and trusting one average error number. Let us work through the first with small numbers. Take one head with d = 64, so each token stores 64 key numbers and 64 value numbers." },
+        { type: "steps", title: "What is the real saving?", items: [
+          { title: "Baseline", text: "FP16 keys and values: (64 + 64) × 2 bytes = 256 bytes per token per head." },
+          { title: "Rank-32 keys only", text: "Keys shrink from 64 to 32 numbers, values stay at 64: (32 + 64) × 2 = 192 bytes. The keys halved, but the whole cache is only 256 ÷ 192 ≈ 1.33× smaller. (We ignore the small shared basis.)" },
+          { title: "INT8 values only", text: "64 × 2 + 64 × 1 = 192 bytes. Again 1.33×, not 2×." },
+          { title: "INT8 for both", text: "(64 + 64) × 1 = 128 bytes: a true 2×. A saving counts in full only when it covers keys and values." },
+          { title: "Add the small extras", text: "Scales and bases also take bytes. They are tiny for long caches, but they are why a measured ratio is always a little below the headline one." }
+        ] },
+        { type: "table", caption: "Symptoms, likely causes and the check that confirms them", head: ["What we see", "Likely cause", "How to check"], rows: [
+          ["Short tests pass, but answers about early pages of a long contract are wrong", "Eviction dropped the tokens that held the fact", "Ask questions whose answers sit at the start and middle of a long context"],
+          ["Overall error is low at 4 bits, yet outputs degrade", "A few large channels set the scale, and the ordinary channels round to zero", "Measure the error on ordinary channels separately, as in the practice below"],
+          ["Memory fell less than the quoted ratio", "Only keys or only values were compressed", "Add up bytes for keys, values and scales together"],
+          ["Memory fell but tokens per second did not rise", "The engine pays extra work to expand the cache at each step", "Time a decode step with and without compression"]
+        ] },
+        { type: "p", text: "The pattern in every row: measure the thing we care about directly. Bytes for the whole cache, error where the query actually looks, and speed on a real decode step." }
+      ]
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "The lesson said keys often have a few channels with very large values, and that this is why keys are quantized per channel. We will see it happen. We build 200 keys with two outlier channels, quantize them to 4 bits with one scale per token and then with one scale per channel, and measure the error in two ways." },
+        { type: "code", lang: "python", title: "practice_outlier_channels.py", code: `import numpy as np
+rng = np.random.default_rng(3)
+T, d, BITS = 200, 16, 4                  # 200 cached keys, 16 channels, INT4
+K = rng.normal(size=(T, d))
+K[:, 5] *= 20                            # channel 5 is an outlier: always large
+K[:, 11] *= 8                            # channel 11 is large too
+
+def quantize(x, axis):
+    # axis=1: one scale per token (row). axis=0: one scale per channel (column).
+    qmax = 2 ** (BITS - 1) - 1           # INT4 keeps the integers -7..7
+    scale = np.abs(x).max(axis=axis, keepdims=True) / qmax
+    return np.round(x / scale).clip(-qmax, qmax) * scale, scale.size
+
+small = [c for c in range(d) if c not in (5, 11)]    # the ordinary channels
+for name, axis in [("per-token", 1), ("per-channel", 0)]:
+    Kq, n_scales = quantize(K, axis)
+    err_all = np.linalg.norm(Kq - K) / np.linalg.norm(K)
+    err_small = np.linalg.norm((Kq - K)[:, small]) / np.linalg.norm(K[:, small])
+    zeroed = np.mean(Kq[:, small] == 0)              # ordinary numbers rounded to 0
+    size = T * d * BITS / 8 + n_scales * 2           # packed ints + FP16 scales
+    print(f"{name:11s} error(all)={err_all:.3f}  error(ordinary)={err_small:.3f}  "
+          f"zeroed={zeroed:.0%}  bytes={size:.0f}")
+print("FP16 bytes:", T * d * 2)`, output: `per-token   error(all)=0.119  error(ordinary)=0.674  zeroed=69%  bytes=2000
+per-channel error(all)=0.108  error(ordinary)=0.123  zeroed=17%  bytes=1632
+FP16 bytes: 6400`, walkthrough: [
+          { lines: [1, 6], note: "Synthetic keys: 16 channels of ordinary size, then channels 5 and 11 are made 20 and 8 times larger." },
+          { lines: [8, 12], note: "Symmetric quantization. The axis decides the grouping: one scale per row (token) or one per column (channel). We also return how many scales we had to store." },
+          { lines: [14, 20], note: "Two error measures: over all channels, and over the 14 ordinary channels only. We also count how many ordinary numbers became exactly zero, and the bytes including the scales." },
+          { lines: [21, 23], note: "Print both groupings next to the FP16 size." }
+        ] },
+        { type: "p", text: "The overall error is almost the same for both (0.119 and 0.108). But with per-token scales, 69% of the ordinary numbers were rounded to zero and their error is 0.674. The overall number hid it because the two huge channels dominate the norm. Now change it:" },
+        { type: "list", items: [
+          "Set `BITS = 8`. Predict whether per-token scales still wipe out the ordinary channels, then check the `zeroed` column.",
+          "Delete the two lines that scale channels 5 and 11. Predict which grouping wins when there are no outlier channels.",
+          "Set `T = 20`. Predict which grouping now stores more scales, and compare the two byte counts. Why does the per-token overhead grow with T while the per-channel one does not?"
+        ] },
+        { type: "check", question: "In the practice output the two groupings have nearly the same overall error. Why would a query still get much worse attention scores with per-token scales?", answer: "The score is q · k, a sum over all channels. If the query's useful signal is in the ordinary channels, per-token quantization has turned most of those numbers into zero, so the scores lose that signal. The overall error looks fine only because the two large channels dominate the norm and are stored well." },
+        { type: "check", question: "A report says: “We store keys at rank 16 instead of 64, so the cache is 4× smaller.” What is missing from that claim?", answer: "The values. If values are unchanged, each token stores 16 + 64 = 80 numbers instead of 128, which is only 1.6× smaller. A ratio on keys alone is not the ratio for the whole cache." }
       ]
     }
   ],

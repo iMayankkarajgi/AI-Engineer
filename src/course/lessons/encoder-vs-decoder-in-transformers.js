@@ -1,6 +1,6 @@
 export default {
   id: "encoder-vs-decoder-in-transformers",
-  minutes: 20,
+  minutes: 25,
   hook: "BERT and GPT are both Transformers, yet one is great at understanding and the other at writing. What single design choice makes the difference?",
   summary: "An encoder reads the whole input at once, letting every token look both left and right, and outputs a context-rich vector per token: ideal for understanding. A decoder generates text one token at a time and uses a causal mask so each token sees only earlier tokens: ideal for writing. Transformers come in three types, encoder-only, decoder-only and encoder–decoder, and we choose among them based on whether the task is understanding, open-ended generation or mapping an input to an output.",
   sections: [
@@ -167,6 +167,85 @@ bank->river  encoder: 0.16  decoder: 0.0`,
         ] },
         { type: "callout", tone: "warn", title: "Common misconception", text: "“Decoder-only models can't understand text because they only look left.” They understand very well: by the time a decoder reaches the end of the prompt, the last positions have seen everything before them. The real trade-off is efficiency and fit: for pure classification or embeddings at scale, a small encoder is often cheaper and just as accurate." },
         { type: "check", question: "We need to score 2 million product reviews per day as positive or negative on modest hardware. Which type would we try first and why?", answer: "An encoder-only model (fine-tuned for sentiment). It produces a label in a single forward pass with no token-by-token generation, so it is far cheaper and faster than prompting a large decoder for each review." },
+      ],
+    },
+    {
+      id: "worked-example-training-pairs",
+      title: "Worked example, step by step",
+      blocks: [
+        { type: "p", text: "The mask does more than decide who sees whom. It also decides what a model can practise on. Let us take one sentence, “The bank of the river”, and write out the training examples each type gets from it in a single pass." },
+        { type: "table", caption: "Decoder training: next-token prediction. One pass over 5 tokens gives 4 questions.", head: ["Position", "What the model may see", "What it must predict"], rows: [
+          ["1", "The", "bank"],
+          ["2", "The bank", "of"],
+          ["3", "The bank of", "the"],
+          ["4", "The bank of the", "river"],
+        ] },
+        { type: "p", text: "All four questions are answered in the same forward pass. The causal mask makes this honest: position 2 cannot see “of”, so it has to guess it." },
+        { type: "table", caption: "Encoder training: masked-token prediction. Masking about 15% of 5 tokens hides roughly one token.", head: ["Input the model sees", "Hidden token", "Context it may use"], rows: [
+          ["The [MASK] of the river", "bank", "Both sides: “The” on the left, “of the river” on the right"],
+        ] },
+        { type: "steps", title: "What the two tables tell us", items: [
+          { title: "Count the questions", text: "The decoder practises on every position. The encoder practises only on the hidden tokens, here one out of five. Per pass, the decoder gets more questions from the same text." },
+          { title: "Compare the clues", text: "The encoder's single question comes with richer clues. It sees “river” while guessing “bank”. The decoder at position 1 must guess “bank” from “The” alone." },
+          { title: "Look at what is learned", text: "Guessing the next token is the same skill as writing. Filling a gap is the skill of reading closely. Each training task builds the skill the model is later used for." },
+          { title: "Spot the mismatch", text: "An encoder never practised continuing text, so asking it to write a paragraph does not work well. A decoder never saw the right-hand side during training, so its vector for an early token cannot reflect later words." },
+        ] },
+        { type: "callout", tone: "tip", title: "A practical consequence", text: "When we take a single vector from a decoder to represent a whole text, the last token is the natural choice: it is the only position that has seen everything. With an encoder, any position (or the average of all) has seen the full input." },
+      ],
+    },
+    {
+      id: "practice-lab",
+      title: "Practice: try it yourself",
+      blocks: [
+        { type: "p", text: "We will run an experiment the weight tables cannot show. We replace the last word of the sentence and measure how much each token's *output vector* moves, once with encoder-style attention and once with decoder-style attention." },
+        { type: "code", lang: "python", title: "practice_who_is_affected.py", code: `import numpy as np
+
+rng = np.random.default_rng(3)
+tokens = ["The", "bank", "of", "the", "river"]
+X = rng.normal(size=(5, 4))             # toy token vectors
+
+def attend(X, causal):
+    scores = X @ X.T / np.sqrt(X.shape[1])
+    if causal:                          # hide every position to the right
+        future = np.triu(np.ones_like(scores), k=1).astype(bool)
+        scores = np.where(future, -np.inf, scores)
+    w = np.exp(scores - scores.max(1, keepdims=True))
+    return (w / w.sum(1, keepdims=True)) @ X
+
+# Swap the last word for a different one: "river" -> some other word
+X2 = X.copy()
+X2[4] = rng.normal(size=4)
+
+for name, causal in [("encoder", False), ("decoder", True)]:
+    moved = np.abs(attend(X2, causal) - attend(X, causal)).sum(axis=1)
+    print(name)
+    for tok, m in zip(tokens, moved):
+        print(f"  {tok:5s} output moved by {m:.2f}")`, output: `encoder
+  The   output moved by 0.05
+  bank  output moved by 0.09
+  of    output moved by 0.11
+  the   output moved by 0.21
+  river output moved by 5.31
+decoder
+  The   output moved by 0.00
+  bank  output moved by 0.00
+  of    output moved by 0.00
+  the   output moved by 0.00
+  river output moved by 5.31`,
+          walkthrough: [
+            { lines: [3, 5], note: "Five tokens with random 4-number vectors. The values are meaningless; only the pattern of change matters." },
+            { lines: [7, 13], note: "One attention step that returns output vectors. With `causal=True`, scores above the diagonal are set to −∞ before softmax." },
+            { lines: [15, 17], note: "Make a copy of the sentence where only the last token's vector is replaced, as if “river” became another word." },
+            { lines: [19, 23], note: "Run both versions through each attention style and sum how far each output row moved. In the decoder, the first four rows do not move at all." },
+          ] },
+        { type: "p", text: "Now change it:" },
+        { type: "list", items: [
+          "Replace the *first* token instead: change `X2[4]` to `X2[0]`. Predict first: which decoder rows move now?",
+          "Replace the middle token: use `X2[2]`. Predict exactly which decoder rows stay at 0.00.",
+          "Change `k=1` to `k=0` in `np.triu`, so each token is also hidden from itself. Predict what the first decoder row prints, and why.",
+        ] },
+        { type: "check", question: "In the decoder, changing the last token left the first four outputs at exactly 0.00. Why does this property let a decoder reuse earlier work when it appends a new token, and why can an encoder not do the same?", answer: "In a decoder, earlier positions never look right, so adding or changing a later token cannot alter their results. They can be computed once and kept. In an encoder every token attends to every other, so a new token changes all outputs (all five rows moved in our run) and everything has to be recomputed." },
+        { type: "check", question: "In the encoder run, “The” moved by only 0.05 while “river” moved by 5.31. Does the small number mean encoders make little use of words to the right?", answer: "No. These are random, untrained vectors, so “The” happened to give “river” a small weight. The important fact is that the number is not zero: the path exists. Training can make that path strong where it helps, for example from “bank” to “river”. In the decoder the path is cut, so no amount of training can use it." },
       ],
     },
     {

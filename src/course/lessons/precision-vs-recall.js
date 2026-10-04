@@ -1,6 +1,6 @@
 export default {
   id: 'precision-vs-recall',
-  minutes: 17,
+  minutes: 22,
   hook: 'A spam filter that marks nothing as spam can still score 99% accuracy. So how do we actually tell whether a classifier is good?',
   summary: 'Precision asks: of everything the model flagged, how much was really positive? Recall asks: of everything that was really positive, how much did the model catch? Raising the decision threshold usually raises precision and lowers recall, so we choose based on which mistake costs more: false alarms (favour precision) or misses (favour recall). F1 combines both into one number.',
   sections: [
@@ -134,6 +134,96 @@ print(f"'never spam' model: accuracy {acc_lazy:.2f}, recall 0.00")`, output: `th
         ], verdict: 'Ask: "What happens when we wrongly flag?" and "What happens when we miss?" Then set the threshold to match. If both matter equally, track F1.' },
         { type: 'callout', tone: 'example', title: 'Precision and recall in AI engineering', text: 'In a RAG system (Module 10), **retrieval recall** asks: did the retriever find the documents that contain the answer? If not, the LLM cannot answer correctly however good it is, so retrieval often favours recall, and a **reranker** then improves precision by pushing the best passages to the top. Guardrails (Module 15) face the same trade-off: blocking too eagerly annoys users (low precision); blocking too little lets harmful content through (low recall).' },
         { type: 'check', question: 'A hospital screening test flags patients for a follow-up scan. Missing a sick patient is far worse than an extra scan. Which metric should we prioritise, and should the threshold go up or down?', answer: 'Prioritise recall and lower the threshold, so almost every sick patient is flagged. The extra false positives are handled by the follow-up scan.' },
+      ],
+    },
+    {
+      id: 'base-rate',
+      title: 'Going one level deeper',
+      blocks: [
+        { type: 'p', text: 'Here is a surprise that catches many teams. We test a filter in the lab, get a good precision, ship it, and precision collapses. The model did not change. The **share of positives** in the data did. That share is called the **base rate** (or prevalence).' },
+        { type: 'p', text: 'To see why, we describe the model by two numbers that do not depend on the base rate. **Recall** is the share of real positives it flags. The **false positive rate** is the share of real negatives it wrongly flags: FPR = FP / (FP + TN). Take an illustrative filter with recall 0.90 and FPR 0.05, and run it on 10,000 emails.' },
+        { type: 'steps', title: 'Same filter, three different inboxes', items: [
+          { title: 'Half the emails are spam', text: '5,000 spam and 5,000 normal. TP = 0.90 × 5,000 = 4,500. FP = 0.05 × 5,000 = 250. Precision = 4,500 / 4,750 ≈ 0.95.' },
+          { title: 'One in ten is spam', text: '1,000 spam and 9,000 normal. TP = 900. FP = 0.05 × 9,000 = 450. Precision = 900 / 1,350 ≈ 0.67.' },
+          { title: 'One in a hundred is spam', text: '100 spam and 9,900 normal. TP = 90. FP = 0.05 × 9,900 = 495. Precision = 90 / 585 ≈ 0.15.' },
+          { title: 'What changed', text: 'Recall stayed at 0.90 every time. But the pile of normal emails grew, and 5% of a big pile is a lot of false alarms. They swamp the few true positives.' },
+        ] },
+        { type: 'chart', kind: 'bar', title: 'Precision of the same filter at different base rates', yLabel: 'Precision', labels: ['50% spam', '10% spam', '1% spam'], series: [ { name: 'Precision', values: [0.95, 0.67, 0.15] } ], caption: 'Computed from the illustrative filter above (recall 0.90, false positive rate 0.05). Recall is 0.90 in all three cases.' },
+        { type: 'list', items: [
+          '**How to spot it:** precision in production is far below precision on the test set, while recall looks about the same. Compare the share of positives in the two datasets.',
+          '**How to avoid it:** build the test set with the same base rate we expect in production. A test set that was balanced to 50/50 for convenience will overstate precision.',
+          '**How to fix it:** when positives are rare, we need a much lower false positive rate. That means a higher threshold, a better model, or a second-stage check on the flagged items.',
+        ] },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will pick a threshold the way a product team should: by adding up what the mistakes cost. We switch to a fraud detector with 16 scored card payments, put a price on a false alarm and on a miss, and let the code find the cheapest threshold. Then we flip the prices and watch the answer move.' },
+        { type: 'code', lang: 'python', title: 'practice_cost_threshold.py', code: `# Pick a threshold by total cost, not by habit.
+# 16 card payments: the model's fraud score and the truth (1 = fraud).
+scores = [0.97, 0.92, 0.86, 0.81, 0.77, 0.69, 0.63, 0.58,
+          0.51, 0.44, 0.39, 0.31, 0.26, 0.18, 0.12, 0.05]
+truth = [1, 1, 0, 1, 0, 1, 0, 0,
+         1, 0, 0, 0, 1, 0, 0, 0]
+
+def counts(threshold):
+    """Return (false positives, false negatives) at this threshold."""
+    flagged = [s >= threshold for s in scores]
+    fp = sum(f and t == 0 for f, t in zip(flagged, truth))
+    fn = sum((not f) and t == 1 for f, t in zip(flagged, truth))
+    return fp, fn
+
+def best_threshold(cost_fp, cost_fn):
+    """Try each threshold and keep the one with the lowest total cost."""
+    best = None
+    for t in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+        fp, fn = counts(t)
+        cost = fp * cost_fp + fn * cost_fn
+        print(f"  t={t:.1f}  FP={fp}  FN={fn}  cost={cost:3d}")
+        if best is None or cost < best[1]:
+            best = (t, cost)
+    return best
+
+for cost_fp, cost_fn in ((1, 20), (20, 1)):
+    print(f"a false alarm costs {cost_fp}, a miss costs {cost_fn}:")
+    t, cost = best_threshold(cost_fp, cost_fn)
+    print(f"  -> best threshold {t:.1f} with total cost {cost}")`, output: `a false alarm costs 1, a miss costs 20:
+  t=0.1  FP=9  FN=0  cost=  9
+  t=0.2  FP=7  FN=0  cost=  7
+  t=0.3  FP=7  FN=1  cost= 27
+  t=0.4  FP=5  FN=1  cost= 25
+  t=0.5  FP=4  FN=1  cost= 24
+  t=0.6  FP=3  FN=2  cost= 43
+  t=0.7  FP=2  FN=3  cost= 62
+  t=0.8  FP=1  FN=3  cost= 61
+  t=0.9  FP=0  FN=4  cost= 80
+  -> best threshold 0.2 with total cost 7
+a false alarm costs 20, a miss costs 1:
+  t=0.1  FP=9  FN=0  cost=180
+  t=0.2  FP=7  FN=0  cost=140
+  t=0.3  FP=7  FN=1  cost=141
+  t=0.4  FP=5  FN=1  cost=101
+  t=0.5  FP=4  FN=1  cost= 81
+  t=0.6  FP=3  FN=2  cost= 62
+  t=0.7  FP=2  FN=3  cost= 43
+  t=0.8  FP=1  FN=3  cost= 23
+  t=0.9  FP=0  FN=4  cost=  4
+  -> best threshold 0.9 with total cost 4`, walkthrough: [
+          { lines: [3, 6], note: 'Sixteen payments sorted by fraud score, with the truth. Six are fraud, and one of them has a low score of 0.26.' },
+          { lines: [8, 13], note: 'For one threshold, count the two kinds of mistake: false positives (good payments flagged) and false negatives (fraud missed).' },
+          { lines: [15, 24], note: 'Sweep nine thresholds. Total cost = FP × cost of a false alarm + FN × cost of a miss. Keep the cheapest.' },
+          { lines: [26, 29], note: 'Run the sweep twice with opposite prices: first a miss is 20 times worse, then a false alarm is 20 times worse.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Make both mistakes cost the same: change the price pairs to `((5, 5),)`. Predict which threshold wins before you run it. (Hint: now only the total number of mistakes matters.)',
+          'Change the truth of the payment scored 0.26 from `1` to `0`. Predict the new best threshold when a miss costs 20.',
+          'Inside `best_threshold`, also print precision and recall for each threshold (there are 6 frauds in total). Predict which of the two rises as the threshold goes up.',
+        ] },
+        { type: 'check', question: 'When a miss costs 20, thresholds 0.1 and 0.2 both miss nothing (FN = 0). Why does the code prefer 0.2?', answer: 'Because 0.2 has fewer false alarms: 7 instead of 9. Lowering the threshold from 0.2 to 0.1 flags two more good payments and catches no extra fraud, so it only adds cost. Once recall is already 1.0, going lower can only hurt precision.' },
+        { type: 'check', question: 'Between thresholds 0.2 and 0.3, FP stays at 7 but FN goes from 0 to 1, and the cost jumps from 7 to 27. What does this tell us about the data, without looking at it?', answer: 'Exactly one payment has a score between 0.2 and 0.3, and it is fraud (it is the one scored 0.26). Raising the threshold past it turned a true positive into a miss and removed no false alarm. A single low-scoring positive like this is what forces a recall-first system to use a very low threshold.' },
       ],
     },
     {

@@ -1,6 +1,6 @@
 export default {
   id: 'machine-learning',
-  minutes: 17,
+  minutes: 22,
   hook: 'How can a program get good at a task that nobody ever wrote the rules for, like spotting spam or pricing a house?',
   summary: 'Machine learning is a way of building software where, instead of writing rules by hand, we show the computer many examples and let an algorithm adjust a model\'s numbers until its predictions match the examples. Training is a loop: predict, measure the error with a loss, nudge the parameters to reduce it, repeat. The real test is how well the model does on new data it has never seen.',
   sections: [
@@ -161,6 +161,75 @@ prediction for a 2,000 sq ft house: $447k`, walkthrough: [
           '**Watch for bias in data.** If historical decisions were unfair, a model trained on them learns the same unfairness.',
         ] },
         { type: 'check', question: 'A bank wants to compute monthly loan interest from a fixed published formula. Should it use machine learning?', answer: 'No. The rule is known exactly, so ordinary code is simpler, exact, and explainable. ML is for patterns we cannot write down, such as predicting which loans are likely to default.' },
+      ],
+    },
+    {
+      id: 'worked-example',
+      title: 'Worked example, step by step',
+      blocks: [
+        { type: 'p', text: 'Let us do one full gradient descent step by hand, on numbers small enough to check on paper. We use the simplest model, `price = w × size` (no `b`, to keep the sums short), and three made-up houses.' },
+        { type: 'table', caption: 'Three illustrative houses and our predictions with w = 10', head: ['Size', 'True price', 'Prediction (w = 10)', 'Error (prediction − true)'], rows: [
+          ['1', '20', '10', '−10'],
+          ['2', '40', '20', '−20'],
+          ['3', '60', '30', '−30'],
+        ] },
+        { type: 'steps', title: 'One update of w, by hand', items: [
+          { title: 'Measure the loss', text: 'Square each error and average: (100 + 400 + 900) / 3 ≈ 466.7. That is our mean squared error with `w = 10`.' },
+          { title: 'Find the slope', text: 'The gradient for `w` is 2 × mean(error × size). The products are −10×1, −20×2, −30×3 = −10, −40, −90. Their mean is −46.67, so the gradient is about −93.3.' },
+          { title: 'Read the sign', text: 'A negative gradient means the loss goes *down* when `w` goes *up*. That matches common sense: all three predictions are too low.' },
+          { title: 'Take the step', text: 'With learning rate 0.05: new w = 10 − 0.05 × (−93.3) ≈ 14.67.' },
+          { title: 'Check it helped', text: 'New predictions are 14.67, 29.33, 44.0. Errors are −5.33, −10.67, −16.0. The new loss is about 132.7, down from 466.7.' },
+          { title: 'Repeat', text: 'Here each step removes the same share of the remaining gap to the best value, `w = 20`. The gap shrinks from 10 to 5.33, then to about 2.84, and so on.' },
+        ] },
+        { type: 'chart', kind: 'line', title: 'Loss after each hand-computed step', xLabel: 'Step', yLabel: 'Mean squared error', series: [
+          { name: 'Loss', points: [[0, 466.7], [1, 132.7], [2, 37.8], [3, 10.7], [4, 3.1]] },
+        ], caption: 'Computed from the three houses above with learning rate 0.05. The loss falls fast at first, then more slowly as we get close to w = 20.' },
+        { type: 'callout', tone: 'warn', title: 'What a too-large step looks like', text: 'Try learning rate 0.25 on the same numbers: new w = 10 + 0.25 × 93.3 ≈ 33.3. We jumped past 20 and landed further away than we started (a gap of 13.3 instead of 10). The loss goes *up*. If the loss rises step after step, the first thing to try is a smaller learning rate.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will see underfitting and overfitting with real numbers. We fit curves of different flexibility (polynomials of degree 1, 2, 5 and 12) to 20 training points, then score each curve on 10 points it never saw.' },
+        { type: 'code', lang: 'python', title: 'practice_overfitting.py', code: `import numpy as np
+
+# 30 points from a gently curved hidden rule, plus noise
+rng = np.random.default_rng(2)
+x = np.sort(rng.uniform(-1, 1, 30))
+y = 1.5 * x**2 - x + rng.normal(0, 0.15, 30)
+
+# Every 3rd point is held out for testing; the model never trains on it
+test = np.arange(30) % 3 == 0
+x_tr, y_tr, x_te, y_te = x[~test], y[~test], x[test], y[test]
+
+def mse(coefs, xs, ys):
+    """Mean squared error of a polynomial on some points."""
+    return ((np.polyval(coefs, xs) - ys) ** 2).mean()
+
+print(f"train points: {len(x_tr)}, test points: {len(x_te)}")
+print("degree  train MSE  test MSE")
+for degree in (1, 2, 5, 12):
+    coefs = np.polyfit(x_tr, y_tr, degree)   # fit on training data only
+    print(f"{degree:6d}  {mse(coefs, x_tr, y_tr):9.4f}  {mse(coefs, x_te, y_te):8.4f}")`, output: `train points: 20, test points: 10
+degree  train MSE  test MSE
+     1     0.1558    0.2682
+     2     0.0189    0.0316
+     5     0.0121    0.0358
+    12     0.0065    0.3034`, walkthrough: [
+          { lines: [3, 6], note: 'The hidden rule is a gentle curve (a degree-2 shape) plus random noise.' },
+          { lines: [8, 10], note: 'Hold out every third point as a test set. Training never touches these 10 points.' },
+          { lines: [12, 14], note: 'A helper that scores any fitted curve on any set of points.' },
+          { lines: [18, 20], note: 'Fit each degree on the training points only, then print the error on both sets. Compare the two columns row by row.' },
+        ] },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'Add degree `0` to the list (a flat line). Predict: will its training error be higher or lower than degree 1, and is that underfitting or overfitting?',
+          'Change the noise from `0.15` to `0.0`. Predict what happens to the test error of degree 2, and whether degree 12 still looks bad.',
+          'Change `30` to `300` points in all three places. Predict whether the gap between train and test error for degree 12 grows or shrinks, and why more data helps.',
+        ] },
+        { type: 'check', question: 'Degree 12 has the lowest training error in the table. Why is it still the worst choice here?', answer: 'Because its test error (about 0.30) is roughly ten times that of degree 2 (about 0.03). It used its extra flexibility to chase the noise in the 20 training points. Low training error only shows the model can fit what it saw; the test column shows what it will do on new data.' },
+        { type: 'check', question: 'Degree 1 and degree 12 have similar test errors. Are they failing for the same reason? How can we tell from the table?', answer: 'No. Degree 1 is bad on *both* columns (about 0.16 train, 0.27 test): it is too simple for a curved rule, which is underfitting. Degree 12 is excellent on train and bad on test: a big gap between the columns is the sign of overfitting.' },
       ],
     },
   ],

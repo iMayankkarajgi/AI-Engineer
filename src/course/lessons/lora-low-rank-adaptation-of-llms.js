@@ -1,6 +1,6 @@
 export default {
   id: 'lora-low-rank-adaptation-of-llms',
-  minutes: 20,
+  minutes: 25,
   hook: 'What if we could fine-tune a 7-billion-parameter model by training only about 4 million numbers, and get nearly the same result?',
   summary: 'LoRA (Low-Rank Adaptation) freezes a pretrained model’s weights and learns the change to each chosen weight matrix as the product of two thin matrices, B·A. Because the update is low-rank, it needs a tiny fraction of the trainable parameters and optimizer memory. After training, B·A can be merged back into W, so inference costs nothing extra.',
   sections: [
@@ -157,6 +157,82 @@ merged layer gives same output: True`, walkthrough: [
         { type: 'callout', tone: 'example', title: 'Where LoRA shows up', text: 'Fine-tuning open models (Llama, Mistral, Qwen and others) on a single GPU with libraries like Hugging Face PEFT; per-customer or per-task adapters served from one base model; community style adapters for image diffusion models; and QLoRA for fine-tuning large models on modest hardware. Several hosted fine-tuning services also use LoRA-style adapters under the hood, though vendors do not always say which method they use.' },
         { type: 'callout', tone: 'warn', title: 'Common mistakes', text: 'Using a learning rate tuned for full fine-tuning (LoRA usually needs a larger one); setting r very high “to be safe” and overfitting a small dataset; adapting only one matrix type when the task needs more; and forgetting that LoRA still learns from the data, so bad examples still teach bad habits. LoRA also does not fully prevent forgetting; it only reduces the risk.' },
         { type: 'p', text: '**When not to use LoRA:** when we need to teach a lot of genuinely new knowledge or a new language and have large data and budget, full fine-tuning or continued pretraining may reach higher quality. And if a prompt or RAG already solves the problem, no fine-tuning is needed at all.' },
+      ],
+    },
+    {
+      id: 'spotting-mistakes',
+      title: 'Common mistakes and how to spot them',
+      blocks: [
+        { type: 'p', text: 'LoRA has few moving parts, so most failures trace back to one of three things: the **scale** `α / r`, the **rank**, or the **merge**. Let us make the scale concrete first, because it is the one people trip over most.' },
+        { type: 'steps', title: 'What happens to the scale when we change the rank', items: [
+          { title: 'Start', text: 'We train with `r = 8` and `α = 16`. The adapter output is multiplied by `α / r = 16 / 8 = 2`.' },
+          { title: 'Double the rank, keep α', text: 'Now `r = 16`, `α = 16`. The scale drops to `16 / 16 = 1`. The adapter has more capacity but each direction counts half as much. A learning rate that worked before may now feel too weak.' },
+          { title: 'Double both', text: '`r = 16`, `α = 32` gives scale 2 again. This is why many recipes tie α to r (for example α = 2r): we can then change the rank without retuning everything else.' },
+          { title: 'Check before merging', text: 'The same scale must be used when merging: `W′ = W + (α / r) · B·A`. Merging with plain `B·A` gives a model that behaves differently from the one we evaluated.' },
+        ] },
+        { type: 'table', caption: 'Diagnosing a LoRA run', head: ['What we see', 'Likely cause', 'How to check'], rows: [
+          ['Outputs identical to the base model after training', 'B is still all zeros: the adapter was not attached to any layer, or no gradient reached it', 'Print the largest absolute value in B; list which layers have adapters'],
+          ['Loss is noisy or explodes early', 'Learning rate or α / r too large', 'Halve the scale or the learning rate and compare the first 100 steps'],
+          ['Training loss falls, validation loss rises quickly', 'Rank too high for a small dataset', 'Try half the rank, or fewer target layers'],
+          ['Both losses stay high', 'Rank too low, or too few layers adapted', 'Raise the rank or add the MLP layers as targets'],
+          ['Merged model scores differently from the unmerged one', 'Scale left out, adapter merged twice, or merged into a different base model', 'Compare both versions on one input, as the code below does'],
+        ] },
+        { type: 'p', text: 'A useful mental test for the rank: ask how many *independent things* the task changes. A tone change is probably a few directions. Teaching a new domain with new vocabulary is many. The practice code below shows what happens when the rank is smaller than the true number of directions.' },
+      ],
+    },
+    {
+      id: 'practice-lab',
+      title: 'Practice: try it yourself',
+      blocks: [
+        { type: 'p', text: 'We will build a weight change that secretly has **3 strong directions**, then ask: how well can a rank-1, rank-2, rank-3… pair of thin matrices rebuild it? We use the SVD (singular value decomposition), which gives the best possible rank-r approximation, so no training loop is needed. Then we verify that merging changes nothing.' },
+        { type: 'code', lang: 'python', title: 'practice_lora_rank.py', code: `import numpy as np
+rng = np.random.default_rng(1)
+d = 32
+
+# A "true" fine-tuning change: 3 strong directions plus faint noise.
+U, V = rng.normal(size=(d, 3)), rng.normal(size=(3, d))
+delta_W = U @ V + 0.05 * rng.normal(size=(d, d))
+
+# SVD gives the best possible rank-r approximation of delta_W.
+P, s, Qt = np.linalg.svd(delta_W)
+print("rank  params  share of d*d  relative error")
+for r in [1, 2, 3, 4, 8]:
+    B = P[:, :r] * s[:r]                  # d x r, plays the role of B
+    A = Qt[:r, :]                         # r x d, plays the role of A
+    err = np.linalg.norm(delta_W - B @ A) / np.linalg.norm(delta_W)
+    print(f"{r:>4}  {2 * d * r:>6}  {2 * d * r / d**2:>11.1%}  {err:>14.3f}")
+
+# Merging: the adapter path and the merged matrix give the same output.
+W = rng.normal(size=(d, d))               # frozen pretrained weight
+x = rng.normal(size=d)                    # one input vector
+r, alpha = 4, 8
+B, A = P[:, :r] * s[:r], Qt[:r, :]
+scale = alpha / r
+two_paths = W @ x + scale * (B @ (A @ x))   # unmerged: frozen path + adapter
+merged = (W + scale * B @ A) @ x            # merged: a single matrix
+print("scale alpha/r =", scale)
+print("merged and unmerged outputs match:", np.allclose(two_paths, merged))`, output: `rank  params  share of d*d  relative error
+   1      64         6.2%           0.729
+   2     128        12.5%           0.490
+   3     192        18.8%           0.032
+   4     256        25.0%           0.030
+   8     512        50.0%           0.022
+scale alpha/r = 2.0
+merged and unmerged outputs match: True`,
+          walkthrough: [
+            { lines: [5, 7], note: 'Build a 32 × 32 change from 3 directions, plus a little noise so it is not exactly rank 3.' },
+            { lines: [9, 16], note: 'For each rank, keep the top r directions as thin matrices B and A, count their parameters, and measure how much of the change is missed.' },
+            { lines: [18, 27], note: 'Compute the layer output two ways: frozen path plus scaled adapter path, and one merged matrix. They match.' },
+          ] },
+        { type: 'p', text: 'The error falls sharply until rank 3 and then barely moves. Extra rank beyond what the change needs only buys parameters.' },
+        { type: 'p', text: 'Now change it:' },
+        { type: 'list', items: [
+          'On line 6, change both `3`s to `6` so the true change has 6 directions. Predict: at which rank will the error now drop below 0.05?',
+          'Raise the noise on line 7 from `0.05` to `0.5`. Predict: will rank 3 still look like a clear “elbow”, or will the error keep falling slowly at higher ranks?',
+          'On line 25, delete `scale *` so we merge without the scale. Predict what the last line prints, then run it.',
+        ] },
+        { type: 'check', question: 'Going from rank 3 to rank 8 in the output raises the parameter share from 18.8% to 50.0% but the error only moves from 0.032 to 0.022. What does that tell us about choosing r?', answer: 'Once the rank covers the real directions of the change, more rank mostly fits noise. Here the true change has 3 directions, so r = 3 already captures almost everything. In practice we cannot see the true rank, so we start small (8 or 16), and only raise r if both training and validation loss stay high.' },
+        { type: 'check', question: 'With d = 32, rank 8 already uses 50% of the full matrix. In the lesson, rank 16 on a 4096 × 4096 matrix was under 1%. Why is LoRA’s saving so much bigger on large layers?', answer: 'LoRA parameters grow as `2·d·r`, the full matrix grows as `d²`, so the share is `2r / d`. For d = 32 and r = 8 that is 16 / 32 = 50%. For d = 4096 and r = 16 it is 32 / 4096 ≈ 0.78%. The bigger the layer, the smaller the share for the same rank.' },
       ],
     },
     {

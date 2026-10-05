@@ -37,7 +37,8 @@ export function Header() {
       <NavLink onClick={close} to="/practice">Practice</NavLink>
       <NavLink onClick={close} to="/glossary">Glossary</NavLink>
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
-      <NavLink onClick={close} to="/resources">Useful links</NavLink>
+      <NavLink onClick={close} to="/news">Live news</NavLink>
+      <NavLink onClick={close} to="/resources">Resources</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
       {ACCOUNTS && (user ? <NavLink className="nav-account" onClick={close} to="/profile">Your profile</NavLink>
         : <><Link className="nav-account" onClick={close} to="/account?mode=signup">Sign up (new here)</Link><Link className="nav-account plain" onClick={close} to="/account?mode=login">Sign in</Link></>)}
@@ -56,7 +57,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>Understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/resources">Useful links</Link><Link to="/dashboard">Your progress</Link></div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link></div>
     <small>Lessons and interactives © {new Date().getFullYear()} AI Atlas. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
@@ -335,7 +336,7 @@ export function Account() {
 // Every external reference in one place; lessons themselves do not link out.
 export function Resources() {
   return <main className="page container narrow">
-    <PageIntro eyebrow="Useful links" title="Papers, documentation and standards">The original sources and reference manuals behind the course, gathered in one place. Links open in a new tab.</PageIntro>
+    <PageIntro eyebrow="Resources" title="Papers, documentation and standards">The original sources and reference manuals behind the course, gathered in one place. Links open in a new tab.</PageIntro>
     {resources.map(g => <section key={g.group} className="resource-group">
       <h2 className="section-title">{g.group}</h2>
       <p className="section-dek">{g.note}</p>

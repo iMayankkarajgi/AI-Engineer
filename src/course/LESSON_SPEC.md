@@ -18,7 +18,7 @@ what the lesson actually teaches.
 
 - **Write original text.** Every sentence, example and structure must be your own. Do not copy or closely
   paraphrase any outside article, course or video, and do not mention or link to other courses, authors or sites.
-  Lessons contain no external links at all; outside references live on the Useful links page (`src/course/resources.js`).
+  Lessons contain no external links at all; outside references live on the Resources page (`src/course/resources.js`).
 - **Cover every item in the lesson's `covers` list**, roughly in that order. Usually each item becomes a section
   or a clearly titled part of one. If `covers` is empty, design a sensible outline yourself from the title.
 - Voice: simple words, short sentences, "we" voice, friendly and precise. Define every term the first time it

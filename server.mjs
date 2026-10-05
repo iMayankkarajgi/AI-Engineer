@@ -4,6 +4,7 @@ import { scryptSync, randomBytes, timingSafeEqual, createHash } from 'node:crypt
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import newsHandler from './api/news.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -27,6 +28,8 @@ const originGuard = (req, res, next) => {
 };
 app.use('/api', originGuard);
 app.get('/api/health', (_, res) => res.json({ ok: true }));
+// The same handler runs as a serverless function on Vercel (api/news.js).
+app.get('/api/news', newsHandler);
 
 const attempts = new Map();
 const authLimit = (req, res, next) => {
@@ -105,5 +108,8 @@ if (fs.existsSync(dist)) {
   app.use(express.static(dist, { index: false }));
   app.get('/{*path}', (_, res) => res.sendFile(path.join(dist, 'index.html')));
 }
-const port = Number(process.env.PORT || 3001);
+// `--port N` wins over PORT, so `npm run dev` keeps the API on 3001 (where Vite proxies /api)
+// even when the environment sets PORT for the front-end server.
+const portArg = process.argv.indexOf('--port');
+const port = Number((portArg > 0 && process.argv[portArg + 1]) || process.env.PORT || 3001);
 app.listen(port, () => console.log(`AI Atlas running at http://localhost:${port}`));

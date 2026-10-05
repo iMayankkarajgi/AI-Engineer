@@ -18,6 +18,7 @@ import './cinematic.css';
 const CinematicHome = React.lazy(() => import('./CinematicHome'));
 // The editor is sizeable, so it loads only when the Practice page is opened.
 const Practice = React.lazy(() => import('./practice/Practice'));
+const News = React.lazy(() => import('./News'));
 // The static build (a single shareable page) cannot rewrite URLs on the server,
 // so it routes with the URL hash instead.
 const Router = STATIC ? HashRouter : BrowserRouter;
@@ -64,6 +65,7 @@ function App() {
         <Route path="/practice" element={<Practice/>}/>
         <Route path="/glossary" element={<Glossary/>}/>
         <Route path="/faq" element={<Faq/>}/>
+        <Route path="/news" element={<News/>}/>
         <Route path="/resources" element={<Resources/>}/>
         <Route path="/exam" element={<Exam/>}/>
         <Route path="/dashboard" element={<Dashboard/>}/>

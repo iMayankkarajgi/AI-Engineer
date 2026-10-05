@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node server.mjs\" \"vite --host 127.0.0.1\"",
+    "dev": "concurrently \"node server.mjs --port 3001\" \"vite --host 127.0.0.1\"",
     "build": "vite build",
     "start": "node server.mjs",
     "build:static": "node scripts/build-static.mjs",

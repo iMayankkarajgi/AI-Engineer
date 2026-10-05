@@ -1,4 +1,4 @@
-// Useful links, shown on /resources. Lessons themselves do not link out; every
+// Resources, shown on /resources. Lessons themselves do not link out; every
 // external reference lives here. Each entry names the lesson it supports.
 export const resources = [
   { group: 'Research papers', note: 'The original papers behind ideas taught in the course.', items: [

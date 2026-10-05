@@ -46,7 +46,8 @@ To exercise the whole flow offline, `npm run dev:mock` starts the site on http:/
 - **Quiz gating**: every lesson ends with 5 multiple-choice questions. Scoring 4/5 or better marks the lesson as passed and unlocks the next one. Wrong answers show explanations; retries shuffle the options.
 - **Practice** (`/practice`): a Python editor that runs code in the browser with Pyodide (output, `input()` text, Stop for runaway programs) and saves files to the learner's account, or to the browser for guests.
 - **Final exam** (`/exam`): 50 mixed questions (`src/course/exam.js`), open once every lesson is passed; 45 or more earns the certificate. The result is stored as the `final-exam` row in `lesson_progress`.
-- **Useful links** (`/resources`): papers, documentation and standards (`src/course/resources.js`). Lessons do not link to outside sites; add external references there.
+- **Live news** (`/news`): current AI stories read from official lab, company and university feeds by `api/news.js` (a Vercel function, also mounted by `server.mjs`). The source list is at the top of that file; items are kept only when they link back to the source's own domain.
+- **Resources** (`/resources`): papers, documentation and standards (`src/course/resources.js`). Lessons do not link to outside sites; add external references there.
 - **Glossary** and **FAQ** pages.
 - Guest progress and best quiz scores are stored in `localStorage`; signed-in progress is stored in SQLite.
 

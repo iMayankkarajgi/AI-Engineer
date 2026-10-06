@@ -14,6 +14,7 @@ import { ThemeToggle, useTheme } from './theme';
 import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
 import { BRAND, PROGRAM } from './brand';
+import LogoMark from './LogoMark';
 import { VIZ } from './course/vizNames';
 import { vizUsage } from './course/vizUsage';
 
@@ -21,7 +22,7 @@ const Universe = React.lazy(() => import('./Universe'));
 const TOTAL = allLessons.length;
 
 export function Logo() {
-  return <Link className="logo" to="/" aria-label={`${BRAND} home`}><span className="logo-symbol" aria-hidden="true">✳</span><span className="logo-text"><b>Modern AI</b> <span>Engineering</span></span></Link>;
+  return <Link className="logo" to="/" aria-label={`${BRAND} home`}><LogoMark/><span className="logo-text"><b>Modern AI</b> <span>Engineering</span></span></Link>;
 }
 
 export function Header() {

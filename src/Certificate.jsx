@@ -4,6 +4,7 @@ import { CLOUD } from './app';
 import { examQuestions } from './course/exam';
 import { supabase } from './supabase';
 import Modal from './Modal';
+import LogoMark from './LogoMark';
 import { BRAND, PROGRAM } from './brand';
 
 const longDate = d => d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
@@ -27,7 +28,7 @@ export default function Certificate({ user, exam, open, onClose }) {
   return <Modal open={open} onClose={onClose} label="Certificate of completion" className="modal-wide cert-modal">
     <div className="cert-scroll" tabIndex="0"><div className="cert" role="img" aria-label={`Certificate of completion awarded to ${user.name} by ${BRAND} for the ${PROGRAM}, ${longDate(date)}`}>
       <div className="cert-frame">
-        <div className="cert-brand"><span>✳</span> {BRAND}</div>
+        <div className="cert-brand"><LogoMark className="cert-mark"/>{BRAND}</div>
         <div className="cert-kicker">Certificate of Completion</div>
         <p className="cert-lead">This certifies that</p>
         <div className="cert-name">{user.name}</div>

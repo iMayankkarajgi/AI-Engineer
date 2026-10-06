@@ -178,3 +178,5 @@
 }
 @media (prefers-reduced-motion: reduce) and (max-width: 900px) { .story-scene.scene-0 { transform: translate(-50%, 0); } }
 @media (max-width: 520px) { .story-topline { letter-spacing: .08em; white-space: nowrap; } }
+.cinematic-footer .footer-brand { display: flex; align-items: center; gap: 10px; }
+.footer-mark { width: 26px; height: 26px; }

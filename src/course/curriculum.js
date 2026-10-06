@@ -316,7 +316,7 @@ export const modules = [
   "number": 4,
   "title": "Transformers and How They Think",
   "short": "Transformers",
-  "icon": "✳",
+  "icon": "◈",
   "accent": "#d4c4ff",
   "stage": "Core",
   "intro": [

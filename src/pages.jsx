@@ -15,6 +15,7 @@ import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
 import { BRAND, PROGRAM } from './brand';
 import LogoMark from './LogoMark';
+import GoogleButton, { GOOGLE_CLIENT_ID } from './GoogleSignIn';
 import { VIZ } from './course/vizNames';
 import { vizUsage } from './course/vizUsage';
 
@@ -316,7 +317,7 @@ export function Account() {
     <div className="account-form-wrap"><div className="account-form">
       <h1>{mode === 'signup' ? 'Create your account' : 'Sign in'}</h1>
       <p className="dek">{mode === 'signup' ? 'Keep your progress across devices.' : `Pick up your ${PROGRAM} where you left off.`}</p>
-      {CLOUD && <><button type="button" className="button ghost google-button" disabled={busy} onClick={google}><GoogleMark/>Continue With Google</button><div className="form-divider"><span>or use your email</span></div></>}
+      {CLOUD && <>{GOOGLE_CLIENT_ID ? <GoogleButton onError={setError}/> : <button type="button" className="button ghost google-button" disabled={busy} onClick={google}><GoogleMark/>Continue With Google</button>}<div className="form-divider"><span>or use your email</span></div></>}
       <form onSubmit={submit}>
         {mode === 'signup' && <label>Your name<input name="name" required maxLength="80" autoComplete="name"/></label>}
         <label>Email address<input type="email" name="email" required autoComplete="email"/></label>

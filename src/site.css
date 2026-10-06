@@ -133,6 +133,7 @@
 .account-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .form-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--line)); border-radius: var(--r); padding: 10px 12px; font-size: .9rem; }
 .google-button { width: 100%; padding-block: 12px; }
+.google-gis { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
 .form-divider { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: .8rem; }
 .form-divider::before, .form-divider::after { content: ''; flex: 1; height: 1px; background: var(--line-2); }
 

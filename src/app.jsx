@@ -151,6 +151,11 @@ export function AppProvider({ children }) {
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: home() } });
     if (error) throw new Error(error.message);
   };
+  // Google sign-in started from this site (see GoogleSignIn.jsx): exchange Google's token for a Supabase session.
+  const signInWithGoogleToken = async (token, nonce) => {
+    const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token, nonce });
+    if (error) throw new Error(error.message);
+  };
   const auth = async (mode, body) => {
     if (CLOUD) {
       const { data, error } = mode === 'signup'
@@ -179,5 +184,5 @@ export function AppProvider({ children }) {
     setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]); setExam(null);
   };
   const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); setExam(null); } };
-  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
 }

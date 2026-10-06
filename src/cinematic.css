@@ -32,14 +32,14 @@
 .story-scene.scene-0 .story-eyebrow, .story-scene.scene-1 .story-eyebrow, .story-scene.scene-2 .story-eyebrow { justify-content: flex-start; }
 .tiny-line { width: 22px; height: 1px; background: currentColor; }
 
-.story-scene h1 { margin: 22px 0 20px; color: var(--scene-ink); font-size: clamp(46px, 5.9vw, 88px); font-weight: 520; line-height: 1.02; letter-spacing: -.05em; }
-.story-scene.scene-0 h1 { font-size: clamp(50px, 5.5vw, 84px); }
-.story-scene.scene-1 h1, .story-scene.scene-2 h1 { font-size: clamp(44px, 4.8vw, 70px); }
-.story-scene h1 .title-line { display: block; white-space: nowrap; }
-.story-scene h1 .title-word { display: inline-block; white-space: nowrap; }
-.story-scene h1 .title-line.muted { color: var(--scene-ink-2); }
-.story-scene h1 .title-character { display: inline-block; opacity: 0; filter: blur(13px); transform: translateY(18px); transition: opacity .65s ease, filter .65s ease, transform .65s ease; transition-delay: 0ms; }
-.story-scene.is-active h1 .title-character { opacity: 1; filter: blur(0); transform: translateY(0); transition-delay: var(--character-delay); }
+.story-scene .story-title { margin: 22px 0 20px; color: var(--scene-ink); font-size: clamp(46px, 5.9vw, 88px); font-weight: 520; line-height: 1.02; letter-spacing: -.05em; }
+.story-scene.scene-0 .story-title { font-size: clamp(50px, 5.5vw, 84px); }
+.story-scene.scene-1 .story-title, .story-scene.scene-2 .story-title { font-size: clamp(44px, 4.8vw, 70px); }
+.story-scene .story-title .title-line { display: block; white-space: nowrap; }
+.story-scene .story-title .title-word { display: inline-block; white-space: nowrap; }
+.story-scene .story-title .title-line.muted { color: var(--scene-ink-2); }
+.story-scene .story-title .title-character { display: inline-block; opacity: 0; filter: blur(13px); transform: translateY(18px); transition: opacity .65s ease, filter .65s ease, transform .65s ease; transition-delay: 0ms; }
+.story-scene.is-active .story-title .title-character { opacity: 1; filter: blur(0); transform: translateY(0); transition-delay: var(--character-delay); }
 .story-scene p { max-width: 480px; margin: 0 auto; color: var(--scene-ink-2); font-family: var(--serif); font-size: clamp(1rem, 1.3vw, 1.15rem); line-height: 1.65; }
 .story-scene.scene-0 p, .story-scene.scene-1 p, .story-scene.scene-2 p { margin-left: 0; }
 .story-actions { display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 30px; }
@@ -135,7 +135,7 @@
   .story-scene.is-active, .story-scene.scene-0.is-active, .story-scene.scene-1.is-active, .story-scene.scene-2.is-active { transform: translate(-50%, 0) scale(1); }
   .story-scene::before { inset: -20px -7vw; background: linear-gradient(to top, transparent, var(--scene-bg) 16%); }
   .story-chapters, .story-bottom { display: none; }
-  .story-scene h1 { margin: 14px 0 14px; }
+  .story-scene .story-title { margin: 14px 0 14px; }
   .story-scene.scene-0 .story-eyebrow, .story-scene.scene-1 .story-eyebrow, .story-scene.scene-2 .story-eyebrow,
   .story-scene.scene-0 .story-actions, .story-scene.scene-1 .story-actions, .story-scene.scene-2 .story-actions { justify-content: center; }
   .story-scene.scene-0 p, .story-scene.scene-1 p, .story-scene.scene-2 p { margin: auto; }
@@ -147,8 +147,8 @@
   .story-chapters button { font-size: 0; gap: 5px; }
   .story-chapters button span { font-size: .55rem; }
   .story-scene { width: 84vw; }
-  .story-scene h1, .story-scene.scene-0 h1, .story-scene.scene-1 h1, .story-scene.scene-2 h1 { font-size: clamp(32px, 9.6vw, 64px); }
-  .story-scene h1 .title-line { white-space: normal; }
+  .story-scene .story-title, .story-scene.scene-0 .story-title, .story-scene.scene-1 .story-title, .story-scene.scene-2 .story-title { font-size: clamp(32px, 9.6vw, 64px); }
+  .story-scene .story-title .title-line { white-space: normal; }
   .story-actions { flex-direction: column; gap: 18px; }
   .intro-grid, .path-heading { display: block; }
   .principles { grid-template-columns: 1fr; margin-top: 70px; gap: 0; }
@@ -177,3 +177,4 @@
   .spotlight-visual path, .ending-halo { animation: none; }
 }
 @media (prefers-reduced-motion: reduce) and (max-width: 900px) { .story-scene.scene-0 { transform: translate(-50%, 0); } }
+@media (max-width: 520px) { .story-topline { letter-spacing: .08em; white-space: nowrap; } }

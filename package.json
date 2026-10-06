@@ -1,11 +1,11 @@
 {
-  "name": "ai-atlas",
+  "name": "modern-ai-engineering",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "concurrently \"node server.mjs --port 3001\" \"vite --host 127.0.0.1\"",
-    "build": "vite build",
+    "build": "node scripts/build-lesson-minutes.mjs && vite build && node scripts/prerender.mjs",
     "start": "node server.mjs",
     "build:static": "node scripts/build-static.mjs",
     "validate": "node scripts/validate-lessons.mjs",

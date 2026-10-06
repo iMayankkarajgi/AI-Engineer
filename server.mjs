@@ -105,11 +105,16 @@ app.put('/api/progress/:lessonId', (req, res) => {
 
 const dist = path.join(root, 'dist');
 if (fs.existsSync(dist)) {
-  app.use(express.static(dist, { index: false }));
-  app.get('/{*path}', (_, res) => res.sendFile(path.join(dist, 'index.html')));
+  // Prerendered pages live at dist/<path>/index.html; everything else gets the app shell.
+  app.use(express.static(dist, { redirect: false }));
+  const shell = fs.existsSync(path.join(dist, 'app.html')) ? 'app.html' : 'index.html';
+  app.get('/{*path}', (req, res) => {
+    const page = path.join(dist, path.normalize(req.path), 'index.html');
+    res.sendFile(page.startsWith(dist) && fs.existsSync(page) ? page : path.join(dist, shell));
+  });
 }
 // `--port N` wins over PORT, so `npm run dev` keeps the API on 3001 (where Vite proxies /api)
 // even when the environment sets PORT for the front-end server.
 const portArg = process.argv.indexOf('--port');
 const port = Number((portArg > 0 && process.argv[portArg + 1]) || process.env.PORT || 3001);
-app.listen(port, () => console.log(`AI Atlas running at http://localhost:${port}`));
+app.listen(port, () => console.log(`Modern AI Engineering running at http://localhost:${port}`));

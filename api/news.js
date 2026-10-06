@@ -20,7 +20,7 @@ const SOURCES = [
 ];
 // Sources marked general publish on other subjects too; their items must mention an AI topic.
 const AI_TOPIC = /\b(AI|artificial intelligence|machine learning|deep learning|neural|LLMs?|language models?|generative|agents?|agentic|inference|GPT|robot(?:s|ics)?|foundation models?|reinforcement learning|computer vision)\b/;
-const PER_SOURCE = 4, TOTAL = 24, UA = 'Mozilla/5.0 (compatible; AIAtlasNews/1.0)';
+const PER_SOURCE = 4, TOTAL = 24, UA = 'Mozilla/5.0 (compatible; ModernAIEngineeringNews/1.0; +https://modernaiengineering.com)';
 
 async function get(url, ms, maxBytes = 1_500_000) {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);

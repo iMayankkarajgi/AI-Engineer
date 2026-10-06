@@ -1,18 +1,18 @@
-// Course guide, glossary, and FAQs for AI Atlas.
+// Course guide, glossary, and FAQs for the AI Engineer Bootcamp.
 
 export const guide = {
   about: {
     title: 'About this course',
-    lead: 'A free, structured, step-by-step path to learn AI engineering from scratch: 19 modules and 149 interactive lessons, from the first idea of machine learning to designing complete AI systems.',
+    lead: 'A structured, step-by-step path to learn AI engineering from scratch: 19 modules and 149 interactive lessons, from the first idea of machine learning to designing complete AI systems.',
     body: [
       'We start with the basics of machine learning, then go inside the Transformer, see how an LLM generates text, learn how models are fine-tuned and aligned, build RAG systems and AI agents, make models fast and cheap to serve, evaluate and secure them, and finally design whole AI systems end to end.',
       'Every lesson here is self-contained. It explains one concept in simple words, then shows it moving: animated diagrams, charts that draw themselves, widgets you can drag, real code with real output, and side-by-side comparisons. You should never need to open another tab to understand a lesson.',
     ],
     points: [
-      ['Free and open', 'No paywall. Your progress is saved in your browser, or in your account if you sign in.'],
+      ['Open lessons', 'Every lesson and quiz is open to read. Your progress is saved in your browser, or in your account if you sign in.'],
       ['Beginner first', 'Every term is defined the first time it appears. Math is shown with small numbers you can follow.'],
       ['Deep, not shallow', 'Each lesson goes from “why do we need it” to “how it works step by step” to “where it is used”.'],
-      ['In order, with checks', 'Each lesson ends with a 5-question quiz. Score 4 or more to unlock the next lesson.'],
+      ['In order, with checks', 'Each lesson ends with a 5-question quiz. Score 4 or more to pass the lesson.'],
     ],
   },
   whatIs: {
@@ -45,10 +45,10 @@ export const guide = {
   howTo: {
     title: 'How to use this course',
     items: [
-      'Follow the modules in order. Each module builds on the previous one, and lessons unlock one after another.',
+      'Follow the modules in order. Each module builds on the previous one.',
       'Inside a lesson, play with every interactive: move the sliders, step through the animations, press Run on the code.',
       'Use the “Pause and think” checks. Predict the answer before you reveal it.',
-      'Take the 5-question quiz at the end. You need 4 correct answers to unlock the next lesson. Wrong answers come with explanations, and you can retry as often as you like.',
+      'Take the 5-question quiz at the end. You need 4 correct answers to pass the lesson. Wrong answers come with explanations, and you can retry as often as you like.',
       'Do not skip Module 2 and Module 3. Everything later is built on them.',
       'After each module, explain its ideas to a friend in your own words. If you can explain it, you have learned it.',
     ],
@@ -56,18 +56,18 @@ export const guide = {
 };
 
 export const faqs = [
-  ['What is the best way to learn AI engineering?', 'Follow a structured path in order: machine-learning foundations, deep learning, the Transformer, how LLMs generate text, fine-tuning and alignment, prompting and context, RAG, agents, inference, evaluation, safety, and finally system design. This course is organised exactly that way, and each lesson unlocks after you pass the previous one.'],
-  ['Is this course free?', 'Yes. Every lesson, interactive and quiz is free. You can learn as a guest, and your progress is saved in your browser. Creating an account (on the self-hosted version) syncs your progress across devices.'],
+  ['What is the best way to learn AI engineering?', 'Follow a structured path in order: machine-learning foundations, deep learning, the Transformer, how LLMs generate text, fine-tuning and alignment, prompting and context, RAG, agents, inference, evaluation, safety, and finally system design. The AI Engineer Bootcamp is organised exactly that way, and every lesson ends with a quiz that checks you understood it.'],
+  ['Is this course free?', 'Every lesson and quiz is open to read right now, and the Temperature lab is free to try. The other interactive labs open with a paid track; the pricing page lists the three tracks. You can learn as a guest with progress saved in your browser, or sign in to sync it across devices.'],
   ['Do I need a machine-learning background?', 'No. The course starts from the very basics. Basic programming (preferably Python) and high-school math are enough; everything else is explained inside the lessons.'],
-  ['How do the quiz and unlocking work?', 'Every lesson ends with 5 multiple-choice questions. Answer all five and submit. If you get 4 or more right, the lesson is marked as passed and the next lesson unlocks. If not, each question shows an explanation, and you can try again with the options shuffled.'],
-  ['How long does it take to finish?', 'Most lessons take 12–25 minutes including the interactives and quiz. At one or two lessons a day, the full course takes around three to four months. Understanding each concept deeply matters more than speed.'],
+  ['How do the quizzes work?', 'Every lesson ends with 5 multiple-choice questions. Answer all five and submit. If you get 4 or more right, the lesson is marked as passed. If not, each question shows an explanation, and you can try again with the options shuffled.'],
+  ['How long does it take to finish?', 'Most lessons take 20–40 minutes including the interactives, practice lab and quiz; the whole bootcamp is about 63 hours of material. At one or two lessons a day, the full course takes around three to four months. Understanding each concept deeply matters more than speed.'],
   ['What is the difference between an AI engineer and a machine-learning engineer?', 'A machine-learning engineer mostly trains, tunes and deploys models. An AI engineer mostly builds products and systems on top of existing models, especially LLMs, using prompting, context engineering, RAG, agents, fine-tuning, inference optimisation and evaluation. The two overlap, and this course covers the foundations both need.'],
   ['What skills does an AI engineer need?', 'How LLMs work inside (Transformers, attention, tokenization); how to adapt them (prompting, context engineering, fine-tuning, LoRA); how to give them knowledge (RAG, vector search); how to make them act (agents, function calling, MCP); how to run them efficiently (inference, quantization, serving); how to measure and secure them (evaluation, observability, guardrails); and how to design complete systems.'],
   ['Does the course cover AI agents and agentic AI?', 'Yes. Module 11 covers agents in depth (function calling, the agent loop, ReAct, plan-and-execute, reflection, memory, MCP, skills, multi-agent systems, subagents, orchestration and computer-use agents), and Module 12 covers agentic engineering and frameworks such as LangChain, LangGraph, Claude Code and Cursor.'],
   ['Does it cover RAG?', 'Yes. Module 10 goes from vector databases and approximate nearest-neighbour search to semantic and hybrid search, rerankers, ColBERT, chunking, HyDE, caching, agentic RAG, GraphRAG and vectorless RAG.'],
   ['Does it cover LLM inference optimisation?', 'Yes. Module 13 covers prefill vs decode, disaggregation, the KV cache and its compression, paged attention, continuous batching, speculative decoding (n-gram, Medusa, EAGLE), quantization, GGUF, llama.cpp, vLLM, SGLang and TensorRT-LLM.'],
   ['Will this help me with AI engineering interviews?', 'Yes. The course covers the concepts asked in AI engineer, GenAI engineer, LLM engineer and ML engineer interviews, and Module 19 is dedicated to interview preparation, including a worked system-design answer.'],
-  ['Where does the curriculum come from?', 'AI Atlas covers 19 core modules drawn from the established body of AI engineering knowledge — from ML fundamentals through inference optimization and agent systems. All lesson text, interactive widgets, code walkthroughs and quizzes are written specifically for this platform.'],
+  ['Where does the curriculum come from?', 'The AI Engineer Bootcamp covers 19 core modules drawn from the established body of AI engineering knowledge — from ML fundamentals through inference optimization and agent systems. All lesson text, interactive widgets, code walkthroughs and quizzes are written specifically for this platform.'],
 ];
 
 // { term, def, lesson }: lesson is the id of the lesson that teaches the term.

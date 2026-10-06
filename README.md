@@ -1,6 +1,6 @@
-# AI Atlas
+# Modern AI Engineering
 
-An interactive AI engineering course: 19 modules and 149 lessons, from machine-learning foundations to AI system design. Lesson text, interactives, code walkthroughs and quizzes are written for AI Atlas.
+The site at https://modernaiengineering.com. It teaches the **AI Engineer Bootcamp**: three tracks, 19 modules and 149 interactive lessons, from machine-learning foundations to AI system design. The site name, programme name and public address live in `src/brand.js`.
 
 ## Run locally
 
@@ -36,6 +36,18 @@ With Supabase configured, learners sign in with Google (or email), get a profile
 Tables: `profiles` (one row per account), `lesson_progress` (one row per learner per lesson) `code_snippets` (Python files saved from the Practice page) and `entitlements` (plans a learner has bought; learners can read their own rows but only the dashboard or a trusted server can write them). To grant a plan by hand, insert a row in `entitlements` with the learner's user id and a track of `ml`, `ai` or `complete`. Row-level security limits every learner to their own rows.
 
 To exercise the whole flow offline, `npm run dev:mock` starts the site on http://127.0.0.1:5174 against `scripts/mock-supabase.mjs`, a small in-memory stand-in for Supabase Auth and the two tables (with a simulated Google account). `npm run build:static` leaves Supabase out unless you pass `--with-supabase`.
+
+## Domain and search engines
+
+- **Domain**: in Vercel, connect `modernaiengineering.com` (and `www`) to this project. In Supabase under **Authentication → URL Configuration**, set **Site URL** to `https://modernaiengineering.com` and add `https://modernaiengineering.com/**` to **Redirect URLs**, otherwise sign-in returns to the old address.
+- **Per-page metadata**: `src/seo.js` gives every page its title, description, canonical URL and schema.org data (Course, FAQPage, BreadcrumbList, LearningResource). The app applies it on each navigation.
+- **Prerendering**: `npm run build` ends with `scripts/prerender.mjs`, which writes `dist/<path>/index.html` for every public page with that metadata and a plain-HTML copy of the content, plus `dist/sitemap.xml`. Private and unknown URLs are served `dist/app.html`, which is marked noindex.
+- **Static files**: `public/` holds `robots.txt`, the icons, the web manifest and `og.png` (the link-preview image).
+- After launch, add the site in Google Search Console and Bing Webmaster Tools and submit `https://modernaiengineering.com/sitemap.xml`.
+
+## Admin reporting
+
+`supabase/schema.sql` also creates two views for the Supabase dashboard: `admin_learners` (one row per account: sign-in method, progress, exam score, plan) and `admin_summary` (totals: Google users, email users, users with a plan, active this week). Learners cannot read them.
 
 ## How the course works
 

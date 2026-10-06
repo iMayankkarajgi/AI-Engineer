@@ -13,6 +13,7 @@ import { tracks, trackById, labTrack, labUnlocked, FREE_LABS } from './course/tr
 import { ThemeToggle, useTheme } from './theme';
 import { useInView } from './LessonBlocks';
 import { Viz } from './viz';
+import { BRAND, PROGRAM } from './brand';
 import { VIZ } from './course/vizNames';
 import { vizUsage } from './course/vizUsage';
 
@@ -20,7 +21,7 @@ const Universe = React.lazy(() => import('./Universe'));
 const TOTAL = allLessons.length;
 
 export function Logo() {
-  return <Link className="logo" to="/" aria-label="AI Atlas home"><span className="logo-symbol">✳</span><span>AI Atlas</span></Link>;
+  return <Link className="logo" to="/" aria-label={`${BRAND} home`}><span className="logo-symbol" aria-hidden="true">✳</span><span className="logo-text"><b>Modern AI</b> <span>Engineering</span></span></Link>;
 }
 
 export function Header() {
@@ -41,14 +42,14 @@ export function Header() {
       <NavLink onClick={close} to="/resources">Resources</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
       {ACCOUNTS && (user ? <NavLink className="nav-account" onClick={close} to="/profile">Your profile</NavLink>
-        : <><Link className="nav-account" onClick={close} to="/account?mode=signup">Sign up (new here)</Link><Link className="nav-account plain" onClick={close} to="/account?mode=login">Sign in</Link></>)}
+        : <Link className="nav-account" onClick={close} to="/account">Sign in</Link>)}
     </nav>
     <div className="header-actions">
       <ThemeToggle/>
       {user && <Link className="avatar-link" to="/profile" aria-label="Your profile" title={user.name}><Avatar user={user} size={34}/></Link>}
       {!ACCOUNTS || user
         ? <Link className="button primary small continue" to={`/lesson/${nextLesson}`}>Continue</Link>
-        : <><Link className="button ghost small signin" to="/account?mode=login">Sign In</Link><Link className="button primary small" to="/account?mode=signup">Sign Up</Link></>}
+        : <Link className="button primary small signin" to="/account">Sign In</Link>}
       <button className="menu-toggle" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button>
     </div>
   </div></header>;
@@ -56,9 +57,9 @@ export function Header() {
 
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
-    <div><Logo/><p>Understand AI engineering from the inside out.</p></div>
+    <div><Logo/><p>The {PROGRAM}: understand AI engineering from the inside out.</p></div>
     <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link></div>
-    <small>Lessons and interactives © {new Date().getFullYear()} AI Atlas. All lesson text, code, and quizzes are original content.</small>
+    <small>Lessons and interactives © {new Date().getFullYear()} {BRAND}. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
 
@@ -119,7 +120,7 @@ export function Curriculum() {
   const passed = track.lessons.filter(l => completed.includes(l.id)).length;
   const next = track.lessons.find(l => !completed.includes(l.id) && isUnlocked(l.id)) || track.lessons.find(l => !completed.includes(l.id)) || track.lessons[0];
   return <main className="page container">
-    <PageIntro eyebrow="Curriculum" title="Choose your learning track">
+    <PageIntro eyebrow={`${PROGRAM} · Curriculum`} title="Choose your learning track">
       Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; score {PASS_MARK}/5 to pass it{LOCKS ? ' and unlock the next one' : ''}.
     </PageIntro>
     <TrackPicker value={track.id} onChange={setTrack}/>
@@ -230,7 +231,7 @@ export function Glossary() {
     <label className="search-box"><span aria-hidden="true">⌕</span><input placeholder="Search a concept…" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search the glossary"/><small>{entries.length} terms</small></label>
     {letters.map(L => <section key={L} className="glossary-group"><h2>{L}</h2><dl className="glossary-list">{entries.filter(e => e.term[0].toUpperCase() === L).map(e =>
       <div key={e.term}><dt>{e.term}</dt><dd>{e.def}{e.lesson && lessonById[e.lesson] && <Link className="glossary-link" to={`/lesson/${e.lesson}`}>Lesson {lessonById[e.lesson].num} →</Link>}</dd></div>)}</dl></section>)}
-    <p className="lesson-credit">AI Atlas glossary — {entries.length} key terms, each linked to the lesson that teaches it.</p>
+    <p className="lesson-credit">{BRAND} glossary: {entries.length} key terms, each linked to the lesson that teaches it.</p>
   </main>;
 }
 
@@ -274,7 +275,7 @@ export function Dashboard() {
       </Link></li>;
     })}</ul>
     <div className="account-link">{user ? <><Link className="button ghost" to="/profile">Your Profile</Link><SignOutButton/></>
-      : <>{ACCOUNTS && <Link className="button ghost" to="/account">Create An Account To Sync Progress</Link>}{completed.length > 0 && <ResetButton onReset={resetGuest}/>}</>}</div>
+      : <>{ACCOUNTS && <Link className="button ghost" to="/account?mode=signup">Create An Account To Sync Progress</Link>}{completed.length > 0 && <ResetButton onReset={resetGuest}/>}</>}</div>
   </main>;
 }
 
@@ -289,10 +290,10 @@ function ResetButton({ onReset }) {
 
 export function Account() {
   const { user, auth, signInWithGoogle } = useApp(), nav = useNavigate(), { state } = useLocation();
-  const [params] = useSearchParams(), asked = params.get('mode') === 'login' ? 'login' : 'signup';
+  const [params] = useSearchParams(), asked = params.get('mode') === 'signup' ? 'signup' : 'login';
   const [mode, setMode] = useState(asked), [error, setError] = useState(state?.error || ''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
   useEffect(() => { if (user) nav(CLOUD ? '/profile' : '/dashboard'); else if (!ACCOUNTS) nav('/dashboard'); }, [user, nav]);
-  // The header links choose a tab: ?mode=signup or ?mode=login.
+  // Sign-in is the default; ?mode=signup opens the create-account form.
   useEffect(() => { setMode(asked); setError(''); setNotice(''); }, [asked]);
   async function submit(e) {
     e.preventDefault(); setBusy(true); setError(''); setNotice('');
@@ -312,12 +313,8 @@ export function Account() {
   return <main className="account-page">
     <div className="account-aside"><ParticleField/><div className="account-aside-copy"><div className="eyebrow">Build your understanding</div><h2>Every concept connects.</h2><p>Track your path from your first lesson to real AI systems.</p></div></div>
     <div className="account-form-wrap"><div className="account-form">
-      <div className="period-toggle account-tabs" role="tablist" aria-label="Sign up or sign in">
-        <button role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError(''); }}>Sign Up</button>
-        <button role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(''); }}>Sign In</button>
-      </div>
-      <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
-      <p className="dek">{mode === 'signup' ? 'Keep your progress across devices.' : 'Pick up where you left off.'}</p>
+      <h1>{mode === 'signup' ? 'Create your account' : 'Sign in'}</h1>
+      <p className="dek">{mode === 'signup' ? 'Keep your progress across devices.' : `Pick up your ${PROGRAM} where you left off.`}</p>
       {CLOUD && <><button type="button" className="button ghost google-button" disabled={busy} onClick={google}><GoogleMark/>Continue With Google</button><div className="form-divider"><span>or use your email</span></div></>}
       <form onSubmit={submit}>
         {mode === 'signup' && <label>Your name<input name="name" required maxLength="80" autoComplete="name"/></label>}
@@ -395,7 +392,7 @@ export function Lab() {
           <div className="lock-icon" aria-hidden="true">🔒</div>
           <h3>This lab is part of a paid plan</h3>
           <p>It opens with the <b>{trackById[labTrack(open)].name}</b> track or the <b>{trackById.complete.name}</b> track.{!user && ' If you already have a plan, sign in to use it.'}</p>
-          <div className="cert-actions"><Link className="button primary" to="/pricing">See Plans</Link>{!user && ACCOUNTS && <Link className="button ghost" to="/account?mode=login">Sign In</Link>}<button className="button ghost" onClick={() => setOpen('temperature')}>Try The Free Lab</button></div>
+          <div className="cert-actions"><Link className="button primary" to="/pricing">See Plans</Link>{!user && ACCOUNTS && <Link className="button ghost" to="/account">Sign In</Link>}<button className="button ghost" onClick={() => setOpen('temperature')}>Try The Free Lab</button></div>
         </div>}
         {lessonsFor(open).length > 0 && <div className="lab-used">Used in: {lessonsFor(open).slice(0, 4).map(id => <Link key={id} to={`/lesson/${id}`}>{lessonById[id].num} {lessonById[id].title}</Link>)}</div>}
       </>}

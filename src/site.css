@@ -8,6 +8,8 @@
 .header-inner { max-width: var(--max); height: 100%; margin: 0 auto; padding-inline: var(--gutter); display: flex; align-items: center; gap: clamp(14px, 2vw, 32px); }
 .logo { display: inline-flex; align-items: center; gap: 9px; font-weight: 680; font-size: 1rem; letter-spacing: -.01em; white-space: nowrap; }
 .logo-symbol { color: var(--accent); font-size: 1.3rem; line-height: 1; }
+.logo-text b { font-weight: 700; }
+.logo-text span { font-weight: 520; color: var(--ink-2); }
 .site-header nav { display: flex; gap: 4px; }
 .site-header nav .nav-account { display: none; }
 .site-header nav a { white-space: nowrap; color: var(--ink-2); font-size: .9rem; font-weight: 520; padding: 7px 11px; border-radius: var(--r-sm); transition: color .15s, background .15s; }
@@ -254,7 +256,24 @@ body:has(dialog.modal[open]) { overflow: hidden; }
 .exam-card h3 { margin: 0 0 4px; }
 .exam-card p { margin: 0; }
 
-.account-tabs { justify-self: start; margin-bottom: 6px; }
-.account-tabs button { padding: 8px 20px; }
 /* Very narrow phones: one header button; Sign In stays in the menu and on the account page. */
-@media (max-width: 374px) { .header-actions .button.signin { display: none; } }
+/* Phones: the name stacks on two lines so it stays readable beside the buttons. */
+@media (max-width: 520px) { .logo { gap: 8px; } .logo-text { display: grid; font-size: .92rem; line-height: 1.08; } .logo-text span { font-size: .78rem; letter-spacing: .01em; } .header-actions { gap: 8px; } }
+
+/* Static copy of a page written at build time (scripts/prerender.mjs). It is what
+   search engines read and what shows for a moment before the app starts. */
+.prerender { max-width: 860px; margin: 0 auto; padding: 28px var(--gutter) 64px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
+.prerender header, .prerender nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: .9rem; color: var(--ink-2); }
+.prerender header { justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+.prerender h1 { font-size: clamp(1.9rem, 4.4vw, 2.9rem); line-height: 1.1; letter-spacing: -.02em; margin: .3em 0 .5em; text-wrap: balance; }
+.prerender h2 { font-size: 1.35rem; margin: 1.7em 0 .4em; }
+.prerender h3 { font-size: 1.05rem; margin: 1.2em 0 .3em; }
+.prerender p, .prerender li, .prerender dd { color: var(--ink-2); }
+.prerender main a { color: var(--accent); }
+.prerender ul, .prerender ol { padding-left: 1.3em; display: grid; gap: 6px; }
+.prerender dt { font-weight: 650; margin-top: 12px; }
+.prerender dd { margin: 0; }
+.prerender pre { overflow-x: auto; padding: 14px; border-radius: var(--r-sm); background: var(--surface-2); font: .85rem/1.5 var(--mono); }
+.prerender table { display: block; overflow-x: auto; border-collapse: collapse; font-size: .9rem; }
+.prerender th, .prerender td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.prerender footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line); font-size: .85rem; }

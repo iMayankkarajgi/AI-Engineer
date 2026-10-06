@@ -4,6 +4,7 @@ import { CLOUD } from './app';
 import { examQuestions } from './course/exam';
 import { supabase } from './supabase';
 import Modal from './Modal';
+import { BRAND, PROGRAM } from './brand';
 
 const longDate = d => d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -22,16 +23,16 @@ function useCompletionDate(user, open) {
 
 export default function Certificate({ user, exam, open, onClose }) {
   const date = useCompletionDate(user, open);
-  const id = `AA-${date.getFullYear()}-${String(user.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
+  const id = `MAE-${date.getFullYear()}-${String(user.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
   return <Modal open={open} onClose={onClose} label="Certificate of completion" className="modal-wide cert-modal">
-    <div className="cert-scroll" tabIndex="0"><div className="cert" role="img" aria-label={`Certificate of completion awarded to ${user.name} for the AI Atlas AI engineering course, ${longDate(date)}`}>
+    <div className="cert-scroll" tabIndex="0"><div className="cert" role="img" aria-label={`Certificate of completion awarded to ${user.name} by ${BRAND} for the ${PROGRAM}, ${longDate(date)}`}>
       <div className="cert-frame">
-        <div className="cert-brand"><span>✳</span> AI Atlas</div>
+        <div className="cert-brand"><span>✳</span> {BRAND}</div>
         <div className="cert-kicker">Certificate of Completion</div>
         <p className="cert-lead">This certifies that</p>
         <div className="cert-name">{user.name}</div>
         <div className="cert-rule"/>
-        <p className="cert-text">has successfully completed the <b>AI Engineering Course</b>, passing all {allLessons.length} lessons across {modules.length} modules and the final examination, from machine-learning foundations to production AI systems.</p>
+        <p className="cert-text">has successfully completed the <b>{PROGRAM}</b>, passing all {allLessons.length} lessons across {modules.length} modules and the final examination, from machine-learning foundations to production AI systems.</p>
         <div className="cert-foot">
           <div><strong>{longDate(date)}</strong><small>Date of completion</small></div>
           <svg className="cert-seal" viewBox="0 0 120 120" aria-hidden="true">
@@ -42,7 +43,7 @@ export default function Certificate({ user, exam, open, onClose }) {
           </svg>
           <div><strong>{id}</strong><small>Certificate ID</small></div>
         </div>
-        <div className="cert-note">Final examination score: {exam} out of {examQuestions.length}.</div>
+        <div className="cert-note">Final examination score: {exam} out of {examQuestions.length}. Issued by {BRAND} · modernaiengineering.com</div>
       </div>
     </div></div>
     <p className="cert-hint">Swipe sideways to see the whole certificate.</p>

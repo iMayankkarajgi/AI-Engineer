@@ -14,6 +14,7 @@ import './lesson.css';
 import './blocks.css';
 import './viz/viz.css';
 import './cinematic.css';
+import { seoFor, applySeo } from './seo';
 
 const CinematicHome = React.lazy(() => import('./CinematicHome'));
 // The editor is sizeable, so it loads only when the Practice page is opened.
@@ -34,6 +35,13 @@ function ScrollTop() {
   return null;
 }
 
+// Keeps the title, description, canonical URL and structured data in step with the page.
+function Seo() {
+  const { pathname } = useLocation();
+  useEffect(() => { if (!STATIC) applySeo(seoFor(pathname)); }, [pathname]);
+  return null;
+}
+
 // Google sends the browser back to the app's entry URL. Once the session is
 // loaded, continue to the page the learner was heading for; if Google or
 // Supabase reported a problem instead, show it on the sign-in page.
@@ -50,6 +58,7 @@ function AfterLogin() {
 function App() {
   return <ThemeProvider><AppProvider><Router>
     <ScrollTop/>
+    <Seo/>
     <AfterLogin/>
     <Header/>
     <React.Suspense fallback={<main className="page container"><div className="eyebrow">Loading…</div></main>}>

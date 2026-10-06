@@ -27,12 +27,13 @@ export function Logo() {
 }
 
 export function Header() {
-  const { user, nextLesson } = useApp();
+  const { user, resumeLesson, setPickerOpen } = useApp();
   const [menu, setMenu] = useState(false);
   const close = () => setMenu(false);
   return <header className="site-header"><div className="header-inner">
     <Logo/>
     <nav className={menu ? 'menu-open' : ''} aria-label="Main navigation">
+      <button className="nav-picker" onClick={() => { close(); setPickerOpen(true); }}>All lessons</button>
       <NavLink onClick={close} to="/curriculum">Curriculum</NavLink>
       <NavLink onClick={close} to="/guide">Course guide</NavLink>
       <NavLink onClick={close} to="/lab">Lab</NavLink>
@@ -50,7 +51,7 @@ export function Header() {
       <ThemeToggle/>
       {user && <Link className="avatar-link" to="/profile" aria-label="Your profile" title={user.name}><Avatar user={user} size={34}/></Link>}
       {!ACCOUNTS || user
-        ? <Link className="button primary small continue" to={`/lesson/${nextLesson}`}>Continue</Link>
+        ? <Link className="button primary small continue" to={`/lesson/${resumeLesson}`}>Continue</Link>
         : <Link className="button primary small signin" to="/account">Sign In</Link>}
       <button className="menu-toggle" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button>
     </div>
@@ -249,7 +250,7 @@ export function Faq() {
 }
 
 export function Dashboard() {
-  const { user, completed, scores, resetGuest, nextLesson, exam } = useApp();
+  const { user, completed, scores, resetGuest, nextLesson, exam, setPickerOpen } = useApp();
   const next = lessonById[nextLesson];
   const nextMod = modules.find(m => m.lessons.some(l => l.id === nextLesson));
   const attempted = Object.keys(scores).length;
@@ -261,7 +262,7 @@ export function Dashboard() {
     <div className="dashboard-top">
       <div className="card stat"><small>Lessons passed</small><strong>{completed.length}<span> / {TOTAL}</span></strong><div className="meter large"><span style={{ width: `${(completed.length / TOTAL) * 100}%` }}/></div></div>
       <div className="card stat"><small>Average best quiz score</small><strong>{avg}<span> / 5</span></strong><p>{attempted} quiz{attempted === 1 ? '' : 'zes'} attempted</p></div>
-      <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link></div>
+      <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><div className="card-actions"><Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link><button className="button ghost" onClick={() => setPickerOpen(true)}>Browse All Lessons</button></div></div>
     </div>
     <div className="card exam-card">
       <div><small>Final exam</small><h3>{exam !== null && exam >= EXAM_PASS ? `Passed with ${exam} / ${examQuestions.length}` : completed.length < TOTAL ? 'Opens when every lesson is passed' : exam !== null ? `Best score ${exam} / ${examQuestions.length}` : 'Ready when you are'}</h3><p>{examQuestions.length} mixed questions. Score {EXAM_PASS} or more to earn the certificate.</p></div>

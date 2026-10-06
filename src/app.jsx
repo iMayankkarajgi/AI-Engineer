@@ -55,6 +55,9 @@ export function AppProvider({ children }) {
   const [plans, setPlans] = useState([]);
   // Best final-exam score so far, or null when it has not been taken.
   const [exam, setExam] = useState(() => read('atlas-exam-v1', null));
+  // The lesson the learner opened most recently (kept in this browser), so Continue can resume it.
+  const [lastLesson, setLastLesson] = useState(() => { const id = read('atlas-last-lesson', null); return known(id) ? id : null; });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Bundled API: restore the cookie session.
   useEffect(() => {
@@ -143,6 +146,8 @@ export function AppProvider({ children }) {
   // the AI track without finishing the ML one.
   const isUnlocked = id => { if (!LOCKS) return true; const i = lessonIds.indexOf(id); return i <= 0 || completed.includes(lessonIds[i - 1]) || completed.includes(id) || (entryLessonIds.includes(id) && completed.includes(lessonIds[0])); };
   const nextLesson = lessonIds.find(id => !completed.includes(id)) || lessonIds[lessonIds.length - 1];
+  const visitLesson = id => { if (known(id)) { setLastLesson(id); write('atlas-last-lesson', id); } };
+  const resumeLesson = lastLesson || nextLesson;
 
   // Where Supabase sends the browser back to: this app's own entry URL.
   const home = () => location.origin + (STATIC ? location.pathname : import.meta.env.BASE_URL);
@@ -184,5 +189,5 @@ export function AppProvider({ children }) {
     setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]); setExam(null);
   };
   const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); setExam(null); } };
-  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, lastLesson, resumeLesson, visitLesson, pickerOpen, setPickerOpen, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
 }

@@ -166,3 +166,30 @@
   .pager { grid-template-columns: 1fr; }
   .pager-card.next { grid-column: auto; }
 }
+
+/* "Jump to any lesson" pop-up and the buttons that open it. */
+.lesson-nav-all { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 16px; border: 0; border-bottom: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); font-weight: 620; font-size: .88rem; text-align: left; }
+.lesson-nav-all:hover { filter: brightness(1.08); }
+.site-header nav button.nav-picker { white-space: nowrap; color: var(--ink-2); font: inherit; font-size: .9rem; font-weight: 520; padding: 7px 11px; border: 0; border-radius: var(--r-sm); background: none; text-align: left; }
+.site-header nav button.nav-picker:hover { color: var(--ink); background: var(--surface-2); }
+.card-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.picker-modal .modal-body { display: grid; gap: 12px; }
+.picker-modal h2 { margin: 0; padding-right: 44px; }
+.picker-dek { margin: 0; color: var(--ink-2); max-width: 62ch; }
+.picker-resume { justify-self: start; max-width: 100%; text-align: left; white-space: normal; }
+.picker-list { display: grid; gap: 8px; max-height: min(52dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.picker-module { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.picker-module > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; list-style: none; }
+.picker-module > summary::-webkit-details-marker { display: none; }
+.picker-module[open] > summary { border-bottom: 1px solid var(--line); }
+.picker-module-name { display: grid; min-width: 0; }
+.picker-module-name small { color: var(--ink-3); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.picker-module-name strong { font-size: .95rem; font-weight: 640; overflow-wrap: anywhere; }
+.picker-count { color: var(--ink-3); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.picker-module ol { list-style: none; margin: 0; padding: 6px; }
+.picker-module li a { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 10px; border-radius: var(--r-sm); color: var(--ink-2); font-size: .9rem; line-height: 1.35; }
+.picker-module li a:hover { background: var(--surface-2); color: var(--ink); }
+.picker-module li.current a { background: var(--accent-soft); color: var(--ink); font-weight: 620; }
+.picker-module li .nav-index { width: 30px; height: 24px; border-radius: 12px; font-size: .7rem; }
+.picker-module li.done .nav-index { background: var(--ok); color: var(--surface); }
+@media (max-width: 1340px) { .site-header nav button.nav-picker { display: block; padding: 8px 4px; } }

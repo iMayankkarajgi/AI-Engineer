@@ -25,10 +25,11 @@ function useLessonBody(id) {
 }
 
 function LessonNav({ mod, currentId }) {
-  const { completed, isUnlocked } = useApp();
+  const { completed, isUnlocked, setPickerOpen } = useApp();
   const [open, setOpen] = useState(() => matchMedia('(min-width: 1100px)').matches);
   const done = mod.lessons.filter(l => completed.includes(l.id)).length;
   return <nav className={'lesson-nav' + (open ? ' open' : '')} aria-label="Lessons in this module">
+    <button className="lesson-nav-all" onClick={() => setPickerOpen(true)}><span aria-hidden="true">☰</span> Jump to any lesson</button>
     <button className="lesson-nav-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
       <span><small>Module {mod.number}</small><strong>{mod.short}</strong><small>{done} of {mod.lessons.length} passed</small></span>
       <svg className="chevron" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -160,8 +161,9 @@ export default function LessonPage() {
   const meta = lessonById[id], mod = moduleOf(id);
   const body = useLessonBody(id);
   useEffect(() => { if (body?.summary) setDescription(body.summary); }, [body]);
-  const { isUnlocked, completed } = useApp();
+  const { isUnlocked, completed, visitLesson } = useApp();
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
+  useEffect(() => { if (lessonById[id]) visitLesson(id); }, [id]);
   if (!meta || !mod) return <NotFound/>;
   if (!isUnlocked(id)) return <Locked lesson={meta} mod={mod}/>;
   const at = lessonIds.indexOf(id), prevId = lessonIds[at - 1], nextId = lessonIds[at + 1];

@@ -7,6 +7,7 @@ import { Header, Footer, Curriculum, Module, Guide, Glossary, Faq, Dashboard, Ac
 import Exam from './Exam';
 import LessonPage from './LessonPage';
 import Profile from './Profile';
+import LessonPicker from './LessonPicker';
 import { Pricing } from './Tracks';
 import './tokens.css';
 import './site.css';
@@ -61,6 +62,7 @@ function App() {
     <Seo/>
     <AfterLogin/>
     <Header/>
+    <LessonPicker/>
     <React.Suspense fallback={<main className="page container"><div className="eyebrow">Loading…</div></main>}>
       <Routes>
         <Route path="/" element={<CinematicHome/>}/>

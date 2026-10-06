@@ -1,4 +1,4 @@
-// Course guide, glossary, and FAQs for the AI Engineer Bootcamp.
+// Course guide, glossary, and FAQs for the AI Engineering Bootcamp.
 
 export const guide = {
   about: {
@@ -56,7 +56,7 @@ export const guide = {
 };
 
 export const faqs = [
-  ['What is the best way to learn AI engineering?', 'Follow a structured path in order: machine-learning foundations, deep learning, the Transformer, how LLMs generate text, fine-tuning and alignment, prompting and context, RAG, agents, inference, evaluation, safety, and finally system design. The AI Engineer Bootcamp is organised exactly that way, and every lesson ends with a quiz that checks you understood it.'],
+  ['What is the best way to learn AI engineering?', 'Follow a structured path in order: machine-learning foundations, deep learning, the Transformer, how LLMs generate text, fine-tuning and alignment, prompting and context, RAG, agents, inference, evaluation, safety, and finally system design. The AI Engineering Bootcamp is organised exactly that way, and every lesson ends with a quiz that checks you understood it.'],
   ['Is this course free?', 'Every lesson and quiz is open to read right now, and the Temperature lab is free to try. The other interactive labs open with a paid track; the pricing page lists the three tracks. You can learn as a guest with progress saved in your browser, or sign in to sync it across devices.'],
   ['Do I need a machine-learning background?', 'No. The course starts from the very basics. Basic programming (preferably Python) and high-school math are enough; everything else is explained inside the lessons.'],
   ['How do the quizzes work?', 'Every lesson ends with 5 multiple-choice questions. Answer all five and submit. If you get 4 or more right, the lesson is marked as passed. If not, each question shows an explanation, and you can try again with the options shuffled.'],
@@ -67,7 +67,7 @@ export const faqs = [
   ['Does it cover RAG?', 'Yes. Module 10 goes from vector databases and approximate nearest-neighbour search to semantic and hybrid search, rerankers, ColBERT, chunking, HyDE, caching, agentic RAG, GraphRAG and vectorless RAG.'],
   ['Does it cover LLM inference optimisation?', 'Yes. Module 13 covers prefill vs decode, disaggregation, the KV cache and its compression, paged attention, continuous batching, speculative decoding (n-gram, Medusa, EAGLE), quantization, GGUF, llama.cpp, vLLM, SGLang and TensorRT-LLM.'],
   ['Will this help me with AI engineering interviews?', 'Yes. The course covers the concepts asked in AI engineer, GenAI engineer, LLM engineer and ML engineer interviews, and Module 19 is dedicated to interview preparation, including a worked system-design answer.'],
-  ['Where does the curriculum come from?', 'The AI Engineer Bootcamp covers 19 core modules drawn from the established body of AI engineering knowledge — from ML fundamentals through inference optimization and agent systems. All lesson text, interactive widgets, code walkthroughs and quizzes are written specifically for this platform.'],
+  ['Where does the curriculum come from?', 'The AI Engineering Bootcamp covers 19 core modules drawn from the established body of AI engineering knowledge — from ML fundamentals through inference optimization and agent systems. All lesson text, interactive widgets, code walkthroughs and quizzes are written specifically for this platform.'],
 ];
 
 // { term, def, lesson }: lesson is the id of the lesson that teaches the term.

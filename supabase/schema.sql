@@ -1,4 +1,4 @@
--- Modern AI Engineering (AI Engineer Bootcamp) database schema for Supabase.
+-- Modern AI Engineering (AI Engineering Bootcamp) database schema for Supabase.
 -- Run once: Supabase dashboard → SQL Editor → paste this file → Run.
 -- Safe to run again; every statement is idempotent.
 

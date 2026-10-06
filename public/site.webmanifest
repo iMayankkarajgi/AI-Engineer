@@ -1,7 +1,7 @@
 {
   "name": "Modern AI Engineering",
   "short_name": "Modern AI",
-  "description": "The AI Engineer Bootcamp: interactive lessons on machine learning, deep learning, LLMs, RAG and AI agents.",
+  "description": "The AI Engineering Bootcamp: interactive lessons on machine learning, deep learning, LLMs, RAG and AI agents.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c0a17",

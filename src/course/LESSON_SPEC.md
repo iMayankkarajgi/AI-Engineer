@@ -1,4 +1,4 @@
-# AI Engineer Bootcamp lesson authoring spec
+# AI Engineering Bootcamp lesson authoring spec
 
 Every lesson is one file: `src/course/lessons/<lesson-id>.js`, with a single `export default { ... }`.
 The lesson id, number, title and outline ("covers") come from `src/course/curriculum.js`;

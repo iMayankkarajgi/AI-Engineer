@@ -1,6 +1,6 @@
 # Modern AI Engineering
 
-The site at https://modernaiengineering.com. It teaches the **AI Engineer Bootcamp**: three tracks, 19 modules and 149 interactive lessons, from machine-learning foundations to AI system design. The site name, programme name and public address live in `src/brand.js`.
+The site at https://modernaiengineering.com. It teaches the **AI Engineering Bootcamp**: three tracks, 19 modules and 149 interactive lessons, from machine-learning foundations to AI system design. The site name, programme name and public address live in `src/brand.js`.
 
 ## Run locally
 

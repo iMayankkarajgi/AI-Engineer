@@ -204,7 +204,7 @@ export default function LessonPage() {
             {s.quiz && <Quiz key={id} id={id} quiz={body.quiz} nextId={nextId}/>}
             {s.summary && <ul className="b-list takeaways">{body.takeaways.map((t, i) => <li key={i}><Rich text={t}/></li>)}</ul>}
           </section>)}
-          <p className="lesson-credit">Modern AI Engineering: interactive lessons from the AI Engineer Bootcamp. Each lesson is written to be self-contained: definitions, code, visuals, and a quiz all on one page.</p>
+          <p className="lesson-credit">Modern AI Engineering: interactive lessons from the AI Engineering Bootcamp. Each lesson is written to be self-contained: definitions, code, visuals, and a quiz all on one page.</p>
         </div>}
         <nav className="pager" aria-label="Lesson navigation">
           {prevId ? <Link className="pager-card prev" to={`/lesson/${prevId}`}><small>← Previous · {lessonById[prevId].num}</small><strong>{lessonById[prevId].title}</strong></Link> : <span/>}

@@ -1,4 +1,4 @@
-// AI Engineer Bootcamp curriculum — 19 modules, 149 lessons.
+// AI Engineering Bootcamp curriculum — 19 modules, 149 lessons.
 // Lesson bodies live in ./lessons/<id>.js
 export const modules = [
  {

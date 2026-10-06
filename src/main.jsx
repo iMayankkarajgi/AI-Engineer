@@ -8,6 +8,7 @@ import Exam from './Exam';
 import LessonPage from './LessonPage';
 import Profile from './Profile';
 import LessonPicker from './LessonPicker';
+import Legal from './Legal';
 import { Pricing } from './Tracks';
 import './tokens.css';
 import './site.css';
@@ -78,6 +79,9 @@ function App() {
         <Route path="/faq" element={<Faq/>}/>
         <Route path="/news" element={<News/>}/>
         <Route path="/resources" element={<Resources/>}/>
+        <Route path="/privacy" element={<Legal page="privacy"/>}/>
+        <Route path="/terms" element={<Legal page="terms"/>}/>
+        <Route path="/refund" element={<Legal page="refund"/>}/>
         <Route path="/exam" element={<Exam/>}/>
         <Route path="/dashboard" element={<Dashboard/>}/>
         <Route path="/account" element={<Account/>}/>

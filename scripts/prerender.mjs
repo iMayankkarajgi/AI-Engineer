@@ -18,7 +18,8 @@ const { guide, glossary, faqs } = await load('/src/course/reference.js');
 const { resources } = await load('/src/course/resources.js');
 const { VIZ } = await load('/src/course/vizNames.js');
 const { lessonMinutes } = await load('/src/course/lessonMinutes.js');
-const { BRAND, PROGRAM, SITE_URL, TAGLINE } = await load('/src/brand.js');
+const { BRAND, PROGRAM, SITE_URL, TAGLINE, CONTACT_EMAIL, LEGAL_UPDATED } = await load('/src/brand.js');
+const { legalPages } = await load('/src/course/legal.js');
 await vite.close();
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -47,7 +48,11 @@ function block(b) {
   }
 }
 
+const legal = key => { const d = legalPages[key]; return `<p>Legal · Updated ${esc(LEGAL_UPDATED)}</p><h1>${esc(d.title)}</h1><p>${esc(d.intro)}</p>${d.sections.map((s, i) => `<h2>${i + 1}. ${esc(s.h)}</h2>${(s.p || []).map(t => `<p>${esc(t)}</p>`).join('')}${list((s.items || []).map(esc))}`).join('')}<p>Questions? Email ${esc(CONTACT_EMAIL)}.</p>`; };
 const PAGES = {
+  '/privacy': () => legal('privacy'),
+  '/terms': () => legal('terms'),
+  '/refund': () => legal('refund'),
   '/': () => `<p>${esc(PROGRAM)} · 3 tracks · ${allLessons.length} lessons</p><h1>See the system. Then go inside.</h1>
     <p>Learn AI engineering, machine learning and deep learning, from the first data point to the LLM systems behind every answer.</p>
     <p>${a('/curriculum', 'Explore the curriculum')} · ${a('/guide', 'Read the course guide')} · ${a(`/lesson/${allLessons[0].id}`, `Start lesson ${allLessons[0].num}`)}</p>

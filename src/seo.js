@@ -7,6 +7,7 @@ import { faqs, glossary } from './course/reference';
 import { lessonMinutes } from './course/lessonMinutes';
 import { VIZ } from './course/vizNames';
 import { BRAND, PROGRAM, SITE_URL } from './brand';
+import { legalPages } from './course/legal';
 
 export const clip = (text, max = 158) => {
   const t = String(text || '').replace(/\*\*|\*|`/g, '').replace(/\s+/g, ' ').trim();
@@ -69,6 +70,9 @@ const STATIC_PAGES = {
     title: 'Latest AI News From Official Labs and Companies',
     description: 'This week in AI: announcements and research taken directly from the official blogs of OpenAI, Google DeepMind, Microsoft Research, NVIDIA, Hugging Face and more.',
   }),
+  '/privacy': () => ({ title: 'Privacy Policy', description: `What personal information ${BRAND} collects, how it is used and stored, and your rights over it.` }),
+  '/terms': () => ({ title: 'Terms of Service', description: `The terms for using ${BRAND} and buying the ${PROGRAM}: accounts, plans, payments, acceptable use and certificates.` }),
+  '/refund': () => ({ title: 'Refund Policy', description: `How refunds work for the ${PROGRAM}: the money-back window, exceptions and how to ask.` }),
   '/resources': () => ({
     title: 'AI Engineering Resources: Research Papers, Documentation and Standards',
     description: 'The original papers and reference manuals behind the course: Attention Is All You Need, LoRA, RAG, PPO, PyTorch, Hugging Face Transformers, vLLM and MCP.',

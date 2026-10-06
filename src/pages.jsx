@@ -16,6 +16,7 @@ import { Viz } from './viz';
 import { BRAND, PROGRAM } from './brand';
 import LogoMark from './LogoMark';
 import GoogleButton, { GOOGLE_CLIENT_ID } from './GoogleSignIn';
+import { LEGAL_LINKS } from './Legal';
 import { VIZ } from './course/vizNames';
 import { vizUsage } from './course/vizUsage';
 
@@ -61,7 +62,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>The {PROGRAM}: understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link></div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
     <small>Lessons and interactives © {new Date().getFullYear()} {BRAND}. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
@@ -329,6 +330,7 @@ export function Account() {
       </form>
       <button className="text-button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(''); }}>{mode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
       <Link className="text-button" to="/curriculum">Explore As A Guest →</Link>
+      <p className="legal-note">By continuing you agree to our <Link to="/terms">Terms of Service</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>
     </div></div>
   </main>;
 }

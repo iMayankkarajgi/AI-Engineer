@@ -1,27 +1,20 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-// The inline script in index.html sets data-theme before first paint; this
-// provider keeps React in sync with it and persists explicit user choices.
+// The inline script in index.html sets data-theme before first paint (dark
+// unless the visitor chose light); this provider keeps React in sync with it
+// and persists explicit user choices.
 const STORAGE_KEY = 'atlas-theme';
 const ThemeContext = createContext({ theme: 'dark', toggle: () => {} });
 export const useTheme = () => useContext(ThemeContext);
 
-const systemTheme = () => matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 const storedTheme = () => { try { const t = localStorage.getItem(STORAGE_KEY); return t === 'light' || t === 'dark' ? t : null; } catch { return null; } };
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || storedTheme() || systemTheme());
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || storedTheme() || 'dark');
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', theme === 'light' ? '#f7f6fb' : '#0c0a17'));
   }, [theme]);
-  // Follow the operating system until the user picks a theme explicitly.
-  useEffect(() => {
-    const mq = matchMedia('(prefers-color-scheme: light)');
-    const onChange = () => { if (!storedTheme()) setTheme(systemTheme()); };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
   const toggle = () => setTheme(t => { const next = t === 'light' ? 'dark' : 'light'; try { localStorage.setItem(STORAGE_KEY, next); } catch {} return next; });
   return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
 }

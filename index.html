@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)"/>
-  <meta name="theme-color" content="#0c0a17" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#0c0a17"/>
   <!--seo-->
   <title>AI Engineer Bootcamp | AI Engineering, ML &amp; Deep Learning Course</title>
   <meta name="description" content="A hands-on AI engineering course: interactive lessons on machine learning, deep learning, LLMs, RAG and AI agents. Three tracks, labs, quizzes and a certificate."/>
@@ -23,8 +22,8 @@
   <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png"/>
   <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
   <link rel="manifest" href="/site.webmanifest"/>
-  <!-- Apply the saved (or system) theme before first paint to avoid a flash. -->
-  <script>try{var d=document.documentElement.dataset.theme;var t=localStorage.getItem('atlas-theme');if(t!=='light'&&t!=='dark'&&(d==='light'||d==='dark'))t=d;if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='dark'}</script>
+  <!-- Apply the saved theme (dark when none is saved) before first paint to avoid a flash. -->
+  <script>try{var d=document.documentElement.dataset.theme;var t=localStorage.getItem('atlas-theme');if(t!=='light'&&t!=='dark'&&(d==='light'||d==='dark'))t=d;if(t!=='light'&&t!=='dark')t='dark';document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='dark'}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400..600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&display=swap" rel="stylesheet"/>

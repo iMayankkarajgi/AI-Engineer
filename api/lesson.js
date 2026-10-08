@@ -6,6 +6,7 @@ import { lessonById, moduleOf } from '../src/course/curriculum.js';
 import { canOpenModule, isFreeModule, tracksWithModule } from '../src/course/access.js';
 import { lessonVideos } from '../src/course/videos.js';
 import { plansFromToken } from './_dodo.js';
+import { lessons } from './_lessons.js';
 
 export default async function handler(req, res) {
   const id = String(req.query?.id || new URL(req.url, 'http://x').searchParams.get('id') || '');
@@ -18,11 +19,7 @@ export default async function handler(req, res) {
     if (!plans) return res.status(401).json({ locked: true, reason: 'signin', tracks: tracksWithModule(moduleId) });
     if (!canOpenModule(moduleId, plans)) return res.status(403).json({ locked: true, reason: 'plan', tracks: tracksWithModule(moduleId) });
   } else res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600');
-  try {
-    const body = (await import(`../src/course/lessons/${id}.js`)).default;
-    res.status(200).json({ ...body, video: lessonVideos[id] || null });
-  } catch (err) {
-    console.error('lesson failed:', id, err.message);
-    res.status(404).json({ error: 'This lesson is not available yet.' });
-  }
+  const body = lessons[id];
+  if (!body) return res.status(404).json({ error: 'This lesson is not available yet.' });
+  res.status(200).json({ ...body, video: lessonVideos[id] || null });
 }

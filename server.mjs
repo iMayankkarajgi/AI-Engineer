@@ -8,6 +8,7 @@ import newsHandler from './api/news.js';
 import geoHandler from './api/geo.js';
 import checkoutHandler from './api/checkout.js';
 import webhookHandler from './api/dodo-webhook.js';
+import lessonHandler from './api/lesson.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -35,6 +36,7 @@ app.get('/api/health', (_, res) => res.json({ ok: true }));
 // The same handler runs as a serverless function on Vercel (api/news.js).
 app.get('/api/news', newsHandler);
 app.get('/api/geo', geoHandler);
+app.get('/api/lesson', lessonHandler);
 app.all('/api/checkout', checkoutHandler);
 app.all('/api/dodo-webhook', webhookHandler);
 

@@ -1,28 +1,46 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { lessonById, lessonIds, moduleOf } from './course/curriculum';
 import { Block, Rich } from './LessonBlocks';
-import { useApp, PASS_MARK, LOCKS } from './app';
+import { useApp, PASS_MARK, LOCKS, ACCOUNTS, rememberAfterLogin } from './app';
+import { trackById } from './course/tracks';
+import { tracksWithModule } from './course/access';
 import { NotFound } from './pages';
 import { setDescription } from './seo';
 import LessonVideo from './LessonVideo';
 
 const pad = n => String(n).padStart(2, '0');
-const loaders = import.meta.glob('./course/lessons/*.js');
+// The published site asks the server for each lesson (api/lesson.js), which only
+// sends lessons the learner may open. While developing, and in the static build,
+// lessons are bundled with the pages instead.
+const loaders = import.meta.env.DEV || import.meta.env.VITE_STATIC === '1' ? import.meta.glob('./course/lessons/*.js') : null;
 
-// Loads a lesson body on demand. Returns undefined while loading, null if the
-// lesson has not been written yet.
+// Loads a lesson on demand. Returns undefined while loading, null if the lesson
+// is missing, and { locked: true } when the learner's plan does not include it.
 function useLessonBody(id) {
-  const [state, setState] = useState({ id: null, body: undefined });
+  const { ready, user, plans, accessToken } = useApp();
+  const key = `${id}|${user?.id || ''}|${plans.join(',')}`;
+  const [state, setState] = useState({ key: null, body: undefined });
   useEffect(() => {
+    if (!ready) return;
     let live = true;
-    const load = loaders[`./course/lessons/${id}.js`];
-    if (!load) { setState({ id, body: null }); return; }
-    setState({ id, body: undefined });
-    load().then(m => { if (live) setState({ id, body: m.default }); }).catch(() => { if (live) setState({ id, body: null }); });
+    const done = body => { if (live) setState({ key, body }); };
+    setState({ key, body: undefined });
+    if (import.meta.env.DEV || import.meta.env.VITE_STATIC === '1') {
+      const load = loaders[`./course/lessons/${id}.js`];
+      if (!load) done(null);
+      else Promise.all([load(), import('./course/videos')]).then(([m, v]) => done({ ...m.default, video: v.lessonVideos[id] || null })).catch(() => done(null));
+    } else (async () => {
+      try {
+        const token = await accessToken();
+        const r = await fetch(`/api/lesson?id=${encodeURIComponent(id)}`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+        const d = await r.json();
+        done(r.ok ? d : d.locked ? { locked: true } : null);
+      } catch { done(null); }
+    })();
     return () => { live = false; };
-  }, [id]);
-  return state.id === id ? state.body : undefined;
+  }, [key, ready]);
+  return state.key === key ? state.body : undefined;
 }
 
 function LessonNav({ mod, currentId }) {
@@ -141,18 +159,20 @@ function Quiz({ id, quiz, nextId }) {
   </div>;
 }
 
+// Shown instead of a lesson the learner's plan does not include.
 function Locked({ lesson, mod }) {
-  const { nextLesson } = useApp();
-  const prevId = lessonIds[lessonIds.indexOf(lesson.id) - 1], prev = lessonById[prevId];
+  const { user } = useApp(), nav = useNavigate();
+  const names = tracksWithModule(mod.id).map(t => trackById[t].name);
   return <main className="page container narrow locked-page" style={{ '--track': mod.accent }}>
     <div className="lock-icon" aria-hidden="true">🔒</div>
     <div className="eyebrow">Module {mod.number} · Lesson {lesson.num}</div>
     <h1>{lesson.title}</h1>
-    <p className="dek">This lesson unlocks when you pass the quiz for <b>{prev.num} {prev.title}</b> with at least {PASS_MARK} of 5 correct answers. Each lesson builds on the one before it.</p>
+    <p className="dek">This lesson is part of the <b>{names.join(' and ')}</b> {names.length > 1 ? 'tracks' : 'track'}. Buy a plan for {names.length > 1 ? 'either one' : 'it'} to open the lesson with its video, labs and quiz.{!user && ' If you already have a plan, sign in to open it.'}</p>
     {lesson.covers?.length > 0 && <div className="card"><h3>What you’ll learn here</h3><ul className="check-list">{lesson.covers.map(c => <li key={c}>{c}</li>)}</ul></div>}
     <div className="locked-actions">
-      <Link className="button primary" to={`/lesson/${nextLesson}`}>Continue Where You Left Off →</Link>
-      <Link className="button ghost" to={`/module/${mod.id}`}>Module Overview</Link>
+      <Link className="button primary" to="/pricing">See Plans And Pricing →</Link>
+      {!user && ACCOUNTS && <button className="button ghost" onClick={() => { rememberAfterLogin(`/lesson/${lesson.id}`); nav('/account'); }}>Sign In</button>}
+      <Link className="button ghost" to={`/lesson/${lessonIds[0]}`}>Try The Free Lesson</Link>
     </div>
   </main>;
 }
@@ -162,11 +182,12 @@ export default function LessonPage() {
   const meta = lessonById[id], mod = moduleOf(id);
   const body = useLessonBody(id);
   useEffect(() => { if (body?.summary) setDescription(body.summary); }, [body]);
-  const { isUnlocked, completed, visitLesson } = useApp();
+  const { isUnlocked, completed, visitLesson, ready } = useApp();
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
   useEffect(() => { if (lessonById[id]) visitLesson(id); }, [id]);
   if (!meta || !mod) return <NotFound/>;
-  if (!isUnlocked(id)) return <Locked lesson={meta} mod={mod}/>;
+  if (!ready) return <main className="page container narrow"><div className="eyebrow">Loading…</div></main>;
+  if (!isUnlocked(id) || body?.locked) return <Locked lesson={meta} mod={mod}/>;
   const at = lessonIds.indexOf(id), prevId = lessonIds[at - 1], nextId = lessonIds[at + 1];
   const passed = completed.includes(id);
 
@@ -195,7 +216,7 @@ export default function LessonPage() {
           </div>
           <ol className="unit-rail" aria-hidden="true">{mod.lessons.map((l, i) => <li key={l.id} className={completed.includes(l.id) ? 'past' : l.id === id ? 'now' : ''}/>)}</ol>
         </header>
-        <LessonVideo lessonId={id} title={meta.title}/>
+        <LessonVideo videoId={body?.video} title={meta.title}/>
         {body === undefined && <div className="lesson-loading"><span/><span/><span/></div>}
         {body === null && <div className="card lesson-pending"><h3>This lesson is being prepared</h3><p>The outline is below. Check back soon.</p><ul className="check-list">{meta.covers.map(c => <li key={c}>{c}</li>)}</ul></div>}
         {body && <div className="prose">

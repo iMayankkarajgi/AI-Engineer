@@ -8,6 +8,7 @@ import { lessonMinutes } from './course/lessonMinutes';
 import { VIZ } from './course/vizNames';
 import { BRAND, PROGRAM, SITE_URL } from './brand';
 import { legalPages } from './course/legal';
+import { isFreeModule } from './course/access';
 
 export const clip = (text, max = 158) => {
   const t = String(text || '').replace(/\*\*|\*|`/g, '').replace(/\s+/g, ' ').trim();
@@ -107,7 +108,7 @@ export function seoFor(pathname) {
       type: 'article',
       ld: [crumbs([['Curriculum', '/curriculum'], [m.title, `/module/${m.id}`], [l.title, path]]), {
         '@type': 'LearningResource', name: l.title, url: SITE_URL + path, learningResourceType: 'Lesson', inLanguage: 'en',
-        educationalLevel: 'Beginner', timeRequired: `PT${lessonMinutes[l.id] || 25}M`, teaches: l.covers || [], provider: ORG,
+        educationalLevel: 'Beginner', isAccessibleForFree: isFreeModule(m.id), timeRequired: `PT${lessonMinutes[l.id] || 25}M`, teaches: l.covers || [], provider: ORG,
         isPartOf: { '@type': 'Course', name: PROGRAM, url: `${SITE_URL}/curriculum`, description: STATIC_PAGES['/']().description, provider: ORG },
       }],
     };

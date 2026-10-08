@@ -2,6 +2,7 @@ import { modules, lessonById } from './curriculum';
 import { vizUsage } from './vizUsage';
 import { VIZ } from './vizNames';
 import { PRICES, formatMoney } from './prices';
+import { ML_MODULES, CAREER_MODULES, trackHasModule } from './access';
 
 // The course is sold as three tracks. A track is a set of modules plus the Lab
 // interactives those modules use. The Starter Kit opens every track.
@@ -15,9 +16,8 @@ export const PERIODS = [
   { id: 'lifetime', label: 'Lifetime', unit: 'one-time payment', months: null, best: true },
 ];
 
-const ML_MODULES = ['must-know', 'ml-foundations', 'deep-learning'];
-const CAREER_MODULES = ['interviews'];
-const AI_MODULES = modules.map(m => m.id).filter(id => id === 'must-know' || (!ML_MODULES.includes(id) && !CAREER_MODULES.includes(id)));
+// Which modules each track contains is decided in ./access.js.
+const AI_MODULES = modules.map(m => m.id).filter(id => trackHasModule('ai', id));
 
 const DEFS = [
   {

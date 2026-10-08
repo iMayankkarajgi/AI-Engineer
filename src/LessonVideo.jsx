@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { lessonVideos } from './course/videos';
 
 // The lesson's video, played on the page. It first shows the video's still
 // frame with a play button and loads the YouTube player only when pressed, so
 // lesson pages stay fast. The box keeps a 16:9 shape at every screen width.
-export default function LessonVideo({ lessonId, title }) {
-  const id = lessonVideos[lessonId];
+// `videoId` arrives with the lesson itself, so it is only known to learners
+// who can open the lesson.
+export default function LessonVideo({ videoId: id, title }) {
   const [playing, setPlaying] = useState(false), [sharp, setSharp] = useState(true);
-  useEffect(() => { setPlaying(false); setSharp(true); }, [lessonId]);
+  useEffect(() => { setPlaying(false); setSharp(true); }, [id]);
   if (!id) return null;
   return <figure className="lesson-video">
     <div className="lesson-video-frame">

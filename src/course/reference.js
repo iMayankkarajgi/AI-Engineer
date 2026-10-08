@@ -9,7 +9,7 @@ export const guide = {
       'Every lesson here is self-contained. It explains one concept in simple words, then shows it moving: animated diagrams, charts that draw themselves, widgets you can drag, real code with real output, and side-by-side comparisons. You should never need to open another tab to understand a lesson.',
     ],
     points: [
-      ['Open lessons', 'Every lesson and quiz is open to read. Your progress is saved in your browser, or in your account if you sign in.'],
+      ['Try it first', 'The Starter Kit lesson and the Temperature lab are free. Your progress is saved in your browser, or in your account if you sign in.'],
       ['Beginner first', 'Every term is defined the first time it appears. Math is shown with small numbers you can follow.'],
       ['Deep, not shallow', 'Each lesson goes from “why do we need it” to “how it works step by step” to “where it is used”.'],
       ['In order, with checks', 'Each lesson ends with a 5-question quiz. Score 4 or more to pass the lesson.'],
@@ -57,7 +57,7 @@ export const guide = {
 
 export const faqs = [
   ['What is the best way to learn AI engineering?', 'Follow a structured path in order: machine-learning foundations, deep learning, the Transformer, how LLMs generate text, fine-tuning and alignment, prompting and context, RAG, agents, inference, evaluation, safety, and finally system design. The AI Engineering Bootcamp is organised exactly that way, and every lesson ends with a quiz that checks you understood it.'],
-  ['Is this course free?', 'Every lesson and quiz is open to read right now, and the Temperature lab is free to try. The other interactive labs open with a paid track; the pricing page lists the three tracks. You can learn as a guest with progress saved in your browser, or sign in to sync it across devices.'],
+  ['Is this course free?', 'The Starter Kit lesson and the Temperature lab are free, so you can see how the lessons, videos and labs work. Everything else opens with a paid track: ML & Deep Learning, Generative AI Engineering, or Complete AI Engineer. Each can be bought for one month, three months or for life; the pricing page has the details.'],
   ['Do I need a machine-learning background?', 'No. The course starts from the very basics. Basic programming (preferably Python) and high-school math are enough; everything else is explained inside the lessons.'],
   ['How do the quizzes work?', 'Every lesson ends with 5 multiple-choice questions. Answer all five and submit. If you get 4 or more right, the lesson is marked as passed. If not, each question shows an explanation, and you can try again with the options shuffled.'],
   ['How long does it take to finish?', 'Most lessons take 20–40 minutes including the interactives, practice lab and quiz; the whole bootcamp is about 63 hours of material. At one or two lessons a day, the full course takes around three to four months. Understanding each concept deeply matters more than speed.'],

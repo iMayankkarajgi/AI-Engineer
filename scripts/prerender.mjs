@@ -22,6 +22,8 @@ const { BRAND, PROGRAM, SITE_URL, TAGLINE, CONTACT_EMAIL, LEGAL_UPDATED } = awai
 const { legalPages } = await load('/src/course/legal.js');
 const { roadmapSteps, roadmapTotals, roadmapText } = await load('/src/course/roadmap.js');
 const { lessonVideos } = await load('/src/course/videos.js');
+const { isFreeModule, tracksWithModule } = await load('/src/course/access.js');
+const { trackById } = await load('/src/course/tracks.js');
 await vite.close();
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -101,8 +103,10 @@ async function lessonPage(l) {
   const body = (await import(pathToFileURL(path.resolve(`src/course/lessons/${l.id}.js`)).href)).default;
   return { summary: body.summary, html: `${crumbs([['/curriculum', 'Curriculum'], [`/module/${m.id}`, `Module ${m.number}: ${m.title}`]])}
     <p>Lesson ${l.num} · ${lessonMinutes[l.id]} min${lessonVideos[l.id] ? ' · video lesson' : ''}</p><h1>${esc(l.title)}</h1>${body.hook ? `<p>${rich(body.hook)}</p>` : ''}${body.summary ? `<p><strong>In short:</strong> ${rich(body.summary)}</p>` : ''}
-    ${(body.sections || []).map(s => `<h2>${rich(s.title)}</h2>${(s.blocks || []).map(block).join('')}`).join('')}
-    ${body.takeaways?.length ? `<h2>Key takeaways</h2>${list(body.takeaways.map(say))}` : ''}${body.terms?.length ? `<h2>Key terms</h2>${list(body.terms.map(say))}` : ''}
+    ${isFreeModule(m.id)
+      ? `${(body.sections || []).map(s => `<h2>${rich(s.title)}</h2>${(s.blocks || []).map(block).join('')}`).join('')}${body.takeaways?.length ? `<h2>Key takeaways</h2>${list(body.takeaways.map(say))}` : ''}${body.terms?.length ? `<h2>Key terms</h2>${list(body.terms.map(say))}` : ''}`
+      // Paid lessons: an outline only. The full text is sent to learners whose plan includes it.
+      : `${l.covers?.length ? `<h2>What you will learn</h2>${list(l.covers.map(esc))}` : ''}<h2>In this lesson</h2>${list((body.sections || []).map(s => rich(s.title)), 'ol')}<p>This lesson is part of the ${tracksWithModule(m.id).map(t => esc(trackById[t].name)).join(' and ')} ${tracksWithModule(m.id).length > 1 ? 'tracks' : 'track'}. ${a('/pricing', 'See plans and pricing')} to open the full lesson, its video, labs and quiz, or ${a(`/lesson/${allLessons[0].id}`, 'try the free lesson')} first.</p>`}
     <p>${[prev && a(`/lesson/${prev.id}`, `← ${prev.num} ${prev.title}`), next && a(`/lesson/${next.id}`, `${next.num} ${next.title} →`)].filter(Boolean).join(' · ')}</p>` };
 }
 

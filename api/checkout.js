@@ -1,12 +1,14 @@
 // POST /api/checkout { track, period }: starts a Dodo Payments checkout for the
 // signed-in learner and returns { url } to send the browser to. The currency and
 // price are decided here from the visitor's country, never by the browser.
-import { PRICES, SITE, configured, countryOf, currencyForCountry, dodo, productId, userFromToken } from './_dodo.js';
+import { PRICES, SITE, configured, countryOf, currencyForCountry, dodo, missingSettings, paymentsMode, productId, userFromToken } from './_dodo.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+  // GET reports whether payments are set up (setting names only, never values).
+  if (req.method === 'GET') return res.status(200).json({ ready: configured(), mode: paymentsMode(), missing: missingSettings() });
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
-  if (!configured()) return res.status(503).json({ error: 'Online checkout is not switched on yet. Please try again soon.' });
+  if (!configured()) return res.status(503).json({ error: 'Online checkout is not switched on yet. Please try again soon.', missing: missingSettings() });
   const user = await userFromToken(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
   if (!user) return res.status(401).json({ error: 'Sign in to buy a plan.' });
   let body = req.body; if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }

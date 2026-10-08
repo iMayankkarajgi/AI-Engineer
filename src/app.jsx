@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { lessonIds } from './course/curriculum';
+import { lessonIds, moduleOf } from './course/curriculum';
+import { canOpenModule } from './course/access';
 import { supabase } from './supabase';
 import { entryLessonIds } from './course/tracks';
 import { EXAM_ID, EXAM_PASS } from './course/exam';
@@ -152,8 +153,10 @@ export function AppProvider({ children }) {
   // The first lesson is always open; every other lesson needs its predecessor.
   // A track's opening lesson only needs the Starter Kit, so learners can begin
   // the AI track without finishing the ML one.
-  const isUnlocked = id => { if (!LOCKS) return true; const i = lessonIds.indexOf(id); return i <= 0 || completed.includes(lessonIds[i - 1]) || completed.includes(id) || (entryLessonIds.includes(id) && completed.includes(lessonIds[0])); };
-  const nextLesson = lessonIds.find(id => !completed.includes(id)) || lessonIds[lessonIds.length - 1];
+  // A lesson is open when its module is free or the learner's plan includes it.
+  // Without Supabase there are no plans, so everything is open.
+  const isUnlocked = id => !CLOUD || canOpenModule(moduleOf(id)?.id, plans);
+  const nextLesson = lessonIds.find(id => !completed.includes(id) && isUnlocked(id)) || lessonIds.find(id => !completed.includes(id)) || lessonIds[lessonIds.length - 1];
   const visitLesson = id => { if (known(id)) { setLastLesson(id); write('atlas-last-lesson', id); } };
   const resumeLesson = lastLesson || nextLesson;
 

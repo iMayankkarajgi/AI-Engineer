@@ -144,7 +144,7 @@ export function Curriculum() {
         <h3>{m.title}</h3>
         <p>{m.intro[0]}</p>
         <ul className="module-card-lessons">{m.lessons.slice(0, 4).map(l => <li key={l.id} className={completed.includes(l.id) ? 'done' : ''}>{l.num} {l.title}</li>)}{m.lessons.length > 4 && <li className="more">+ {m.lessons.length - 4} more</li>}</ul>
-        <div className="course-card-foot"><span>{m.lessons.length} lesson{m.lessons.length > 1 ? 's' : ''}</span><span>{done ? `${done}/${m.lessons.length} passed` : open ? 'Start →' : 'Finish earlier modules'}</span></div>
+        <div className="course-card-foot"><span>{m.lessons.length} lesson{m.lessons.length > 1 ? 's' : ''}</span><span>{done ? `${done}/${m.lessons.length} passed` : open ? 'Start →' : 'Unlock with a plan'}</span></div>
         <div className="meter"><span style={{ width: `${(done / m.lessons.length) * 100}%` }}/></div>
       </Link>;
     })}</div>
@@ -175,7 +175,7 @@ export function Module() {
         <div className="meta"><span>{m.lessons.length} lessons</span><span>5 quiz questions each</span><span>{done} of {m.lessons.length} passed</span></div>
         <div className="meter large"><span style={{ width: `${(done / m.lessons.length) * 100}%` }}/></div>
         {open ? <Link className="button primary" to={`/lesson/${next.id}`}>{done ? 'Continue' : 'Start the module'} →</Link>
-          : <p className="locked-note">🔒 Finish Module {prev?.number} to unlock this module. <Link to={`/module/${prev?.id}`}>Go to Module {prev?.number} →</Link></p>}
+          : <p className="locked-note">🔒 This module opens with a paid track. <Link to="/pricing">See plans and pricing →</Link></p>}
       </div>
     </div></section>
     <div className="container course-body">

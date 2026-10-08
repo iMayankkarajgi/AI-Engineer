@@ -20,6 +20,9 @@ const env = () => ({
   serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 });
 export const configured = () => { const e = env(); return !!(e.apiKey && e.webhookSecret && e.serviceKey); };
+// Names (never values) of the settings that are still empty, to help the site owner finish setup.
+export const missingSettings = () => { const e = env(); return [['DODO_PAYMENTS_API_KEY', e.apiKey], ['DODO_WEBHOOK_SECRET', e.webhookSecret], ['SUPABASE_SERVICE_ROLE_KEY', e.serviceKey]].filter(([, v]) => !v).map(([k]) => k); };
+export const paymentsMode = () => process.env.DODO_PAYMENTS_ENV === 'live' ? 'live' : 'test';
 export const countryOf = req => String(process.env.GEO_COUNTRY || req.headers['x-vercel-ip-country'] || '').toUpperCase().slice(0, 2);
 
 export async function dodo(path, { method = 'GET', body } = {}) {
@@ -67,6 +70,15 @@ export async function userFromToken(token) {
   if (!r.ok) return null;
   const u = await r.json();
   return u?.id ? u : null;
+}
+
+// The tracks this learner has an active plan for, read with their own token
+// (row-level security only returns their own rows). null when the token is not valid.
+export async function plansFromToken(token) {
+  const e = env();
+  const r = await fetch(`${e.supabaseUrl}/rest/v1/entitlements?select=track,expires_at`, { headers: { apikey: e.anonKey, Authorization: `Bearer ${token}` } });
+  if (!r.ok) return null;
+  return (await r.json()).filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).map(p => p.track);
 }
 
 // Supabase REST with the secret key, which bypasses row-level security.

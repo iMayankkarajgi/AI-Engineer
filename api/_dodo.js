@@ -22,6 +22,20 @@ const env = () => ({
 export const configured = () => { const e = env(); return !!(e.apiKey && e.webhookSecret && e.serviceKey); };
 // Names (never values) of the settings that are still empty, to help the site owner finish setup.
 export const missingSettings = () => { const e = env(); return [['DODO_PAYMENTS_API_KEY', e.apiKey], ['DODO_WEBHOOK_SECRET', e.webhookSecret], ['SUPABASE_SERVICE_ROLE_KEY', e.serviceKey]].filter(([, v]) => !v).map(([k]) => k); };
+// Tries each outside service the payment flow depends on and says which work.
+// Reports status codes and the services' own error text only, never a key.
+export async function selfCheck() {
+  const e = env(), out = {};
+  const probe = async (name, url, headers) => { try { const r = await fetch(url, { headers }); out[name] = r.ok ? 'ok' : `failed (${r.status}): ${(await r.text()).slice(0, 160)}`; } catch (err) { out[name] = `failed: ${err.message}`; } };
+  await probe('dodo_api_key', `${e.base}/products?page_size=1`, { Authorization: `Bearer ${e.apiKey}` });
+  const sb = { apikey: e.serviceKey, Authorization: `Bearer ${e.serviceKey}` };
+  await probe('supabase_secret_key_reads_payments', `${e.supabaseUrl}/rest/v1/payments?select=payment_id&limit=1`, sb);
+  await probe('supabase_secret_key_reads_entitlements', `${e.supabaseUrl}/rest/v1/entitlements?select=track&limit=1`, sb);
+  // The secret key must be able to see every account; the public key cannot.
+  try { const r = await fetch(`${e.supabaseUrl}/auth/v1/admin/users?per_page=1`, { headers: sb }); out.supabase_key_is_the_secret_one = r.ok ? 'yes' : `no (${r.status}): this looks like the public key, not the secret key`; } catch (err) { out.supabase_key_is_the_secret_one = `failed: ${err.message}`; }
+  out.dodo_api_host = e.base;
+  return out;
+}
 export const paymentsMode = () => process.env.DODO_PAYMENTS_ENV === 'live' ? 'live' : 'test';
 export const countryOf = req => String(process.env.GEO_COUNTRY || req.headers['x-vercel-ip-country'] || '').toUpperCase().slice(0, 2);
 

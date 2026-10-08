@@ -320,3 +320,9 @@ body:has(dialog.modal[open]) { overflow: hidden; }
 .roadmap-module li a:hover { color: var(--accent); }
 .roadmap-page .guide-cta { display: flex; flex-wrap: wrap; gap: 10px; }
 @media (max-width: 640px) { .roadmap-module ul { columns: 1; } }
+/* Laptops and desktops: the links sit in the middle of the header, between the name and the buttons. */
+@media (min-width: 1181px) {
+  .header-inner > .logo, .header-inner > .header-actions { flex: 1 1 0; min-width: max-content; }
+  .header-inner > .header-actions { margin-left: 0; justify-content: flex-end; }
+  .header-inner > nav { flex: none; }
+}

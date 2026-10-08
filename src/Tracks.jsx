@@ -96,6 +96,13 @@ export function Pricing() {
   const [period, setPeriod] = useState('lifetime'), [picked, setPicked] = useState(null);
   const [busy, setBusy] = useState(false), [payError, setPayError] = useState('');
   const p = PERIODS.find(x => x.id === period);
+  // Coming back from the payment page with the Back button restores this page
+  // exactly as it was left, mid-"Opening Checkout". Put the buttons back to normal.
+  useEffect(() => {
+    const reset = () => setBusy(false);
+    window.addEventListener('pageshow', reset); window.addEventListener('focus', reset);
+    return () => { window.removeEventListener('pageshow', reset); window.removeEventListener('focus', reset); };
+  }, []);
   const start = t => { try { localStorage.setItem(KEY, t.id); } catch {} nav(`/curriculum?track=${t.id}`); };
   const owns = t => plans.includes(t.id) || plans.includes('complete');
   const choose = t => { setPayError(''); setPicked(t); };
@@ -156,7 +163,7 @@ export function Pricing() {
       </table></div>
     </section>
 
-    <Modal open={!!picked} onClose={() => { if (!busy) setPicked(null); }} label="Selected plan">
+    <Modal open={!!picked} onClose={() => { setBusy(false); setPicked(null); }} label="Selected plan">
       {picked && <div className="plan-confirm">
         <div className="eyebrow">Your choice</div>
         <h2>{picked.name}</h2>
@@ -167,7 +174,7 @@ export function Pricing() {
             <div className="cert-actions"><button className="button primary" onClick={() => { rememberAfterLogin('/pricing'); nav('/account'); }}>Sign In To Continue</button><button className="button ghost" onClick={() => setPicked(null)}>Back To Pricing</button></div></>
           : <><p>You will pay on Dodo Payments’ secure page and come back here. Your plan is added to <b>{user.email}</b> as soon as the payment goes through.</p>
             {payError && <div className="form-error" role="alert">{payError}</div>}
-            <div className="cert-actions"><button className="button primary" disabled={busy} onClick={() => pay(picked)}>{busy ? 'Opening Checkout…' : `Pay ${formatPrice(picked.allPrices[currency][period], currency)}`}</button><button className="button ghost" disabled={busy} onClick={() => setPicked(null)}>Back To Pricing</button></div></>}
+            <div className="cert-actions"><button className="button primary" disabled={busy} onClick={() => pay(picked)}>{busy ? 'Opening Checkout…' : `Pay ${formatPrice(picked.allPrices[currency][period], currency)}`}</button><button className="button ghost" onClick={() => { setBusy(false); setPicked(null); }}>Back To Pricing</button></div></>}
       </div>}
     </Modal>
   </main>;

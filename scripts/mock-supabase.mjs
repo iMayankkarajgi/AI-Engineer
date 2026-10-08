@@ -137,8 +137,8 @@ http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith('/auth/v1/')) return await auth(req, res, url);
     if (url.pathname.startsWith('/rest/v1/')) return await rest(req, res, url);
-    // Test-only stand-in for granting a plan from the dashboard: /__grant?email=...&track=ml|ai|complete|none
-    if (url.pathname === '/__grant') { const u = byEmail(url.searchParams.get('email')), track = url.searchParams.get('track'); if (!u) return send(res, 404, { message: 'No such user' }); tables.entitlements.splice(0, tables.entitlements.length, ...tables.entitlements.filter(e => e.user_id !== u.user.id)); if (track !== 'none') tables.entitlements.push({ user_id: u.user.id, track, period: 'lifetime', expires_at: null }); return send(res, 200, { ok: true }); }
+    // Test-only stand-in for granting a plan from the dashboard: /__grant?email=...&track=ml|ai|complete|none[&expires_in=seconds]
+    if (url.pathname === '/__grant') { const u = byEmail(url.searchParams.get('email')), track = url.searchParams.get('track'); if (!u) return send(res, 404, { message: 'No such user' }); tables.entitlements.splice(0, tables.entitlements.length, ...tables.entitlements.filter(e => e.user_id !== u.user.id)); if (track !== 'none') { const secs = url.searchParams.get('expires_in'); tables.entitlements.push({ user_id: u.user.id, track, period: secs ? 'monthly' : 'lifetime', expires_at: secs ? new Date(Date.now() + Number(secs) * 1000).toISOString() : null }); } return send(res, 200, { ok: true }); }
     // Inspection endpoint for tests: what is stored right now.
     if (url.pathname === '/__state') return send(res, 200, { users: [...users.values()].map(u => ({ id: u.user.id, email: u.user.email, provider: u.user.app_metadata.provider })), ...tables });
     send(res, 404, { message: 'Not found' });

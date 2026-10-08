@@ -183,8 +183,20 @@
   .account-page { grid-template-columns: 1fr; }
   .account-aside { min-height: 280px; padding: 32px var(--gutter); border-right: 0; border-bottom: 1px solid var(--line); }
 }
-/* The navigation folds into a menu before its links run out of room. */
-@media (max-width: 1600px) {
+/* Laptops: every link stays in the header row, set a little tighter so the row fits. */
+@media (min-width: 1181px) and (max-width: 1640px) {
+  .header-inner { gap: clamp(8px, 1vw, 18px); padding-inline: clamp(14px, 1.6vw, 28px); }
+  .site-header nav { gap: 0; }
+  .site-header nav a, .site-header nav .nav-picker { font-size: clamp(.76rem, .92vw, .88rem); padding: 7px clamp(5px, .55vw, 9px); }
+  .header-actions { gap: 8px; }
+}
+@media (min-width: 1181px) and (max-width: 1340px) {
+  .logo-text { font-size: .92rem; }
+  .logo-mark { width: 28px; height: 28px; }
+  .header-actions .button.small { padding: 8px 12px; }
+}
+/* Tablets and phones: the navigation folds into a menu. */
+@media (max-width: 1180px) {
   .menu-toggle { display: inline-grid; }
   .site-header nav { display: none; position: absolute; top: var(--header-h); left: 0; right: 0; flex-direction: column; padding: 10px var(--gutter) 16px; background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); }
   .site-header nav.menu-open { display: flex; }

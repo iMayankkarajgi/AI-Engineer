@@ -70,9 +70,9 @@ Each lesson shows its YouTube video in a 16:9 box (`src/LessonVideo.jsx`). The l
 - **Curriculum** (`/curriculum`): 19 modules with progress, an at-a-glance table and an animated learning path.
 - **Course guide** (`/guide`): about the course, what AI engineering is, who it is for, what we learn, prerequisites, how to use it.
 - **Lessons** (`/lesson/:id`): intuition, step-by-step mechanism, math with small numbers, runnable code with a line-by-line walkthrough and real output, side-by-side comparisons, animated charts and flows, interactive widgets, inline "pause and think" checks, key terms, takeaways.
-- **Quiz gating**: every lesson ends with 5 multiple-choice questions. Scoring 4/5 or better marks the lesson as passed and unlocks the next one. Wrong answers show explanations; retries shuffle the options.
+- **Quizzes**: every lesson ends with 5 multiple-choice questions. Scoring 4/5 or better marks the lesson as passed. A pass is never needed to open another lesson (lessons open by plan); passes count toward the certificate. Wrong answers show explanations; retries shuffle the options.
 - **Practice** (`/practice`): a Python editor that runs code in the browser with Pyodide (output, `input()` text, Stop for runaway programs) and saves files to the learner's account, or to the browser for guests.
-- **Final exam** (`/exam`): 50 mixed questions (`src/course/exam.js`), open once every lesson is passed; 45 or more earns the certificate. The result is stored as the `final-exam` row in `lesson_progress`.
+- **Final exam** (`/exam`): 50 mixed questions (`src/course/exam.js`), open at any time. The certificate needs 45 or more here and a pass in every lesson quiz the learner's plan includes. The result is stored as the `final-exam` row in `lesson_progress`.
 - **Live news** (`/news`): current AI stories read from official lab, company and university feeds by `api/news.js` (a Vercel function, also mounted by `server.mjs`). The source list is at the top of that file; items are kept only when they link back to the source's own domain.
 - **Resources** (`/resources`): papers, documentation and standards (`src/course/resources.js`). Lessons do not link to outside sites; add external references there.
 - **Glossary** and **FAQ** pages.

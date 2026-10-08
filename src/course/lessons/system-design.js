@@ -1,8 +1,8 @@
 export default {
   id: 'system-design',
-  minutes: 27,
+  minutes: 40,
   hook: 'Your code works perfectly on your laptop; what has to change when ten million people use it at the same time?',
-  summary: 'System design is deciding how the parts of a software system (clients, servers, databases, caches, queues and the network between them) fit together so it meets its requirements for scale, speed, reliability and cost. We need it because one machine eventually runs out of capacity and fails, and every choice to fix that brings trade-offs. This lesson builds the core vocabulary: scaling, load balancing, caching, CDNs, databases, replication, sharding, consistent hashing, queues, CAP, and back-of-the-envelope estimation.',
+  summary: 'System design is deciding how the parts of a software system (clients, servers, databases, caches, queues and the network between them) fit together so it meets its requirements for scale, speed, reliability and cost. We need it because one machine eventually runs out of capacity and fails, and every choice to fix that brings trade-offs. This lesson builds the core vocabulary: scaling, load balancing, caching, CDNs, databases, replication, sharding, consistent hashing, queues, CAP, and back-of-the-envelope estimation. It then shows what changes when one component is a language model: estimates in tokens and GPUs, new building blocks such as a model gateway, a nine-part process for AI design questions, a worked gateway design, and how a design answer is judged.',
   sections: [
     {
       id: 'what-is',
@@ -28,7 +28,7 @@ export default {
         ] },
         { type: 'p', text: 'System design gives us a toolbox to address these problems and, just as important, a habit of naming the **trade-offs**. Adding a cache makes reads faster but can serve stale data. Copying data to several machines improves availability but makes consistency harder. There is rarely one right answer; there is a best answer for given requirements.' },
         { type: 'chart', kind: 'hbar', title: 'Allowed downtime per year by availability target', xLabel: 'Hours of downtime per year', unit: ' h', labels: ['99% ("two nines")', '99.9% ("three nines")', '99.99% ("four nines")', '99.999% ("five nines")'], series: [ { name: 'Downtime', values: [87.6, 8.76, 0.876, 0.0876] } ], caption: 'Computed as (1 − availability) × 8,760 hours. Four nines allows about 53 minutes a year; five nines about 5 minutes. Each extra nine usually costs significantly more engineering.' },
-        { type: 'p', text: 'System design is also a standard part of software engineering interviews, where the candidate designs a well-known system (a URL shortener, a chat app, a news feed, or, as in the previous lesson, a voice AI agent) and explains the trade-offs out loud.' },
+        { type: 'p', text: 'System design is also a standard part of software engineering interviews, where the candidate designs a well-known system (a URL shortener, a chat app, a news feed, or, as in the previous lesson, a voice AI agent) and explains the trade-offs out loud. For AI roles the prompt is usually an AI product, such as a chatbot over company documents. The second half of this lesson covers what that adds.' },
       ],
     },
     {
@@ -136,6 +136,98 @@ consistent hashing: 19.4% of keys move when 4 -> 5 servers`,
       ],
     },
     {
+      id: "ai-systems",
+      title: "What changes when a model sits inside the system",
+      blocks: [
+        { type: "p", text: "Everything above still applies to an AI product. A chatbot is still clients, a load balancer, stateless servers, a cache, a database and queues. But one box in the diagram is now a **model**, and that box does not behave like normal code. Design interviews for AI roles spend most of their time on these differences." },
+        { type: "table", caption: "A classic web service next to a service that calls a large language model (LLM)", head: ["Aspect", "Classic web service", "Service with an LLM inside"], rows: [
+          ["Unit of work", "One request", "One **token** (a word piece). Requests differ a lot in how many tokens they use"],
+          ["Time per request", "Milliseconds", "Seconds, usually **streamed** to the user token by token"],
+          ["Scarce resource", "CPU and database connections", "GPU memory and GPU time, or the rate limit of a model provider"],
+          ["Cost", "Per machine-hour, nearly the same for every request", "Per token, so a long prompt costs many times more than a short one"],
+          ["Correctness", "Same input, same output; unit tests prove it", "Output varies and can be wrong; we need an **evaluation set** and metrics"],
+          ["Typical failure", "An error code or a timeout", "A fluent, confident, wrong answer returned with a success code"],
+        ] },
+        { type: "p", text: "These rows explain most design choices in AI systems. Long streamed requests keep connections open, so we balance load by **active requests**, not by request count. Cost per token means we count and limit tokens, not only requests. Silent wrong answers mean monitoring must look at answer quality, not only at error rates." },
+        { type: "p", text: "AI systems also bring a few new building blocks. Each one has a classic cousin, so the vocabulary from the earlier sections carries over." },
+        { type: "table", caption: "Building blocks of AI systems", head: ["Building block", "What it does", "Classic cousin"], rows: [
+          ["Model gateway", "One entry point for all model calls: keys, quotas, routing, retries, fallback, logging", "API gateway"],
+          ["Model server", "Runs the model on GPUs and batches many requests together", "App server"],
+          ["Embedding model and vector index", "Turn text into vectors and find the nearest ones, for search by meaning", "Search index"],
+          ["Reranker", "A slower, more exact model that re-orders the top search results", "Ranking stage"],
+          ["Semantic cache", "Reuses an old answer when a new question means the same thing", "Key-value cache"],
+          ["Guardrails", "Checks on input and output: abuse, private data, policy, hidden instructions", "Input validation"],
+          ["Batch queue", "Runs work that is not urgent, such as embedding documents or nightly evaluations, away from live requests", "Message queue and workers"],
+          ["Trace and evaluation store", "Keeps prompts, retrieved text, outputs and scores, so we can measure quality and debug", "Logs and metrics"],
+        ] },
+        { type: "callout", tone: "note", title: "One shape to remember: the funnel", text: "Many ML systems share one shape. A cheap step picks a few hundred candidates out of millions, then an expensive model orders only those. Search, recommendation feeds and document question-answering all work this way: retrieve, then rank. When a design looks too slow or too costly, ask whether a cheap first stage can shrink the work for the expensive one." },
+        { type: "check", question: "Our service streams answers that take between 1 and 30 seconds. A teammate sets the load balancer to round-robin, and one model server ends up overloaded while others are idle. Why, and what is a better rule?", answer: "Round-robin gives every server the same number of new requests, but the requests are not equal. A server that happened to receive several 30-second answers is still busy when its next turn comes. With long streamed requests we route by load: send each new request to the server with the fewest active requests or the shortest queue." },
+      ],
+    },
+    {
+      id: "ai-estimation",
+      title: "Back-of-the-envelope numbers for AI systems",
+      blocks: [
+        { type: "p", text: "Estimates for AI systems need a few extra numbers. Treat every figure in this table as an **order of magnitude**. Real values change with the model, the hardware and the vendor, and prices change often. In an interview we say the number, say it is rough, and move on." },
+        { type: "table", caption: "Rough numbers for AI estimates. Illustrative orders of magnitude, not measurements.", head: ["Quantity", "Rough figure", "Why it matters"], rows: [
+          ["Tokens and words", "1,000 tokens is about 750 English words", "Turns pages of text into tokens"],
+          ["Reading speed of a person", "About 5 tokens per second", "Streaming faster than this already feels smooth"],
+          ["Output speed for one user", "Tens of tokens per second; a few hundred on fast setups", "Sets how long a full answer takes"],
+          ["Time to first token", "A few hundred milliseconds up to a few seconds", "Grows with prompt length and with queueing"],
+          ["Model weights in memory", "Parameters × bytes per parameter: 8 billion × 2 bytes = 16 GB", "Decides which GPU the model fits on"],
+          ["KV cache per request", "Roughly 0.1 MB per token of context for an 8-billion-parameter model", "Decides how many requests fit next to the weights"],
+          ["One embedding vector", "Dimensions × 4 bytes: 1,024 numbers ≈ 4 KB", "One million chunks need about 4 GB"],
+          ["Vector search", "Milliseconds to tens of milliseconds", "Rarely the slow part"],
+          ["Reranking a few dozen candidates", "Tens to a few hundred milliseconds", "Usually affordable, and it improves quality"],
+          ["Hosted model price", "Under one dollar to tens of dollars per million tokens; output usually costs a few times more than input", "Look up the current price list; never state a remembered price as fact"],
+        ] },
+        { type: "p", text: "The **KV cache** is the work a model saves for the tokens it has already read, so it does not redo that work for every new token. It lives in GPU memory, one copy per request in progress. Let us turn these numbers into a sized design for a chat service." },
+        { type: "code", lang: "python", title: "ai_capacity.py", code: `# Rough sizing for an LLM chat service. Every input is an assumption we say out loud.
+import math
+
+daily_requests, peak_factor = 2_000_000, 4
+in_tokens, out_tokens = 1_500, 300
+first_token_s, tokens_per_s = 0.4, 40      # illustrative speeds seen by one user
+
+avg_qps = daily_requests / 86_400
+peak_qps = avg_qps * peak_factor
+latency_s = first_token_s + out_tokens / tokens_per_s
+in_flight = peak_qps * latency_s           # requests being served at the same moment
+print(f"avg {avg_qps:.0f} req/s, peak {peak_qps:.0f} req/s, {latency_s:.1f} s each "
+      f"-> {in_flight:.0f} requests in flight at peak")
+
+# Option A: host an 8B-parameter model ourselves on 80 GB GPUs.
+weights_gb = 8e9 * 2 / 1e9                 # 16-bit weights = 2 bytes per parameter
+kv_gb = 128 * 1024 * (in_tokens + out_tokens) / 1e9   # 128 KiB of KV cache per token
+fit = int((80 * 0.9 - weights_gb) / kv_gb)            # keep 10% of memory free
+by_memory = math.ceil(in_flight / fit)
+gpu_tokens_per_s = 2_000                   # illustrative batched output of one GPU
+by_speed = math.ceil(peak_qps * out_tokens / gpu_tokens_per_s)
+print(f"weights {weights_gb:.0f} GB, KV cache {kv_gb:.2f} GB per request, {fit} requests fit per GPU")
+print(f"GPUs needed: {by_memory} by memory, {by_speed} by speed "
+      f"-> {max(by_memory, by_speed) + 1} with one spare")
+
+# Option B: call a hosted API, billed per token (illustrative prices per 1M tokens).
+price_in, price_out = 0.50, 2.00
+per_request = (in_tokens * price_in + out_tokens * price_out) / 1e6
+print(f"hosted API: \${per_request:.5f} per request, \${per_request * daily_requests:,.0f} per day")`,
+          output: `avg 23 req/s, peak 93 req/s, 7.9 s each -> 731 requests in flight at peak
+weights 16 GB, KV cache 0.24 GB per request, 237 requests fit per GPU
+GPUs needed: 4 by memory, 14 by speed -> 15 with one spare
+hosted API: $0.00135 per request, $2,700 per day`,
+          walkthrough: [
+            { lines: [4, 6], note: "The assumptions: two million requests a day, a peak four times the average, 1,500 tokens in and 300 out. The two speeds are illustrative; we would measure them." },
+            { lines: [8, 13], note: "A web request is over in milliseconds. This one takes about 8 seconds, so at 93 requests per second there are about 731 requests open at once. Requests in flight = arrival rate × time each one takes." },
+            { lines: [15, 19], note: "Memory limit. The weights take 16 GB. Each request in progress needs about 0.24 GB of KV cache for its 1,800 tokens, so about 237 requests fit on one 80 GB GPU. By memory alone, 4 GPUs would do." },
+            { lines: [20, 24], note: "Speed limit. At peak we must produce 93 × 300 ≈ 27,800 output tokens per second. If one GPU produces about 2,000 tokens per second across its whole batch, we need 14. We take the larger of the two limits and add a spare." },
+            { lines: [26, 29], note: "The hosted option has no GPUs to size. Cost is tokens × price. At these illustrative prices one request costs about a seventh of a cent and a day costs about $2,700." },
+          ] },
+        { type: "chart", kind: "bar", title: "GPUs needed at peak, by which limit we look at", yLabel: "GPUs", labels: ["By memory", "By speed", "Chosen, with one spare"], series: [ { name: "GPUs", values: [4, 14, 15] } ], caption: "From the script output, which uses illustrative speeds. Checking only memory would leave the service more than three times too small." },
+        { type: "p", text: "Two points are worth saying out loud. First, memory asked for 4 GPUs and speed asked for 14, so we check **both** limits and take the larger. Second, we cannot say which option is cheaper without real prices: the hosted bill grows with every token, while GPUs cost the same whether they are busy or idle. We do that sum with current numbers instead of guessing." },
+        { type: "check", question: "The product team agrees to cap answers at 150 output tokens instead of 300. Using the method in the script, how many GPUs does the speed limit ask for now?", answer: "Peak output becomes 93 requests per second × 150 tokens ≈ 13,900 tokens per second. At 2,000 tokens per second per GPU that is 6.9, so 7 GPUs, or 8 with a spare. Output length is one of the strongest levers in an LLM system, because output tokens are the slowest to produce and usually the most expensive." },
+      ],
+    },
+    {
       id: 'how-to-approach',
       title: 'How to approach a design problem',
       blocks: [
@@ -151,6 +243,94 @@ consistent hashing: 19.4% of keys move when 4 -> 5 servers`,
       ],
     },
     {
+      id: "ai-design-framework",
+      title: "The process for an ML or GenAI design question",
+      blocks: [
+        { type: "p", text: "The six steps above work for any system. When the prompt is an AI product, such as 'design a chatbot over our company documents', interviewers expect a few more stops: how we measure success, where the data comes from, how we evaluate, and how we keep the system safe. A nine-part version covers them. The example column uses **RAG** (retrieval-augmented generation): fetch the relevant text first, then let the model answer from it." },
+        { type: "table", caption: "Nine parts of an AI design answer", head: ["Part", "Question to answer", "Example: a chatbot over company documents"], rows: [
+          ["1. Requirements", "Who uses it, for what, at what scale, and what must it never do?", "5,000 staff ask about internal policies; answers show sources; document permissions are respected"],
+          ["2. Success metrics", "Which numbers tell us it works, for the business and for the model?", "Share of questions solved without a ticket; answer correctness on a test set"],
+          ["3. Data", "What are the sources? How fresh and clean are they? Who may see what?", "Wiki pages and PDFs, updated daily, with an access list per document"],
+          ["4. Architecture", "What is the pipeline from input to output?", "Offline: parse, chunk, embed, index. Online: retrieve, rerank, generate"],
+          ["5. Serving", "Hosted API or our own GPUs? Streaming? Batching?", "A hosted model behind a gateway, with streamed answers"],
+          ["6. Evaluation", "How do we test before launch and after every change?", "A fixed set of real questions with known answers; score retrieval and the final answer separately"],
+          ["7. Cost and latency", "What is the budget per request in tokens, money and milliseconds?", "Keep only the best few chunks; cache the fixed part of the prompt"],
+          ["8. Safety", "What can go wrong, on purpose or by accident?", "A document that contains orders for the model (prompt injection); a leaked restricted file; private data in logs"],
+          ["9. Monitoring", "How do we notice a quality drop in production?", "A daily sample of answers is scored; user feedback; latency and cost dashboards"],
+        ] },
+        { type: "callout", tone: "tip", title: "Spending the 45 minutes", text: "A common split: about 5 minutes on requirements and metrics, 5 on estimates, 10 on the high-level design, 15 on one or two deep dives, and the rest on evaluation, safety and monitoring. Say this plan at the start and ask whether the interviewer wants a different focus." },
+        { type: "p", text: "Most prompts in AI design rounds come from a short list. Each has a **hard part** that the interviewer wants to reach. Find it early and spend the deep-dive time there." },
+        { type: "table", caption: "Common design prompts and where the difficulty sits", head: ["Prompt", "The hard part", "Do not forget"], rows: [
+          ["Chatbot over company documents (RAG)", "Retrieval quality: chunking, keyword plus vector search, reranking", "Permissions per document, citations, saying 'I do not know'"],
+          ["Customer-support agent that can act", "Safe actions: what it may do, limits, approval", "Human handoff, an audit log, actions that are safe to retry"],
+          ["Semantic search", "Index size, freshness, filters applied together with vector search", "Exact terms such as product codes still need keyword search"],
+          ["LLM gateway or inference service", "Fair limits, routing, fallback, streaming at scale", "Cost per team, time to first token, behaviour under overload"],
+          ["Recommendation feed", "The funnel: candidate generation, then ranking, then business rules", "New users and new items, feedback loops, an online A/B test"],
+          ["Content moderation", "Speed against accuracy: cheap filters first, costly models after", "Human review for unclear cases, appeals, abuse patterns that change"],
+          ["Code assistant", "Choosing which code goes in the prompt; very low latency for completions", "Running generated code in a sandbox; keeping secrets out of prompts"],
+        ] },
+      ],
+    },
+    {
+      id: "worked-llm-gateway",
+      title: "Worked design: an LLM gateway",
+      blocks: [
+        { type: "p", text: "**Prompt:** 'Forty product teams in our company call language models. Each team manages its own keys, retries and logs. Design one shared service that all model calls go through.' This is a good first AI design to practise, because it is classic system design with AI-shaped numbers." },
+        { type: "steps", title: "The first ten minutes", items: [
+          { title: "Clarify", text: "We ask: which models, hosted or our own? Is streaming needed (yes)? What must be fair between teams (each team has a budget)? What may be logged (prompts can hold private data)? How available must it be (more than any single provider)?" },
+          { title: "Agree on metrics", text: "Latency added by the gateway itself (target: a few milliseconds), availability, share of requests served by a fallback, cost per team, and time to first token as the user sees it." },
+          { title: "Estimate", text: "We reuse the script: about 93 requests per second and about 730 open streams at peak. The gateway does no model work, so a handful of small stateless servers is enough. The real limits are the provider's rate limit and our GPUs." },
+          { title: "Define the API", text: "One endpoint shaped like a chat call: team key, model name or task label, messages, maximum output tokens, stream flag. A request ID lets us recognise a retry of the same call." },
+          { title: "Sketch the design", text: "Stateless gateway servers behind a load balancer. A shared in-memory store for counters and caches. A queue that feeds a log store. Behind the gateway: model providers and our own model servers." },
+        ] },
+        { type: "flow", title: "One request through the gateway", nodes: [
+          { label: "Authenticate", detail: "Check the team key. Load the team's limits and the models it may use." },
+          { label: "Check limits", detail: "Three limits: requests per minute, **tokens per minute**, and requests in flight. Over a limit, we answer 'too many requests' with a wait time. We do not queue forever." },
+          { label: "Cache", detail: "An exact-match cache returns a stored answer for an identical request. A semantic cache is optional and riskier. Caches are kept per team, so an answer never crosses a permission line." },
+          { label: "Route", detail: "Pick a model: the one asked for, or a cheap one for easy tasks and a strong one for hard tasks. Skip targets that are failing right now." },
+          { label: "Call and stream", detail: "Send the call with a timeout. Pass tokens to the client as they arrive, so the user sees the first words quickly." },
+          { label: "Fall back", detail: "If the call fails before any token was sent, retry once after a short random delay, then try the backup model. After tokens have been sent, we cannot switch silently." },
+          { label: "Record", detail: "Count the tokens used, add the cost to the team's total, and push a trace to the log queue with private data masked." },
+        ] },
+        { type: "viz", name: "llm-routing", caption: "Move the threshold. Sending more queries to the small model cuts cost, and at some point quality drops. A gateway is the natural place to make this choice once for every team." },
+        { type: "table", caption: "Design decisions and their trade-offs", head: ["Decision", "Choice", "Why, and what it costs"], rows: [
+          ["What to limit", "Tokens per minute and requests in flight, not only requests per minute", "One request can cost 100 times more than another. We need a token estimate before the call and a correction after it"],
+          ["Where counters live", "A shared in-memory store, plus a small local allowance on each gateway server", "Servers stay stateless. If the store is down we must choose: let traffic through and risk overspending, or block it"],
+          ["Retries", "One or two at most, with growing random delays", "Unlimited retries turn a small provider slowdown into a flood"],
+          ["Fallback", "A second provider or a smaller model of our own, behind a circuit breaker", "Answer quality may differ, and the backup can be hit by the same traffic spike"],
+          ["Caching", "Exact-match first; semantic only for public, repeatable questions", "A false semantic hit returns the wrong answer with full confidence"],
+          ["Logging", "Asynchronous, through a queue, with masking", "Traces are needed for debugging and evaluation, but must never slow or block a request"],
+        ] },
+        { type: "p", text: "A **circuit breaker** stops sending calls to a target that keeps failing, waits, then tests it with a few calls before using it again. It protects our users, who get a fast failure or a fallback instead of a long timeout, and it gives the struggling provider room to recover." },
+        { type: "compare", title: "Hosted model API vs our own model servers", options: [
+          { name: "Hosted API", summary: "Pay a provider per token.", pros: ["No GPUs to run", "Strong models from day one", "Cost follows usage"], cons: ["Rate limits we do not control", "Data leaves our network", "The price per token does not fall as we grow"], bestFor: "New products, low or spiky traffic, tasks that need the strongest models" },
+          { name: "Own model servers", summary: "Run open models on GPUs we rent or own.", pros: ["Data stays inside", "Full control of latency and versions", "Cheap per token when GPUs are kept busy"], cons: ["Capacity planning and on-call work", "Idle GPUs still cost money", "Usually smaller models"], bestFor: "Steady high traffic, strict data rules, narrow tasks a small model handles well" },
+        ], rows: [
+          ["Scaling limit", "The provider's quota", "The GPUs we can get"],
+          ["Cost shape", "Per token", "Per GPU-hour, used or not"],
+          ["Who handles outages", "The provider, plus our fallback", "We do"],
+        ], verdict: "Many teams start hosted and later move steady, simple traffic to their own servers. The gateway makes that switch invisible to product teams." },
+        { type: "p", text: "**Failures to raise before we are asked.** The provider slows down: timeouts and the circuit breaker stop requests from piling up. One team sends a burst: its own limit stops it and other teams are unaffected. The counter store dies: we fall back to local limits. A stream breaks half-way: the client gets a clear error and may retry with the same request ID. A gateway server dies: it is stateless, so the load balancer sends traffic to the other copies." },
+        { type: "check", question: "A team's nightly job sends 5,000 long prompts at once, and the daytime chat product slows down. Both use the gateway. Name two design changes that prevent this.", answer: "First, limits per team on tokens per minute and on requests in flight, so one team cannot take the whole provider quota. Second, separate urgent from non-urgent traffic: the nightly job goes to a low-priority batch queue and runs when there is spare capacity. Reserving part of the quota for interactive traffic is a third option." },
+      ],
+    },
+    {
+      id: "how-design-is-judged",
+      title: "How a design answer is judged",
+      blocks: [
+        { type: "p", text: "Interviewers do not hold a list of correct boxes. They look for evidence on a few **signals** and write down what they saw. The same signals are used at every level. What changes is how much we are expected to drive without help." },
+        { type: "table", caption: "Signals in a design round", head: ["Signal", "Weak evidence", "Strong evidence"], rows: [
+          ["Finding the problem", "Starts drawing at once", "Asks about users, scale and limits; names the hard part of this prompt"],
+          ["Sound design", "A list of popular tools", "A simple pipeline where every part has a reason to exist"],
+          ["Trade-offs", "One option, presented as the only one", "Two options, what each costs, and a choice tied to the requirements"],
+          ["Numbers", "No estimates", "Rough traffic, tokens, memory and cost that change a decision"],
+          ["Evaluation and operations", "Stops at 'then the model answers'", "Says how quality is measured, what can fail, and how we would notice"],
+          ["Communication", "Long silences or a long monologue", "States a plan, thinks aloud, checks in, uses hints well"],
+        ] },
+        { type: "p", text: "At a junior or mid level, a clear and correct design of a bounded system is the goal, and the interviewer usually leads the deep dive. At a senior level we are expected to lead: choose the one or two areas that make this system hard, go deep there with detail from experience, and bring up failure modes and monitoring before anyone asks." },
+      ],
+    },
+    {
       id: 'mistakes',
       title: 'Common mistakes',
       blocks: [
@@ -161,6 +341,9 @@ consistent hashing: 19.4% of keys move when 4 -> 5 servers`,
           '**Forgetting cache invalidation.** Updated data that stays cached causes users to see stale results.',
           '**Ignoring failure modes.** Every component can fail; ask what happens when it does.',
           '**Treating CAP as "pick any two" at all times.** The choice is forced only during a network partition.',
+          '**Treating the model as a normal function.** It is slow, it costs money per token and it is sometimes wrong. It needs timeouts, limits, a fallback and an evaluation plan.',
+          '**Estimating requests but not tokens.** Two services with the same requests per second can differ many times over in cost and in GPUs needed.',
+          '**No plan for measuring quality.** Checking a few answers by hand does not survive the first prompt change. Name a test set and a metric.',
         ] },
         { type: 'check', question: 'A teammate wants to shard the URL table across 50 database servers on day one. Using the estimate from the code, is that justified?', answer: 'Probably not. About 12 writes/s, 1,157 reads/s and under 1 TB in five years fit a single primary database with read replicas and a cache. Sharding adds complexity we do not yet need; plan for it, but add it when growth requires.' },
       ],
@@ -246,9 +429,9 @@ one server 99.00% | two in parallel 99.99% | whole chain 99.88%`,
   ],
   quiz: [
     { q: 'Which of these is a non-functional requirement?', options: ['Users can create a short link with an optional custom alias', '99.9% availability with p95 latency under 100 ms', 'Users can delete their links', 'Links redirect to the original URL'], answer: 1, explain: 'Availability and latency describe how well the system works, so they are non-functional. The others describe what the system does (functional).' },
-    { q: 'A service receives 2,000 reads per second and its cache hit rate is 95%. How many reads per second hit the database?', options: ['1,900', '200', '95', '100'], answer: 3, explain: 'Misses are 5% of 2,000 = 100 per second. 1,900 is the number served by the cache.' },
+    { q: 'An LLM service has a peak of 50 requests per second. Each answer is 200 output tokens. One GPU produces about 2,000 output tokens per second across its batch. How many GPUs does the speed limit ask for, before spares?', options: ['5', '10', '2', '40'], answer: 0, explain: 'Peak output is 50 × 200 = 10,000 tokens per second. Divided by 2,000 per GPU that is 5. 40 comes from dividing 2,000 by 50, which mixes up the units.' },
     { q: 'We shard data with hash(key) % N and must add one server to grow from 4 to 5. What problem should we expect, and what fixes it?', options: ['Most keys move; consistent hashing would move only about 1/N of them', 'No keys move, since existing keys keep their old shard; nothing to fix', 'All keys move to the new server; switch to vertical scaling instead', 'The hash function breaks for N = 5; replace it with a bigger machine'], answer: 0, explain: 'Because N is in the formula, changing it reassigns most keys (about 80% in our test). Consistent hashing moved only about 20%, the new server\'s fair share.' },
-    { q: 'What best contrasts horizontal and vertical scaling?', options: ['Vertical adds more machines; horizontal adds CPU and memory to one machine', 'Both remove every single point of failure, so the choice is just about cost', 'Horizontal adds machines and survives failures; vertical grows one box up to a limit', 'Horizontal needs stateful servers, so that each node keeps its own sessions'], answer: 2, explain: 'Scaling out adds machines (needs stateless services and distributed data); scaling up buys a bigger box, simpler but limited and still a single point of failure.' },
+    { q: 'What best contrasts rate limiting a classic API with rate limiting an API that calls an LLM?', options: ['A classic API needs limits for each user, while an LLM API needs none at all', 'Both only need a cap on the number of requests per second for each user', 'LLM calls differ a lot in cost and time, so we also cap tokens and open requests', 'LLM APIs are limited mostly by disk space, so we cap the stored bytes for each user'], answer: 2, explain: 'One LLM request can use 100 times more tokens than another and can stay open for many seconds. A cap on request count alone does not protect the budget or the GPUs, so we also limit tokens per minute and requests in flight.' },
     { q: 'A colleague says: "CAP means a distributed database always gives up one of consistency, availability or partition tolerance." What is the more accurate statement?', options: ['CAP applies only to single-machine databases, not to distributed ones', 'During a network partition, it must choose between consistency and availability', 'With a fast enough network we can have all three properties at once', 'CAP stands for caching, availability and performance, not consistency'], answer: 1, explain: 'Partitions cannot be ruled out in distributed systems; the forced choice is between consistency and availability during one. Without a partition, a system can be both consistent and available.' },
   ],
   takeaways: [
@@ -257,6 +440,7 @@ one server 99.00% | two in parallel 99.99% | whole chain 99.88%`,
     'Core vocabulary: DNS, CDN, load balancer, stateless servers, cache, SQL/NoSQL, replication, sharding, consistent hashing, queues, CAP.',
     'Estimate first: requests per second, read/write ratio and storage tell you what you actually need.',
     'Start simple and add complexity only where numbers or failure modes demand it.',
+    'With a model in the system, estimate tokens, GPU memory and GPU speed, and add success metrics, data, evaluation, safety and monitoring to the design process.',
   ],
   terms: [
     { term: 'Load balancer', def: 'A component that spreads incoming requests across several servers and skips unhealthy ones.' },
@@ -265,6 +449,7 @@ one server 99.00% | two in parallel 99.99% | whole chain 99.88%`,
     { term: 'Replication', def: 'Keeping copies of the same data on several machines for availability and read capacity.' },
     { term: 'Sharding', def: 'Splitting a dataset across machines so each stores only part of it.' },
     { term: 'Consistent hashing', def: 'Assigning keys to servers on a hash ring so adding or removing a server moves only about 1/N of keys.' },
+    { term: 'Model gateway', def: 'One shared entry point for model calls that handles keys, limits, routing, retries, fallback and logging.' },
     { term: 'CAP theorem', def: 'During a network partition, a distributed store must choose between consistency and availability.' },
   ],
 };

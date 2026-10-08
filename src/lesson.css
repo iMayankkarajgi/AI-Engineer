@@ -192,7 +192,7 @@
 .picker-module li.current a { background: var(--accent-soft); color: var(--ink); font-weight: 620; }
 .picker-module li .nav-index { width: 30px; height: 24px; border-radius: 12px; font-size: .7rem; }
 .picker-module li.done .nav-index { background: var(--ok); color: var(--surface); }
-@media (max-width: 1600px) { .site-header nav button.nav-picker { display: block; padding: 8px 4px; } }
+@media (max-width: 1180px) { .site-header nav button.nav-picker { display: block; padding: 8px 4px; } }
 
 /* The lesson's video: a 16:9 box that fills the article column on any screen. */
 .lesson-video { margin: 26px 0 8px; }

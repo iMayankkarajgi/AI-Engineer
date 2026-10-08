@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
-import { useApp, ACCOUNTS, CLOUD } from './app';
+import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
 import Certificate from './Certificate';
 import Modal from './Modal';
 import { EXAM_PASS, examQuestions } from './course/exam';
@@ -45,7 +45,7 @@ export function SignOutButton() {
 }
 
 export default function Profile() {
-  const { user, ready, completed, scores, nextLesson, updateProfile, syncError, plans, exam } = useApp(), nav = useNavigate();
+  const { user, ready, completed, scores, nextLesson, updateProfile, syncError, plans, planExpiry, exam, certLessons, certLessonsLeft } = useApp(), nav = useNavigate();
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false), [cert, setCert] = useState(false);
   useEffect(() => { if (ready && !user) nav(ACCOUNTS ? '/account' : '/dashboard', { replace: true }); }, [ready, user, nav]);
   if (!user) return <main className="page container narrow"><div className="eyebrow">Loading…</div></main>;
@@ -54,7 +54,7 @@ export default function Profile() {
   const avg = attempted ? (Object.values(scores).reduce((a, b) => a + b, 0) / attempted).toFixed(1) : '–';
   const modulesDone = modules.filter(m => m.lessons.every(l => completed.includes(l.id))).length;
   const next = lessonById[nextLesson];
-  const lessonsDone = allLessons.every(l => completed.includes(l.id));
+  const lessonsDone = certLessonsLeft === 0;
   const examPassed = exam !== null && exam >= EXAM_PASS;
   const finished = lessonsDone && examPassed;
   const joined = user.joined ? new Date(user.joined).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null;
@@ -78,7 +78,7 @@ export default function Profile() {
         <div className="profile-tags">
           {user.provider === 'google' && <span className="profile-tag"><GoogleMark/>Signed in with Google</span>}
           {joined && <span className="profile-tag">Joined {joined}</span>}
-          {CLOUD && <span className="profile-tag">{plans.length ? `Plan: ${plans.map(p => trackById[p]?.name || p).join(', ')}` : 'No plan yet'}</span>}
+          {CLOUD && <span className="profile-tag">{plans.length ? `Plan: ${plans.map(p => (trackById[p]?.name || p) + (planExpiry[p] ? ` (until ${new Date(planExpiry[p]).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })})` : ' (lifetime)')).join(', ')}` : Object.keys(planExpiry).length ? 'Plan expired' : 'No plan yet'}</span>}
           {CLOUD && <span className={'profile-tag ' + (syncError ? 'bad' : 'ok')} role="status">{syncError ? '⚠ Not synced' : '✓ Synced to your account'}</span>}
         </div>
       </div>
@@ -112,11 +112,11 @@ export default function Profile() {
     <section className="card profile-cert">
       <div><small>Course certificate</small><h3>{finished ? 'You completed the course.' : 'Certificate Of Completion'}</h3>
         <p>{finished ? `Your certificate is ready, with your name on it. Final exam: ${exam} / ${examQuestions.length}.`
-          : !lessonsDone ? `Pass all ${allLessons.length} lessons (${allLessons.length - completed.length} to go), then score ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam.`
+          : !lessonsDone ? `Two things earn it: a pass (${PASS_MARK} of 5) in each of your ${certLessons.length} lesson quizzes (${certLessonsLeft} to go), and ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam${examPassed ? ` (done: ${exam})` : exam !== null ? ` (best so far: ${exam})` : ''}.`
           : `All lessons passed. Score ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam to unlock it${exam !== null ? ` (best so far: ${exam})` : ''}.`}</p></div>
       {finished ? <button className="button primary" onClick={() => setCert(true)}>View Certificate</button>
-        : lessonsDone ? <Link className="button primary" to="/exam">Take The Final Exam →</Link>
-        : <button className="button ghost" disabled>🔒 Certificate Locked</button>}
+        : !examPassed ? <Link className="button primary" to="/exam">Take The Final Exam →</Link>
+        : <Link className="button primary" to={`/lesson/${certLessons.find(id => !completed.includes(id))}`}>Continue The Quizzes →</Link>}
     </section>
     {finished && <Certificate user={user} exam={exam} open={cert} onClose={() => setCert(false)}/>}
 

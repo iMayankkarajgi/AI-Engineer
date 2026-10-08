@@ -1,14 +1,15 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { lessonIds, moduleOf } from './course/curriculum';
 import { canOpenModule } from './course/access';
 import { supabase } from './supabase';
 import { entryLessonIds } from './course/tracks';
 import { EXAM_ID, EXAM_PASS } from './course/exam';
 
-// Account session and lesson progress. A lesson counts as completed once its
-// quiz is passed (4 of 5). Lessons unlock in order: each one opens when the
-// previous lesson is completed. Guests keep progress in localStorage; signing
-// in merges it into the account.
+// Account session and lesson progress. A lesson counts as passed once its quiz
+// is passed (4 of 5). Passing is never needed to open another lesson: a lesson
+// is open whenever the learner's plan includes it. Quiz passes only count
+// toward the certificate. Guests keep progress in localStorage; signing in
+// merges it into the account.
 //
 // Accounts have two backends. With Supabase configured (see supabase.js) the
 // browser talks to it directly: Google or email sign-in, and the profile,
@@ -16,10 +17,6 @@ import { EXAM_ID, EXAM_PASS } from './course/exam';
 // build uses the bundled Express + SQLite API, and the static build is
 // guest-only.
 export const PASS_MARK = 4;
-// Whether lessons open in order (each one after the previous quiz is passed).
-// Off for now: every lesson is open. Passing quizzes still counts toward
-// progress, the final exam and the certificate.
-export const LOCKS = false;
 export const STATIC = import.meta.env.VITE_STATIC === '1';
 export const CLOUD = !!supabase;
 export const ACCOUNTS = CLOUD || !STATIC;
@@ -53,8 +50,14 @@ export function AppProvider({ children }) {
   const [scores, setScores] = useState(() => read('atlas-scores-v2', {}));
   const [ready, setReady] = useState(!ACCOUNTS);
   const [syncError, setSyncError] = useState('');
-  // Track ids the learner has an active plan for (granted in the entitlements table).
-  const [plans, setPlans] = useState([]);
+  // The learner's plans (rows of the entitlements table). A timed plan stops
+  // counting the moment it expires, even while the site stays open: the clock
+  // below is read again every half minute.
+  const [planRows, setPlanRows] = useState([]);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setClock(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const plans = useMemo(() => planRows.filter(p => !p.expires_at || new Date(p.expires_at).getTime() > clock).map(p => p.track), [planRows, clock]);
+  const planExpiry = useMemo(() => Object.fromEntries(planRows.map(p => [p.track, p.expires_at || null])), [planRows]);
   // Best final-exam score so far, or null when it has not been taken.
   const [exam, setExam] = useState(() => read('atlas-exam-v1', null));
   // The lesson the learner opened most recently (kept in this browser), so Continue can resume it.
@@ -88,7 +91,7 @@ export function AppProvider({ children }) {
   const authId = authUser?.id;
   useEffect(() => {
     if (!CLOUD) return;
-    if (!authUser) { setUser(null); setPlans([]); return; }
+    if (!authUser) { setUser(null); setPlanRows([]); return; }
     let live = true;
     (async () => {
       const guestDone = read('atlas-progress-v2', []).filter(known), guestScores = read('atlas-scores-v2', {});
@@ -125,7 +128,7 @@ export function AppProvider({ children }) {
       const failed = profileRes.error || rowsRes.error || pushRes.error || examRes.error;
       setSyncError(failed ? SYNC_FAILED : '');
       if (!failed) { try { localStorage.removeItem('atlas-progress-v2'); } catch {} }
-      setPlans((plansRes.data || []).filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).map(p => p.track));
+      setPlanRows(plansRes.data || []);
       setUser(toUser(authUser, profile));
       setReady(true);
     })();
@@ -150,12 +153,13 @@ export function AppProvider({ children }) {
     if (CLOUD && user) supabase.from('lesson_progress').upsert({ user_id: user.id, lesson_id: EXAM_ID, best_score: best, passed: best >= EXAM_PASS, updated_at: new Date().toISOString() })
       .then(({ error }) => setSyncError(error ? SYNC_FAILED : ''));
   };
-  // The first lesson is always open; every other lesson needs its predecessor.
-  // A track's opening lesson only needs the Starter Kit, so learners can begin
-  // the AI track without finishing the ML one.
   // A lesson is open when its module is free or the learner's plan includes it.
   // Without Supabase there are no plans, so everything is open.
   const isUnlocked = id => !CLOUD || canOpenModule(moduleOf(id)?.id, plans);
+  // The certificate needs a pass in every lesson the learner's plan includes
+  // (every lesson, when there is no plan) and a pass in the final exam.
+  const certLessons = plans.length ? lessonIds.filter(isUnlocked) : lessonIds;
+  const certLessonsLeft = certLessons.filter(id => !completed.includes(id)).length;
   const nextLesson = lessonIds.find(id => !completed.includes(id) && isUnlocked(id)) || lessonIds.find(id => !completed.includes(id)) || lessonIds[lessonIds.length - 1];
   const visitLesson = id => { if (known(id)) { setLastLesson(id); write('atlas-last-lesson', id); } };
   const resumeLesson = lastLesson || nextLesson;
@@ -166,8 +170,8 @@ export function AppProvider({ children }) {
   // Read the learner's plans again (after a payment, for example).
   const refreshPlans = async () => {
     if (!CLOUD || !authUser) return [];
-    const list = activePlans((await supabase.from('entitlements').select('track,expires_at').eq('user_id', authUser.id)).data);
-    setPlans(list); return list;
+    const rows = (await supabase.from('entitlements').select('track,expires_at').eq('user_id', authUser.id)).data || [];
+    setPlanRows(rows); setClock(Date.now()); return activePlans(rows);
   };
   const accessToken = async () => CLOUD ? (await supabase.auth.getSession()).data.session?.access_token || '' : '';
   const signInWithGoogle = async (then = '/profile') => {
@@ -205,8 +209,8 @@ export function AppProvider({ children }) {
   };
   const logout = async () => {
     if (CLOUD) await supabase.auth.signOut(); else await fetch('/api/logout', { method: 'POST' });
-    setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]); setExam(null);
+    setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlanRows([]); setExam(null);
   };
   const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); setExam(null); } };
-  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, lastLesson, resumeLesson, visitLesson, pickerOpen, setPickerOpen, currency, refreshPlans, accessToken, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, lastLesson, resumeLesson, visitLesson, pickerOpen, setPickerOpen, currency, refreshPlans, accessToken, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, planExpiry, exam, recordExam, certLessons, certLessonsLeft }}>{children}</AppContext.Provider>;
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { guide, glossary, faqs } from './course/reference';
-import { useApp, ACCOUNTS, CLOUD, PASS_MARK, LOCKS, takeAfterLogin } from './app';
+import { useApp, ACCOUNTS, CLOUD, PASS_MARK, takeAfterLogin } from './app';
 import { Avatar, GoogleMark, SignOutButton } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
@@ -125,7 +125,7 @@ export function Curriculum() {
   const next = track.lessons.find(l => !completed.includes(l.id) && isUnlocked(l.id)) || track.lessons.find(l => !completed.includes(l.id)) || track.lessons[0];
   return <main className="page container">
     <PageIntro eyebrow={`${PROGRAM} · Curriculum`} title="Choose your learning track">
-      Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; score {PASS_MARK}/5 to pass it{LOCKS ? ' and unlock the next one' : ''}.
+      Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz; score {PASS_MARK}/5 to pass it. Lessons open in any order.
     </PageIntro>
     <TrackPicker value={track.id} onChange={setTrack}/>
 
@@ -196,7 +196,7 @@ export function Module() {
       </section>
       <aside className="course-aside">
         <div className="card"><h3>How each lesson works</h3><ul className="check-list">
-          <li>Intuition and an analogy first</li><li>Animated diagrams and step-by-step flows</li><li>Interactive widgets you can drag and play</li><li>Real code with walkthrough and real output</li><li>Side-by-side comparisons</li><li>A 5-question quiz: score {PASS_MARK}+ to {LOCKS ? 'unlock the next lesson' : 'pass the lesson'}</li>
+          <li>Intuition and an analogy first</li><li>Animated diagrams and step-by-step flows</li><li>Interactive widgets you can drag and play</li><li>Real code with walkthrough and real output</li><li>Side-by-side comparisons</li><li>A 5-question quiz: score {PASS_MARK}+ to pass the lesson</li>
         </ul></div>
         <div className="card"><h3>Module outcome</h3><p>{m.intro[1] || m.intro[0]}</p></div>
       </aside>
@@ -251,7 +251,7 @@ export function Faq() {
 }
 
 export function Dashboard() {
-  const { user, completed, scores, resetGuest, nextLesson, exam, setPickerOpen } = useApp();
+  const { user, completed, scores, resetGuest, nextLesson, exam, setPickerOpen, certLessonsLeft } = useApp();
   const next = lessonById[nextLesson];
   const nextMod = modules.find(m => m.lessons.some(l => l.id === nextLesson));
   const attempted = Object.keys(scores).length;
@@ -266,8 +266,8 @@ export function Dashboard() {
       <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><div className="card-actions"><Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link><button className="button ghost" onClick={() => setPickerOpen(true)}>Browse All Lessons</button></div></div>
     </div>
     <div className="card exam-card">
-      <div><small>Final exam</small><h3>{exam !== null && exam >= EXAM_PASS ? `Passed with ${exam} / ${examQuestions.length}` : completed.length < TOTAL ? 'Opens when every lesson is passed' : exam !== null ? `Best score ${exam} / ${examQuestions.length}` : 'Ready when you are'}</h3><p>{examQuestions.length} mixed questions. Score {EXAM_PASS} or more to earn the certificate.</p></div>
-      <Link className={'button ' + (completed.length < TOTAL ? 'ghost' : 'primary')} to="/exam">{completed.length < TOTAL ? 'About The Exam' : exam !== null && exam >= EXAM_PASS ? 'Retake The Exam' : 'Take The Final Exam'} →</Link>
+      <div><small>Final exam</small><h3>{exam !== null && exam >= EXAM_PASS ? `Passed with ${exam} / ${examQuestions.length}` : exam !== null ? `Best score ${exam} / ${examQuestions.length}` : 'Ready when you are'}</h3><p>{examQuestions.length} mixed questions, open at any time. The certificate needs {EXAM_PASS} or more here and a pass ({PASS_MARK}/5) in every lesson quiz{certLessonsLeft ? ` (${certLessonsLeft} to go)` : ''}.</p></div>
+      <Link className="button primary" to="/exam">{exam !== null && exam >= EXAM_PASS ? 'Retake The Exam' : 'Take The Final Exam'} →</Link>
     </div>
     <h2 className="section-title">Your modules</h2>
     <ul className="dashboard-tracks">{modules.map(m => {

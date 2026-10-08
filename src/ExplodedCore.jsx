@@ -12,6 +12,7 @@ attribute vec3 aDir;
 uniform float uFrame;
 uniform float uTime;
 uniform float uPixelRatio;
+uniform float uTurn;
 varying float vIntensity;
 void main(){
   float p=clamp(uFrame/120.0,0.0,1.0);
@@ -24,7 +25,7 @@ void main(){
   float slide=sin(uTime*0.32+ph*3.0)*0.2*(1.0-move);
   vec3 wobble=vec3(sin(uTime*0.41+ph*5.0),sin(uTime*0.37+ph*7.0),cos(uTime*0.29+ph*11.0))*mix(0.03,0.07,move);
   position3+=aDir*slide+wobble;
-  float turn=p*0.45+aSeed*0.02;
+  float turn=p*uTurn+aSeed*0.02;
   position3.xy=mat2(cos(turn),-sin(turn),sin(turn),cos(turn))*position3.xy;
   vec4 view=modelViewMatrix*vec4(position3,1.0);
   gl_Position=projectionMatrix*view;
@@ -93,9 +94,12 @@ export default function ExplodedCore({frame=0}){
     // screen, whatever the screen height, so it sits just under the text without touching it.
     const fitCompact=()=>{if(!mobile)return;const box=host.getBoundingClientRect(),H=box.height,W=box.width;if(!H)return;let textBottom=0;host.parentElement.querySelectorAll('.story-scene').forEach(el=>{textBottom=Math.max(textBottom,el.getBoundingClientRect().bottom-box.top)});const GAP=22,room=H-textBottom-GAP-18,radius=Math.max(56,Math.min(room/2,W*.4)),perUnit=H/9.13;root.scale.setScalar(radius/(2.4*perUnit));root.position.y=(.5-(textBottom+GAP+radius)/H)*9.13;lastFrame=-1};
     // Wide screens: keep the closed core to the right of the headline, shrinking it if the window is narrow.
-    let wideX=1.8,wideScale=1;
+    // Once the core opens, the row of four layers is fitted into the band between the bottom of the text
+    // and the bottom of the screen, so the words never sit on top of the layers.
+    let wideX=1.8,wideScale=1,rowY=-1.4,rowScale=1;
+    const fitWide=()=>{if(mobile)return;const W=host.clientWidth,H=host.clientHeight;if(!H)return;const perUnit=H/7.652;let textBottom=0;host.parentElement.querySelectorAll('.story-scene:not(.scene-0)').forEach(el=>{textBottom=Math.max(textBottom,el.offsetTop+el.offsetHeight)});const GAP=22,FOOT=20,room=H-textBottom-GAP-FOOT;rowScale=Math.max(.5,Math.min(1,room/(2.85*perUnit),W*.9/(9.6*perUnit)));const half=1.42*rowScale*perUnit,centre=Math.min(Math.max(textBottom+GAP+half,textBottom+GAP+room/2),H-FOOT-half);rowY=(H/2-centre)/perUnit;lastFrame=-1};
     const geometry=geometryFor(mobile?6500:18000,mobile);
-    const material=new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{uFrame:{value:0},uTime:{value:0},uPixelRatio:{value:renderer.getPixelRatio()},uColorA:{value:new THREE.Color()},uColorB:{value:new THREE.Color()},uAlpha:{value:1}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
+    const material=new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{uFrame:{value:0},uTime:{value:0},uPixelRatio:{value:renderer.getPixelRatio()},uTurn:{value:mobile?.45:.1},uColorA:{value:new THREE.Color()},uColorB:{value:new THREE.Color()},uAlpha:{value:1}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
     root.add(new THREE.Points(geometry,material));
     const shells=[
       new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(.83,1)),new THREE.LineBasicMaterial({color:0xdccdff,transparent:true,opacity:.18,depthWrite:false})),
@@ -107,12 +111,12 @@ export default function ExplodedCore({frame=0}){
     let raf=0,lastFrame=-1,lastTime=performance.now(),spin=0,shellSpin=0,clock=0;
     // Idle motion: the closed core turns slowly; once it opens, the turn settles and the layers drift instead.
     const TURN=Math.PI*2,SPEED=.12;
-    const ro=new ResizeObserver(()=>{renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/Math.max(1,host.clientHeight);camera.updateProjectionMatrix();lastFrame=-1;fitCompact();if(!mobile){const w=host.clientWidth,half=3.826*camera.aspect,textRight=(.085*w+Math.min(590,.47*w))/w,edge=(textRight*2-1)*half;wideScale=Math.max(.55,Math.min(1,(half-edge)/4.7));wideX=Math.max(1.8,edge+2.35*wideScale)}});ro.observe(host);
-    function draw(){const f=reduce?0:Math.max(0,Math.min(120,Math.round(frameRef.current)));const now=performance.now(),dt=Math.min(.05,(now-lastTime)/1000);lastTime=now;if(!reduce){clock+=dt;material.uniforms.uTime.value=clock}if(!reduce||f!==lastFrame){lastFrame=f;material.uniforms.uFrame.value=f;const p=f/120;if(!reduce){const open=smooth(0,.3,p);spin+=dt*SPEED*(1-open);if(open>0){const rest=Math.round(spin/TURN)*TURN;spin+=(rest-spin)*Math.min(1,dt*5)*open}shellSpin+=dt*SPEED*open}root.position.x=mobile?0:wideX*(1-smooth(0,.36,p));if(!mobile){root.position.y=-1.25*smooth(.12,.36,p)-.15*smooth(.72,1,p);root.scale.setScalar(wideScale+(1-wideScale)*smooth(0,.36,p))}root.rotation.y=p*.22+spin;root.rotation.x=.13+p*.1;shells.forEach((shell,i)=>{const shift=smooth(i*.2,Math.min(1,i*.2+.39),p),positions=mobile?COMPACT_SPOTS:WIDE_SPOTS;shell.position.set(positions[i][0]*shift,positions[i][1]*shift,0);shell.rotation.x=.3+p*(i+1)*.35;shell.rotation.y=(p*.7+shellSpin)*(i%2?-1:1);shell.scale.setScalar(1-.12*p)});renderer.render(scene,camera)}raf=requestAnimationFrame(draw)}
+    const ro=new ResizeObserver(()=>{renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/Math.max(1,host.clientHeight);camera.updateProjectionMatrix();lastFrame=-1;fitCompact();if(!mobile){const w=host.clientWidth,half=3.826*camera.aspect,textRight=(.085*w+Math.min(590,.47*w))/w,edge=(textRight*2-1)*half;wideScale=Math.max(.55,Math.min(1,(half-edge)/4.7));wideX=Math.max(1.8,edge+2.35*wideScale);fitWide()}});ro.observe(host);
+    function draw(){const f=reduce?0:Math.max(0,Math.min(120,Math.round(frameRef.current)));const now=performance.now(),dt=Math.min(.05,(now-lastTime)/1000);lastTime=now;if(!reduce){clock+=dt;material.uniforms.uTime.value=clock}if(!reduce||f!==lastFrame){lastFrame=f;material.uniforms.uFrame.value=f;const p=f/120;if(!reduce){const open=smooth(0,.3,p);spin+=dt*SPEED*(1-open);if(open>0){const rest=Math.round(spin/TURN)*TURN;spin+=(rest-spin)*Math.min(1,dt*5)*open}shellSpin+=dt*SPEED*open}root.position.x=mobile?0:wideX*(1-smooth(0,.36,p));if(!mobile){root.position.y=rowY*smooth(.12,.36,p);root.scale.setScalar(wideScale+(rowScale-wideScale)*smooth(0,.36,p))}root.rotation.y=p*.22+spin;root.rotation.x=.13+p*.1;shells.forEach((shell,i)=>{const shift=smooth(i*.2,Math.min(1,i*.2+.39),p),positions=mobile?COMPACT_SPOTS:WIDE_SPOTS;shell.position.set(positions[i][0]*shift,positions[i][1]*shift,0);shell.rotation.x=.3+p*(i+1)*.35;shell.rotation.y=(p*.7+shellSpin)*(i%2?-1:1);shell.scale.setScalar(1-.12*p)});renderer.render(scene,camera)}raf=requestAnimationFrame(draw)}
     // Recolor in place when the theme changes, then force a redraw.
     applyRef.current=t=>{const pal=scenePalette(t);material.uniforms.uColorA.value.setRGB(...pal.a);material.uniforms.uColorB.value.setRGB(...pal.b);material.uniforms.uAlpha.value=pal.alpha;material.blending=pal.light?THREE.NormalBlending:THREE.AdditiveBlending;material.needsUpdate=true;shells.forEach(s=>{s.material.color.setHex(pal.light?pal.line:s.userData.color);s.material.opacity=Math.min(1,s.userData.opacity*pal.lineOpacity)});lastFrame=-1};
     shells.forEach(s=>{s.userData.color=s.material.color.getHex()});applyRef.current(themeRef.current);
-    const refit=setTimeout(fitCompact,1200);document.fonts?.ready.then(fitCompact).catch(()=>{});
+    const fitAll=()=>{fitCompact();fitWide()};const refit=setTimeout(fitAll,1200);document.fonts?.ready.then(fitAll).catch(()=>{});
     draw();return()=>{clearTimeout(refit);applyRef.current=null;cancelAnimationFrame(raf);ro.disconnect();geometry.dispose();material.dispose();shells.forEach(s=>{s.geometry.dispose();s.material.dispose()});ambient.geometry.dispose();ambient.material.dispose();renderer.dispose();renderer.domElement.remove()};
   },[]);
   return <div className="universe exploded-core" ref={hostRef} role="img" aria-label="A luminous AI core separating into four connected layers as the page scrolls"/>;

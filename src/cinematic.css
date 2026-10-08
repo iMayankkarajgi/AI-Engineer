@@ -186,10 +186,20 @@
 @media (min-width: 901px) {
   .story-scene.scene-1, .story-scene.scene-2, .story-scene.scene-3 { top: calc(var(--header-h) + 84px); }
   .story-scene.scene-3 { width: min(790px, 62vw); }
-  /* A soft dark panel behind each scene's words, so the particles never show through the text. */
-  .story-scene::before { inset: -18px -34px; border-radius: 40px; background: var(--scene-bg); opacity: .9; filter: blur(26px); }
+  /* No panel behind the words: the particle layers stay visible. They are placed in the band below
+     the text (see ExplodedCore.jsx), and a soft shadow keeps the words readable where the two meet. */
+  .story-scene::before { display: none; }
+  .story-scene .story-title, .story-scene p, .story-scene .story-eyebrow { text-shadow: 0 0 18px var(--scene-bg), 0 0 6px var(--scene-bg); }
   .story-scene.scene-1 { transform: translate(0, 14px) scale(.96); }
   .story-scene.scene-1.is-active { transform: translate(0, 0) scale(1); }
   .story-scene.scene-2, .story-scene.scene-3 { transform: translate(-50%, 14px) scale(.96); }
   .story-scene.scene-2.is-active, .story-scene.scene-3.is-active { transform: translate(-50%, 0) scale(1); }
+}
+/* Short laptop screens: smaller words, so the particle layers get a real band below them. */
+@media (min-width: 901px) and (max-height: 780px) {
+  .story-scene.scene-1, .story-scene.scene-2, .story-scene.scene-3 { top: calc(var(--header-h) + 62px); }
+  .story-scene.scene-1 .story-title, .story-scene.scene-2 .story-title { font-size: clamp(38px, 4vw, 54px); }
+  .story-scene.scene-3 .story-title { font-size: clamp(42px, 4.6vw, 62px); }
+  .story-scene.scene-1 .story-title, .story-scene.scene-2 .story-title, .story-scene.scene-3 .story-title { margin: 14px 0 12px; }
+  .story-scene.scene-1 p, .story-scene.scene-2 p, .story-scene.scene-3 p { line-height: 1.5; }
 }

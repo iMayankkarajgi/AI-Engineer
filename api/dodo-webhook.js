@@ -51,6 +51,7 @@ export default async function handler(req, res) {
   } catch (err) {
     // A 500 makes Dodo deliver the event again later.
     console.error('webhook failed:', err.message);
-    res.status(500).json({ error: 'Could not process the event.' });
+    // Only correctly signed requests reach this point, so the reason is safe to return; it shows in Dodo's delivery log.
+    res.status(500).json({ error: 'Could not process the event.', reason: String(err.message).slice(0, 300) });
   }
 }

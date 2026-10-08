@@ -2,7 +2,7 @@
 // schema.org structured data. The browser applies it on each navigation
 // (applySeo) and scripts/prerender.mjs writes the same values into static HTML.
 import { modules, allLessons, lessonById, moduleOf } from './course/curriculum';
-import { tracks, CURRENCY } from './course/tracks';
+import { tracks } from './course/tracks';
 import { faqs, glossary } from './course/reference';
 import { lessonMinutes } from './course/lessonMinutes';
 import { VIZ } from './course/vizNames';
@@ -16,22 +16,22 @@ export const clip = (text, max = 158) => {
 
 const LESSONS = allLessons.length, MODULES = modules.length, LABS = Object.keys(VIZ).length;
 const PRIVATE = ['/account', '/profile', '/dashboard', '/exam'];
-const ORG = { '@type': 'Organization', '@id': `${SITE_URL}/#organization`, name: BRAND, url: SITE_URL, logo: `${SITE_URL}/icon-512.png` };
+const ORG = { '@type': 'Organization', '@id': `${SITE_URL}/#organization`, name: BRAND, url: SITE_URL, logo: `${SITE_URL}/icon-512.png`, sameAs: ['https://www.youtube.com/@modernaiengineering02'] };
 const hours = lessons => Math.max(1, Math.round(lessons.reduce((n, l) => n + (lessonMinutes[l.id] || 25), 0) / 60));
 
 const courseLd = t => ({
   '@type': 'Course', '@id': `${SITE_URL}/curriculum?track=${t.id}#course`,
   name: `${t.name}: ${PROGRAM}`, description: t.blurb, url: `${SITE_URL}/curriculum?track=${t.id}`,
   provider: ORG, inLanguage: 'en', educationalLevel: 'Beginner', teaches: t.modules.map(m => m.title),
-  offers: { '@type': 'Offer', category: 'Paid', price: t.prices.monthly, priceCurrency: CURRENCY.code, url: `${SITE_URL}/pricing` },
+  offers: ['INR', 'USD'].map(c => ({ '@type': 'Offer', category: 'Paid', price: t.allPrices[c].monthly, priceCurrency: c, url: `${SITE_URL}/pricing`, ...(c === 'INR' ? { eligibleRegion: { '@type': 'Country', name: 'IN' } } : {}) })),
   hasCourseInstance: { '@type': 'CourseInstance', courseMode: 'Online', courseWorkload: `PT${hours(t.lessons)}H` },
 });
 const crumbs = items => ({ '@type': 'BreadcrumbList', itemListElement: items.map(([name, path], i) => ({ '@type': 'ListItem', position: i + 1, name, item: SITE_URL + path })) });
 
 const STATIC_PAGES = {
   '/': () => ({
-    title: `${PROGRAM} | AI Engineering, ML & Deep Learning Course`,
-    description: `A hands-on AI engineering course: ${LESSONS} interactive lessons on machine learning, deep learning, LLMs, RAG and AI agents. Three tracks, labs, quizzes and a certificate.`,
+    title: `${PROGRAM}: Become an AI Engineer | ML, Deep Learning & LLM Course`,
+    description: `Become an AI engineer with a hands-on course: ${LESSONS} video lessons on machine learning, deep learning, LLMs, RAG and AI agents. Three tracks, labs, quizzes, certificate.`,
     ld: [ORG, { '@type': 'WebSite', '@id': `${SITE_URL}/#website`, name: BRAND, alternateName: PROGRAM, url: SITE_URL, publisher: { '@id': ORG['@id'] } }, ...tracks.map(courseLd)],
   }),
   '/curriculum': () => ({
@@ -69,6 +69,11 @@ const STATIC_PAGES = {
   '/news': () => ({
     title: 'Latest AI News From Official Labs and Companies',
     description: 'This week in AI: announcements and research taken directly from the official blogs of OpenAI, Google DeepMind, Microsoft Research, NVIDIA, Hugging Face and more.',
+  }),
+  '/ai-engineer-roadmap': () => ({
+    title: 'AI Engineer Roadmap: Skills and Learning Path, Step by Step',
+    description: `How to become an AI engineer: a step-by-step roadmap of ${MODULES} modules, from machine learning and deep learning to LLMs, RAG, agents and AI system design, with study times.`,
+    ld: [{ '@type': 'ItemList', name: 'AI engineer roadmap', itemListElement: modules.map((m, i) => ({ '@type': 'ListItem', position: i + 1, name: m.title, url: `${SITE_URL}/module/${m.id}` })) }],
   }),
   '/privacy': () => ({ title: 'Privacy Policy', description: `What personal information ${BRAND} collects, how it is used and stored, and your rights over it.` }),
   '/terms': () => ({ title: 'Terms of Service', description: `The terms for using ${BRAND} and buying the ${PROGRAM}: accounts, plans, payments, acceptable use and certificates.` }),

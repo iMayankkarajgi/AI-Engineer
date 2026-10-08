@@ -5,6 +5,7 @@ import { Block, Rich } from './LessonBlocks';
 import { useApp, PASS_MARK, LOCKS } from './app';
 import { NotFound } from './pages';
 import { setDescription } from './seo';
+import LessonVideo from './LessonVideo';
 
 const pad = n => String(n).padStart(2, '0');
 const loaders = import.meta.glob('./course/lessons/*.js');
@@ -194,6 +195,7 @@ export default function LessonPage() {
           </div>
           <ol className="unit-rail" aria-hidden="true">{mod.lessons.map((l, i) => <li key={l.id} className={completed.includes(l.id) ? 'past' : l.id === id ? 'now' : ''}/>)}</ol>
         </header>
+        <LessonVideo lessonId={id} title={meta.title}/>
         {body === undefined && <div className="lesson-loading"><span/><span/><span/></div>}
         {body === null && <div className="card lesson-pending"><h3>This lesson is being prepared</h3><p>The outline is below. Check back soon.</p><ul className="check-list">{meta.covers.map(c => <li key={c}>{c}</li>)}</ul></div>}
         {body && <div className="prose">

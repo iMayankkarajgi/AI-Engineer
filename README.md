@@ -45,6 +45,21 @@ To exercise the whole flow offline, `npm run dev:mock` starts the site on http:/
 - **Static files**: `public/` holds `robots.txt`, the icons, the web manifest and `og.png` (the link-preview image).
 - After launch, add the site in Google Search Console and Bing Webmaster Tools and submit `https://modernaiengineering.com/sitemap.xml`.
 
+## Payments (Dodo Payments)
+
+The pricing page sells each track for 1 month, 3 months or lifetime, as single payments (nothing renews automatically). Prices for India (INR) and everywhere else (USD) are in `src/course/prices.js`; the visitor's country comes from Vercel (`api/geo.js`).
+
+- `api/checkout.js` starts a Dodo checkout session for the signed-in learner. The Dodo products are created automatically the first time each plan is bought.
+- `api/dodo-webhook.js` receives Dodo's signed `payment.succeeded` and `refund.succeeded` events, records the payment in the `payments` table and adds or removes the learner's row in `entitlements`.
+- Set these in Vercel (Settings → Environment Variables, Production), then redeploy: `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_ENV` (`live` or `test`), `DODO_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`. Until all are set, checkout answers "not switched on yet".
+- In the Dodo dashboard add a webhook endpoint `https://modernaiengineering.com/api/dodo-webhook` for the events `payment.succeeded` and `refund.succeeded`; its signing secret is `DODO_WEBHOOK_SECRET`.
+- Run `supabase/schema.sql` again so the `payments` table exists.
+- To test offline: `scripts/mock-dodo.mjs` is a stand-in for the Dodo API that shows a one-button pay page and sends signed webhooks; `scripts/mock-supabase.mjs` accepts the service key `mock-service-role`.
+
+## Lesson videos
+
+Each lesson shows its YouTube video in a 16:9 box (`src/LessonVideo.jsx`). The lesson-to-video list is in `scripts/build-videos.mjs`; run `node scripts/build-videos.mjs --check` after changing it.
+
 ## Admin reporting
 
 `supabase/schema.sql` also creates two views for the Supabase dashboard: `admin_learners` (one row per account: sign-in method, progress, exam score, plan) and `admin_summary` (totals: Google users, email users, users with a plan, active this week). Learners cannot read them.

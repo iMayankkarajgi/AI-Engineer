@@ -70,3 +70,12 @@
 .plan-confirm h2 { margin: 0; }
 .plan-confirm p { color: var(--ink-2); }
 .plan-confirm .cert-actions { justify-content: flex-start; margin-top: 6px; }
+
+.pay-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; border-color: var(--accent-line, var(--line-2)); }
+.pay-status h3 { margin: 0 0 4px; }
+.pay-status p { margin: 0; color: var(--ink-2); max-width: 60ch; }
+.pay-status.active { border-color: var(--ok); }
+.pay-status.failed { border-color: var(--bad); }
+.pay-status .cert-actions { margin-top: 0; }
+.pricing-foot { margin: 18px 0 0; color: var(--ink-3); font-size: .85rem; }
+.pricing-foot a { color: var(--accent); text-decoration: underline; }

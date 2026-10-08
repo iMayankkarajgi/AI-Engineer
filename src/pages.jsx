@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
 import { guide, glossary, faqs } from './course/reference';
-import { useApp, ACCOUNTS, CLOUD, PASS_MARK, LOCKS } from './app';
+import { useApp, ACCOUNTS, CLOUD, PASS_MARK, LOCKS, takeAfterLogin } from './app';
 import { Avatar, GoogleMark, SignOutButton } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
@@ -62,7 +62,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>The {PROGRAM}: understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/ai-engineer-roadmap">AI engineer roadmap</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
     <small>Lessons and interactives © {new Date().getFullYear()} {BRAND}. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
@@ -296,7 +296,7 @@ export function Account() {
   const { user, auth, signInWithGoogle } = useApp(), nav = useNavigate(), { state } = useLocation();
   const [params] = useSearchParams(), asked = params.get('mode') === 'signup' ? 'signup' : 'login';
   const [mode, setMode] = useState(asked), [error, setError] = useState(state?.error || ''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
-  useEffect(() => { if (user) nav(CLOUD ? '/profile' : '/dashboard'); else if (!ACCOUNTS) nav('/dashboard'); }, [user, nav]);
+  useEffect(() => { if (user) nav(takeAfterLogin() || (CLOUD ? '/profile' : '/dashboard')); else if (!ACCOUNTS) nav('/dashboard'); }, [user, nav]);
   // Sign-in is the default; ?mode=signup opens the create-account form.
   useEffect(() => { setMode(asked); setError(''); setNotice(''); }, [asked]);
   async function submit(e) {

@@ -9,6 +9,7 @@ import LessonPage from './LessonPage';
 import Profile from './Profile';
 import LessonPicker from './LessonPicker';
 import Legal from './Legal';
+import Roadmap from './Roadmap';
 import { Pricing } from './Tracks';
 import './tokens.css';
 import './site.css';
@@ -53,7 +54,8 @@ function AfterLogin() {
     const problem = new URLSearchParams(location.search).get('error_description');
     if (problem) { takeAfterLogin(); history.replaceState(null, '', location.pathname + location.hash); nav('/account', { replace: true, state: { error: problem } }); }
   }, []);
-  useEffect(() => { if (user) { const to = takeAfterLogin(); if (to) nav(to, { replace: true }); } }, [user]);
+  // The sign-in page sends the learner on by itself.
+  useEffect(() => { if (user && location.pathname !== '/account') { const to = takeAfterLogin(); if (to) nav(to, { replace: true }); } }, [user]);
   return null;
 }
 
@@ -79,6 +81,7 @@ function App() {
         <Route path="/faq" element={<Faq/>}/>
         <Route path="/news" element={<News/>}/>
         <Route path="/resources" element={<Resources/>}/>
+        <Route path="/ai-engineer-roadmap" element={<Roadmap/>}/>
         <Route path="/privacy" element={<Legal page="privacy"/>}/>
         <Route path="/terms" element={<Legal page="terms"/>}/>
         <Route path="/refund" element={<Legal page="refund"/>}/>

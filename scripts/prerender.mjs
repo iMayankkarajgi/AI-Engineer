@@ -20,6 +20,8 @@ const { VIZ } = await load('/src/course/vizNames.js');
 const { lessonMinutes } = await load('/src/course/lessonMinutes.js');
 const { BRAND, PROGRAM, SITE_URL, TAGLINE, CONTACT_EMAIL, LEGAL_UPDATED } = await load('/src/brand.js');
 const { legalPages } = await load('/src/course/legal.js');
+const { roadmapSteps, roadmapTotals, roadmapText } = await load('/src/course/roadmap.js');
+const { lessonVideos } = await load('/src/course/videos.js');
 await vite.close();
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -50,6 +52,11 @@ function block(b) {
 
 const legal = key => { const d = legalPages[key]; return `<p>Legal · Updated ${esc(LEGAL_UPDATED)}</p><h1>${esc(d.title)}</h1><p>${esc(d.intro)}</p>${d.sections.map((s, i) => `<h2>${i + 1}. ${esc(s.h)}</h2>${(s.p || []).map(t => `<p>${esc(t)}</p>`).join('')}${list((s.items || []).map(esc))}`).join('')}<p>Questions? Email ${esc(CONTACT_EMAIL)}.</p>`; };
 const PAGES = {
+  '/ai-engineer-roadmap': () => `<p>${esc(PROGRAM)} · Roadmap</p><h1>${esc(roadmapText.title)}</h1><p>${esc(roadmapText.intro)}</p>
+    <h2>What does an AI engineer do?</h2>${roadmapText.what.map(t => `<p>${esc(t)}</p>`).join('')}<p>${esc(roadmapText.versus)}</p>
+    <h2>The skills an AI engineer needs</h2><p>${esc(roadmapText.skills)}</p>
+    <h2>The roadmap, step by step</h2>${roadmapSteps.map((s, i) => `<h3>Step ${i + 1}: ${esc(s.stage)}</h3>${s.modules.map(m => `<p>${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)} (${m.lessons.length} lessons, about ${m.hours} hours). ${esc(m.intro)}</p>${list(m.lessons.map(l => a(`/lesson/${l.id}`, `${l.num} ${l.title}`)))}`).join('')}`).join('')}
+    <h2>How long does it take to become an AI engineer?</h2><p>About ${roadmapTotals.hours} hours of lessons, labs and quizzes.</p>${list(roadmapText.pace.map(([label, weeks]) => `At ${esc(label)}: about ${weeks} weeks.`))}`,
   '/privacy': () => legal('privacy'),
   '/terms': () => legal('terms'),
   '/refund': () => legal('refund'),
@@ -62,7 +69,7 @@ const PAGES = {
     <p>Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz.</p>${trackCards()}
     ${modules.map(m => `<h2>${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)}</h2><p>${esc(m.intro[0])}</p>${list(m.lessons.map(l => a(`/lesson/${l.id}`, `${l.num} ${l.title}`)), 'ol')}`).join('')}`,
   '/pricing': () => `<p>Pricing</p><h1>Pick the track that fits your goal</h1><p>Three tracks, each with its lessons, quizzes and hands-on labs. Pay monthly, for three months, or once for lifetime access.</p>
-    ${tracks.map(t => `<h2>${esc(t.name)}</h2><p>${esc(t.blurb)}</p>${list([...PERIODS.map(p => `${esc(p.label)}: ${esc(formatPrice(t.prices[p.id]))} ${esc(p.unit)}`), `${t.modules.length} modules, ${t.lessons.length} lessons`, `${t.labs.length} interactive labs`, ...t.extras.map(esc)])}`).join('')}
+    ${tracks.map(t => `<h2>${esc(t.name)}</h2><p>${esc(t.blurb)}</p>${list([...PERIODS.map(p => `${esc(p.label)}: ${esc(formatPrice(t.prices[p.id]))} in India, ${esc(formatPrice(t.allPrices.USD[p.id], 'USD'))} elsewhere, ${esc(p.unit)}`), `${t.modules.length} modules, ${t.lessons.length} lessons`, `${t.labs.length} interactive labs`, ...t.extras.map(esc)])}`).join('')}
     <h2>What each track covers</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `${m.number}. ${m.title}`)}: ${tracks.filter(t => t.moduleIds.includes(m.id)).map(t => esc(t.short)).join(', ')}`))}`,
   '/guide': () => `<p>Course guide</p><h1>Everything you need before lesson one</h1><p>${esc(guide.about.lead)}</p>
     <h2>${esc(guide.about.title)}</h2>${guide.about.body.map(p => `<p>${esc(p)}</p>`).join('')}${list(guide.about.points.map(([t, d]) => `<strong>${esc(t)}</strong>: ${esc(d)}`))}
@@ -93,7 +100,7 @@ async function lessonPage(l) {
   const m = moduleOf(l.id), i = allLessons.findIndex(x => x.id === l.id), prev = allLessons[i - 1], next = allLessons[i + 1];
   const body = (await import(pathToFileURL(path.resolve(`src/course/lessons/${l.id}.js`)).href)).default;
   return { summary: body.summary, html: `${crumbs([['/curriculum', 'Curriculum'], [`/module/${m.id}`, `Module ${m.number}: ${m.title}`]])}
-    <p>Lesson ${l.num} · ${lessonMinutes[l.id]} min</p><h1>${esc(l.title)}</h1>${body.hook ? `<p>${rich(body.hook)}</p>` : ''}${body.summary ? `<p><strong>In short:</strong> ${rich(body.summary)}</p>` : ''}
+    <p>Lesson ${l.num} · ${lessonMinutes[l.id]} min${lessonVideos[l.id] ? ' · video lesson' : ''}</p><h1>${esc(l.title)}</h1>${body.hook ? `<p>${rich(body.hook)}</p>` : ''}${body.summary ? `<p><strong>In short:</strong> ${rich(body.summary)}</p>` : ''}
     ${(body.sections || []).map(s => `<h2>${rich(s.title)}</h2>${(s.blocks || []).map(block).join('')}`).join('')}
     ${body.takeaways?.length ? `<h2>Key takeaways</h2>${list(body.takeaways.map(say))}` : ''}${body.terms?.length ? `<h2>Key terms</h2>${list(body.terms.map(say))}` : ''}
     <p>${[prev && a(`/lesson/${prev.id}`, `← ${prev.num} ${prev.title}`), next && a(`/lesson/${next.id}`, `${next.num} ${next.title} →`)].filter(Boolean).join(' · ')}</p>` };

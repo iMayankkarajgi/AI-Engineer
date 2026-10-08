@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import newsHandler from './api/news.js';
+import geoHandler from './api/geo.js';
+import checkoutHandler from './api/checkout.js';
+import webhookHandler from './api/dodo-webhook.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -17,7 +20,8 @@ CREATE TABLE IF NOT EXISTS progress (user_id TEXT NOT NULL, lesson_id TEXT NOT N
 const app = express();
 app.disable('x-powered-by');
 app.use((_, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); res.set('Referrer-Policy', 'strict-origin-when-cross-origin'); next(); });
-app.use(express.json({ limit: '16kb' }));
+// The payment webhook checks a signature over the exact bytes it was sent.
+app.use(express.json({ limit: '64kb', verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 const originGuard = (req, res, next) => {
   if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
     const origin = req.get('origin');
@@ -30,6 +34,9 @@ app.use('/api', originGuard);
 app.get('/api/health', (_, res) => res.json({ ok: true }));
 // The same handler runs as a serverless function on Vercel (api/news.js).
 app.get('/api/news', newsHandler);
+app.get('/api/geo', geoHandler);
+app.all('/api/checkout', checkoutHandler);
+app.all('/api/dodo-webhook', webhookHandler);
 
 const attempts = new Map();
 const authLimit = (req, res, next) => {
@@ -103,7 +110,7 @@ app.put('/api/progress/:lessonId', (req, res) => {
   res.json({ ok: true });
 });
 
-const dist = path.join(root, 'dist');
+const dist = path.resolve(root, process.env.DIST_DIR || 'dist');
 if (fs.existsSync(dist)) {
   // Prerendered pages live at dist/<path>/index.html; everything else gets the app shell.
   app.use(express.static(dist, { redirect: false }));

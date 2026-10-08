@@ -11,7 +11,7 @@
 .story-noise { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: .05; background-image: radial-gradient(var(--scene-ink-2) .45px, transparent .45px); background-size: 8px 8px; mask-image: radial-gradient(circle, transparent 15%, #000 75%); }
 
 .story-topline, .story-bottom { position: absolute; z-index: 6; left: 3.2%; right: 3.2%; display: flex; justify-content: space-between; align-items: center; color: var(--scene-ink-2); font: 500 .62rem var(--mono); letter-spacing: .18em; }
-.story-topline { top: calc(var(--header-h) + 22px); justify-content: center; text-align: center; }
+.story-topline { top: calc(var(--header-h) + 22px); left: var(--edge); right: var(--edge); justify-content: flex-start; }
 .story-bottom { bottom: 32px; }
 .replay-control { border: 1px solid color-mix(in srgb, var(--scene-ink) 30%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--scene-bg) 70%, transparent); color: var(--scene-ink); padding: 9px 13px; font: 500 .62rem var(--mono); letter-spacing: .12em; transition: background .2s, color .2s; }
 .replay-control:hover { background: var(--scene-ink); color: var(--scene-bg); }
@@ -21,7 +21,7 @@
 .story-scene.is-active { opacity: 1; filter: blur(0); pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
 .story-scene::before { content: ''; position: absolute; inset: -24px -48px; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at center, var(--scene-scrim), transparent 74%); }
 .story-scene.scene-0, .story-scene.scene-1, .story-scene.scene-2 { text-align: left; }
-.story-scene.scene-0 { left: 8.5%; top: 48%; width: min(590px, 47vw); transform: translate(0, -45%) scale(.96); }
+.story-scene.scene-0 { left: 8.5%; top: max(48%, 330px); width: min(590px, 47vw); transform: translate(0, -45%) scale(.96); }
 .story-scene.scene-1 { left: 7%; top: 28%; width: min(540px, 45vw); transform: translate(0, -45%) scale(.96); }
 .story-scene.scene-0.is-active, .story-scene.scene-1.is-active { transform: translate(0, -50%) scale(1); }
 .story-scene.scene-2 { left: 60%; top: 27%; width: min(490px, 39vw); }
@@ -141,7 +141,7 @@
   .story-scene.scene-0 p, .story-scene.scene-1 p, .story-scene.scene-2 p { margin: auto; }
 }
 @media (max-width: 700px) {
-  .story-topline { left: 5%; right: 5%; }
+  .story-topline { left: 5%; right: 5%; justify-content: center; text-align: center; }
   .story-bottom { left: 5%; right: 5%; gap: 10px; }
   .story-chapters { right: 5px; gap: 10px; }
   .story-chapters button { font-size: 0; gap: 5px; }
@@ -180,3 +180,16 @@
 @media (max-width: 520px) { .story-topline { letter-spacing: .08em; white-space: nowrap; } }
 .cinematic-footer .footer-brand { display: flex; align-items: center; gap: 10px; }
 .footer-mark { width: 26px; height: 26px; }
+
+/* Laptops and desktops: scenes 2 to 4 hang from a fixed line under the header
+   and the programme label, so their first line can never slide under either. */
+@media (min-width: 901px) {
+  .story-scene.scene-1, .story-scene.scene-2, .story-scene.scene-3 { top: calc(var(--header-h) + 84px); }
+  .story-scene.scene-3 { width: min(790px, 62vw); }
+  /* A soft dark panel behind each scene's words, so the particles never show through the text. */
+  .story-scene::before { inset: -18px -34px; border-radius: 40px; background: var(--scene-bg); opacity: .9; filter: blur(26px); }
+  .story-scene.scene-1 { transform: translate(0, 14px) scale(.96); }
+  .story-scene.scene-1.is-active { transform: translate(0, 0) scale(1); }
+  .story-scene.scene-2, .story-scene.scene-3 { transform: translate(-50%, 14px) scale(.96); }
+  .story-scene.scene-2.is-active, .story-scene.scene-3.is-active { transform: translate(-50%, 0) scale(1); }
+}

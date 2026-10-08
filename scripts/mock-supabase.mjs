@@ -16,9 +16,11 @@ const users = new Map();      // id -> { user, password }
 const tokens = new Map();     // access token -> user id
 const refresh = new Map();    // refresh token -> user id
 const codes = new Map();      // oauth code -> user id
-const tables = { profiles: [], lesson_progress: [], code_snippets: [], entitlements: [] };
-const OWNER = { profiles: 'id', lesson_progress: 'user_id', code_snippets: 'user_id', entitlements: 'user_id' };
-const KEYS = { profiles: ['id'], lesson_progress: ['user_id', 'lesson_id'], code_snippets: ['id'], entitlements: ['user_id', 'track'] };
+const tables = { profiles: [], lesson_progress: [], code_snippets: [], entitlements: [], payments: [] };
+// Stands in for the Supabase secret (service role) key: it bypasses row-level security.
+const SERVICE_KEY = 'mock-service-role';
+const OWNER = { profiles: 'id', lesson_progress: 'user_id', code_snippets: 'user_id', entitlements: 'user_id', payments: 'user_id' };
+const KEYS = { profiles: ['id'], lesson_progress: ['user_id', 'lesson_id'], code_snippets: ['id'], entitlements: ['user_id', 'track'], payments: ['payment_id'] };
 
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 function createUser({ email, password, meta, provider }) {
@@ -72,9 +74,32 @@ async function auth(req, res, url) {
   send(res, 404, { msg: 'Not found' });
 }
 
+// Requests made with the service key see and change every row, like the real service role.
+async function serviceRest(req, res, url, name, rows) {
+  const filters = [...url.searchParams].filter(([k, v]) => !['select', 'on_conflict', 'columns'].includes(k) && v.startsWith('eq.'));
+  const match = () => rows.filter(r => filters.every(([k, v]) => String(r[k]) === v.slice(3)));
+  const prefer = req.headers.prefer || '', wants = prefer.includes('return=representation');
+  if (req.method === 'GET') return send(res, 200, match());
+  const body = await readBody(req);
+  if (req.method === 'POST') {
+    const out = [];
+    for (const row of [].concat(body)) {
+      if ((name === 'entitlements' || name === 'payments') && (!['ml', 'ai', 'complete'].includes(row.track) || !['monthly', 'quarter', 'lifetime'].includes(row.period) || ![...users.keys()].includes(row.user_id))) return send(res, 400, { code: '23514', message: 'new row violates a constraint' });
+      const at = rows.findIndex(r => KEYS[name].every(k => r[k] === row[k]));
+      if (at >= 0) { if (prefer.includes('ignore-duplicates')) continue; if (!prefer.includes('merge-duplicates')) return send(res, 409, { code: '23505', message: 'duplicate key value violates unique constraint' }); rows[at] = { ...rows[at], ...row }; out.push(rows[at]); }
+      else { const fresh = { created_at: new Date().toISOString(), ...row }; rows.push(fresh); out.push(fresh); }
+    }
+    return wants ? send(res, 201, out) : send(res, 201);
+  }
+  if (req.method === 'PATCH') { const out = match(); out.forEach(r => Object.assign(r, body)); return wants ? send(res, 200, out) : send(res, 204); }
+  if (req.method === 'DELETE') { const gone = match(); gone.forEach(r => rows.splice(rows.indexOf(r), 1)); return wants ? send(res, 200, gone) : send(res, 204); }
+  send(res, 405, { message: 'Method not allowed' });
+}
+
 async function rest(req, res, url) {
   const name = url.pathname.replace('/rest/v1/', ''), rows = tables[name];
   if (!rows) return send(res, 404, { code: 'PGRST205', message: `Could not find the table 'public.${name}'` });
+  if ((req.headers.authorization || '') === `Bearer ${SERVICE_KEY}`) return serviceRest(req, res, url, name, rows);
   const uid = bearer(req), owner = OWNER[name];
   const single = (req.headers.accept || '').includes('vnd.pgrst.object');
   const reply = (status, out) => single ? (out.length === 1 ? send(res, status, out[0]) : send(res, 406, { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: `The result contains ${out.length} rows` })) : send(res, status, out);
@@ -82,7 +107,7 @@ async function rest(req, res, url) {
   const filters = [...url.searchParams].filter(([k, v]) => !['select', 'on_conflict', 'columns'].includes(k) && v.startsWith('eq.'));
   const visible = () => rows.filter(r => uid && r[owner] === uid && filters.every(([k, v]) => String(r[k]) === v.slice(3)));
   if (req.method === 'GET') return reply(200, visible());
-  if (!uid || name === 'entitlements') return send(res, uid ? 403 : 401, { code: '42501', message: 'new row violates row-level security policy' });
+  if (!uid || name === 'entitlements' || name === 'payments') return send(res, uid ? 403 : 401, { code: '42501', message: 'new row violates row-level security policy' });
   const body = await readBody(req), wants = (req.headers.prefer || '').includes('return=representation');
   if (req.method === 'POST') {
     const out = [];

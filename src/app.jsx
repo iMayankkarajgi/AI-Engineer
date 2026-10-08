@@ -32,6 +32,7 @@ const SYNC_FAILED = 'Could not reach the database. Your latest changes are kept 
 
 // Where the browser lands after Google sends the learner back.
 const AFTER_LOGIN = 'atlas-after-login';
+export const rememberAfterLogin = to => { try { sessionStorage.setItem(AFTER_LOGIN, to); } catch {} };
 export const takeAfterLogin = () => { try { const to = sessionStorage.getItem(AFTER_LOGIN); sessionStorage.removeItem(AFTER_LOGIN); return to; } catch { return null; } };
 
 const toUser = (u, p) => ({
@@ -58,6 +59,13 @@ export function AppProvider({ children }) {
   // The lesson the learner opened most recently (kept in this browser), so Continue can resume it.
   const [lastLesson, setLastLesson] = useState(() => { const id = read('atlas-last-lesson', null); return known(id) ? id : null; });
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Prices are shown in rupees in India and in dollars elsewhere. Start from the
+  // device's time zone, then use the country the server sees.
+  const [currency, setCurrency] = useState(() => { try { const s = sessionStorage.getItem('atlas-currency'); if (s === 'INR' || s === 'USD') return s; return /Calcutta|Kolkata/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) ? 'INR' : 'USD'; } catch { return 'USD'; } });
+  useEffect(() => {
+    if (STATIC) return;
+    fetch('/api/geo').then(r => r.json()).then(d => { if (d.currency === 'INR' || d.currency === 'USD') { setCurrency(d.currency); try { sessionStorage.setItem('atlas-currency', d.currency); } catch {} } }).catch(() => {});
+  }, []);
 
   // Bundled API: restore the cookie session.
   useEffect(() => {
@@ -151,6 +159,14 @@ export function AppProvider({ children }) {
 
   // Where Supabase sends the browser back to: this app's own entry URL.
   const home = () => location.origin + (STATIC ? location.pathname : import.meta.env.BASE_URL);
+  const activePlans = rows => (rows || []).filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).map(p => p.track);
+  // Read the learner's plans again (after a payment, for example).
+  const refreshPlans = async () => {
+    if (!CLOUD || !authUser) return [];
+    const list = activePlans((await supabase.from('entitlements').select('track,expires_at').eq('user_id', authUser.id)).data);
+    setPlans(list); return list;
+  };
+  const accessToken = async () => CLOUD ? (await supabase.auth.getSession()).data.session?.access_token || '' : '';
   const signInWithGoogle = async (then = '/profile') => {
     try { sessionStorage.setItem(AFTER_LOGIN, then); } catch {}
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: home() } });
@@ -189,5 +205,5 @@ export function AppProvider({ children }) {
     setUser(null); setCompleted([]); setScores({}); setSyncError(''); setPlans([]); setExam(null);
   };
   const resetGuest = () => { if (!user) { setCompleted([]); setScores({}); setExam(null); } };
-  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, lastLesson, resumeLesson, visitLesson, pickerOpen, setPickerOpen, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ user, completed, scores, complete, recordScore, isUnlocked, nextLesson, lastLesson, resumeLesson, visitLesson, pickerOpen, setPickerOpen, currency, refreshPlans, accessToken, auth, signInWithGoogle, signInWithGoogleToken, updateProfile, logout, resetGuest, ready, syncError, plans, exam, recordExam }}>{children}</AppContext.Provider>;
 }

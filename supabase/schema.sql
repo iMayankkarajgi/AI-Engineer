@@ -100,6 +100,24 @@ alter table public.entitlements enable row level security;
 drop policy if exists "entitlements: read own" on public.entitlements;
 create policy "entitlements: read own" on public.entitlements for select using (auth.uid() = user_id);
 
+-- Payments made through Dodo Payments, one row per payment. Written only by the
+-- site's webhook (using the service role); learners can read their own rows.
+create table if not exists public.payments (
+  payment_id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  track text not null check (track in ('ml', 'ai', 'complete')),
+  period text not null check (period in ('monthly', 'quarter', 'lifetime')),
+  currency text not null,
+  amount integer not null,            -- in the currency's smallest unit (paise or cents), tax included
+  status text not null default 'succeeded' check (status in ('succeeded', 'refunded')),
+  created_at timestamptz not null default now(),
+  refunded_at timestamptz
+);
+create index if not exists payments_user on public.payments (user_id, created_at desc);
+alter table public.payments enable row level security;
+drop policy if exists "payments: read own" on public.payments;
+create policy "payments: read own" on public.payments for select using (auth.uid() = user_id);
+
 -- Final exam: its result is one lesson_progress row with lesson_id 'final-exam'
 -- and a score out of 50, so databases created before the exam need a wider check.
 alter table public.lesson_progress drop constraint if exists lesson_progress_best_score_check;

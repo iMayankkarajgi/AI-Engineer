@@ -4,6 +4,7 @@
   --serif: 'Source Serif 4', Charter, 'Iowan Old Style', Georgia, serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --max: 1240px;
+  --edge: clamp(16px, 3.2vw, 56px);
   --gutter: clamp(16px, 4vw, 40px);
   --header-h: 60px;
   --r-lg: 14px;

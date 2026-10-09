@@ -292,7 +292,7 @@
 .lesson-nav li.locked .nav-index { background: none; font-size: .7rem; }
 .lesson-nav-toggle small:first-child { text-transform: uppercase; letter-spacing: .06em; font-size: .68rem; }
 .pager-card.locked { border-style: dashed; opacity: .8; }
-.locked-page { text-align: center; display: grid; gap: 16px; justify-items: center; padding-top: 40px; }
+.locked-page { text-align: center; display: grid; gap: 16px; justify-items: center; padding-top: calc(var(--header-h) + 40px); }
 .locked-page .card { text-align: left; width: 100%; }
 .lock-icon { font-size: 2.6rem; animation: b-rise .5s ease both; }
 .locked-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }

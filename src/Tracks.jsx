@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { modules } from './course/curriculum';
-import { tracks, trackById, PERIODS, formatPrice, quarterSaving } from './course/tracks';
+import { tracks, trackById, PERIODS, formatPrice } from './course/tracks';
 import { useApp, PASS_MARK, CLOUD, rememberAfterLogin } from './app';
 import Modal from './Modal';
 import './tracks.css';
@@ -120,22 +120,21 @@ export function Pricing() {
     <div className="page-intro pricing-intro">
       <div className="eyebrow">Pricing</div>
       <h1>Pick the track that fits your goal</h1>
-      <p className="dek">Three tracks, each with its lessons, quizzes and hands-on labs. Buy one month, three months, or pay once for lifetime access.</p>
+      <p className="dek">Three tracks, each with its lessons, quizzes and hands-on labs. Buy one month, or pay once for lifetime access.</p>
     </div>
     <PaymentReturn/>
     <div className="period-toggle" role="radiogroup" aria-label="Plan length">{PERIODS.map(x =>
       <button key={x.id} role="radio" aria-checked={period === x.id} className={period === x.id ? 'active' : ''} onClick={() => setPeriod(x.id)}>{x.label}{x.best && <span className="best-pill">Best Value</span>}</button>)}
     </div>
     <div className="plan-grid">{tracks.map((t, i) => {
-      const prices = t.allPrices[currency], price = prices[period], saving = quarterSaving(prices);
+      const prices = t.allPrices[currency], price = prices[period];
       return <section key={t.id} className={'plan card' + (t.featured ? ' featured' : '') + (period === 'lifetime' ? ' best' : '')} style={{ '--track': t.accent }} aria-label={t.name}>
         {t.featured && <span className="track-badge"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6l1.9 4 4.4.6-3.2 3 .8 4.3L8 11.4l-3.9 2.1.8-4.3-3.2-3 4.4-.6z"/></svg>Recommended</span>}
         <div className="plan-head"><span className="course-icon">{t.icon}</span><div><small>Track {i + 1}</small><h2>{t.name}</h2></div></div>
         <p className="plan-blurb">{t.blurb}</p>
-        <div className="plan-price"><strong>{formatPrice(price, currency)}</strong><span>{p.unit}</span></div>
+        <div className="plan-price"><strong>{formatPrice(price, currency)}</strong><span>{p.unit} · {currency === 'INR' ? 'incl. GST' : 'incl. taxes'}</span></div>
         <p className="plan-note">{period === 'monthly' ? 'One payment for 1 month of access. Renew whenever you like; you are never charged automatically.'
-          : period === 'quarter' ? <>One payment for 3 months of access{saving > 0 ? <> · <b>save {saving}%</b> against monthly</> : ''}.</>
-          : <><b>Best value.</b> Pay once and keep access for good, for the cost of about {Math.round(price / prices.monthly)} months.</>}</p>
+          : <><b>Best value.</b> Pay once and keep access for good{price < prices.monthly * 2 ? ', for less than two monthly payments' : `, for the cost of about ${Math.round(price / prices.monthly)} months`}.</>}</p>
         {period !== 'lifetime' && <button className="lifetime-nudge" onClick={() => setPeriod('lifetime')}><span className="best-pill">Best Value</span>Lifetime access for {formatPrice(prices.lifetime, currency)}, paid once →</button>}
         <button className={'button ' + (t.featured ? 'primary' : 'ghost')} onClick={() => choose(t)}>{owns(t) ? `You Have ${t.short} · Extend` : `Choose ${t.short}`}</button>
         <ul className="check-list plan-features">
@@ -148,7 +147,7 @@ export function Pricing() {
         </ul>
       </section>;
     })}</div>
-    <p className="pricing-foot">Prices are in {currency === 'INR' ? 'Indian rupees' : 'US dollars'} for your region. Payments are handled securely by Dodo Payments; taxes may be added at checkout. See the <Link to="/refund">Refund Policy</Link>.</p>
+    <p className="pricing-foot">Prices are in {currency === 'INR' ? 'Indian rupees' : 'US dollars'} for your region. {currency === 'INR' ? 'GST is included' : 'Taxes are included'}: the price shown is what you pay. Payments are handled securely by Dodo Payments. See the <Link to="/refund">Refund Policy</Link>.</p>
 
     <section>
       <h2 className="section-title">What each track covers</h2>

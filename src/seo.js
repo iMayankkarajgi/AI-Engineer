@@ -43,7 +43,7 @@ const STATIC_PAGES = {
   }),
   '/pricing': () => ({
     title: 'Pricing: ML & Deep Learning, Generative AI and Complete AI Engineer Tracks',
-    description: `Compare the three ${PROGRAM} tracks and their monthly, three-month and lifetime prices. Each track includes its lessons, quizzes and interactive labs.`,
+    description: `Compare the three ${PROGRAM} tracks and their monthly and lifetime prices. Each track includes its lessons, quizzes and interactive labs.`,
     ld: tracks.map(courseLd),
   }),
   '/blog': () => ({

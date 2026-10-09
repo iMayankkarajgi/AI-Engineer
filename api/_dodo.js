@@ -7,9 +7,9 @@
 //   DODO_WEBHOOK_SECRET         signing secret of the webhook endpoint (starts with whsec_)
 //   SUPABASE_SERVICE_ROLE_KEY   Supabase secret key, used only here to record plans
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { PRICES, PLAN_DAYS, TRACK_NAMES, PERIOD_NAMES, currencyForCountry } from '../src/course/prices.js';
+import { PRICES, PERIOD_IDS, PLAN_DAYS, TRACK_NAMES, PERIOD_NAMES, currencyForCountry } from '../src/course/prices.js';
 
-export { PRICES, PLAN_DAYS, currencyForCountry };
+export { PRICES, PERIOD_IDS, PLAN_DAYS, currencyForCountry };
 export const SITE = process.env.SITE_URL || 'https://modernaiengineering.com';
 const env = () => ({
   apiKey: process.env.DODO_PAYMENTS_API_KEY || '',
@@ -67,7 +67,8 @@ export async function productId(track, period, currency) {
     const made = await dodo('/products', { method: 'POST', body: {
       name, tax_category: 'edtech',
       description: `${PERIOD_NAMES[period]} access to the ${TRACK_NAMES[track]} track of the AI Engineering Bootcamp at modernaiengineering.com.`,
-      price: { type: 'one_time_price', price, currency, discount: 0, purchasing_power_parity: false },
+      // tax_inclusive: the listed amount already contains GST or other taxes, so the buyer pays exactly it.
+      price: { type: 'one_time_price', price, currency, discount: 0, purchasing_power_parity: false, tax_inclusive: true },
       metadata: { track, period, currency },
     } });
     products.set(key, made.product_id);
@@ -75,6 +76,16 @@ export async function productId(track, period, currency) {
   return products.get(key);
 }
 export const resetProductCache = () => { products = null; };
+// Makes sure every plan on sale has its product in Dodo (creating any that are
+// missing) and lists them. Safe to run again: existing products are reused.
+export async function ensureProducts() {
+  const out = [];
+  for (const track of Object.keys(PRICES)) for (const period of PERIOD_IDS) for (const currency of Object.keys(PRICES[track])) {
+    try { out.push({ plan: `${TRACK_NAMES[track]}, ${PERIOD_NAMES[period]}`, currency, price: PRICES[track][currency][period], tax_included: true, product_id: await productId(track, period, currency) }); }
+    catch (err) { out.push({ plan: `${TRACK_NAMES[track]}, ${PERIOD_NAMES[period]}`, currency, price: PRICES[track][currency][period], error: String(err.message).slice(0, 200) }); }
+  }
+  return out;
+}
 
 // Who is asking: the Supabase account behind the access token, or null.
 export async function userFromToken(token) {

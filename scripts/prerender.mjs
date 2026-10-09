@@ -71,7 +71,7 @@ const PAGES = {
   '/curriculum': () => `<p>${esc(PROGRAM)} · Curriculum</p><h1>Choose your learning track</h1>
     <p>Learn machine learning and deep learning, generative AI engineering, or the complete path with career preparation. Every lesson ends with a 5-question quiz.</p>${trackCards()}
     ${modules.map(m => `<h2>${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)}</h2><p>${esc(m.intro[0])}</p>${list(m.lessons.map(l => a(`/lesson/${l.id}`, `${l.num} ${l.title}`)), 'ol')}`).join('')}`,
-  '/pricing': () => `<p>Pricing</p><h1>Pick the track that fits your goal</h1><p>Three tracks, each with its lessons, quizzes and hands-on labs. Pay monthly, for three months, or once for lifetime access.</p>
+  '/pricing': () => `<p>Pricing</p><h1>Pick the track that fits your goal</h1><p>Three tracks, each with its lessons, quizzes and hands-on labs. Pay for one month, or once for lifetime access. Prices include taxes.</p>
     ${tracks.map(t => `<h2>${esc(t.name)}</h2><p>${esc(t.blurb)}</p>${list([...PERIODS.map(p => `${esc(p.label)}: ${esc(formatPrice(t.prices[p.id]))} in India, ${esc(formatPrice(t.allPrices.USD[p.id], 'USD'))} elsewhere, ${esc(p.unit)}`), `${t.modules.length} modules, ${t.lessons.length} lessons`, `${t.labs.length} interactive labs`, ...t.extras.map(esc)])}`).join('')}
     <h2>What each track covers</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `${m.number}. ${m.title}`)}: ${tracks.filter(t => t.moduleIds.includes(m.id)).map(t => esc(t.short)).join(', ')}`))}`,
   '/blog': () => `<p>Blog</p><h1>AI engineering, explained simply</h1><p>Guides on AI engineering, machine learning and deep learning: what the terms mean, what to learn, and in what order.</p>

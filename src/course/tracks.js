@@ -7,12 +7,11 @@ import { ML_MODULES, CAREER_MODULES, trackHasModule } from './access';
 // The course is sold as three tracks. A track is a set of modules plus the Lab
 // interactives those modules use. The Starter Kit opens every track.
 //
-// Prices live in ./prices.js (rupees for India, dollars elsewhere). `quarter` is
-// the price for three months of access; `lifetime` is paid once.
+// Prices live in ./prices.js (rupees for India, dollars elsewhere, taxes
+// included). `monthly` buys one month of access; `lifetime` is paid once.
 export const CURRENCY = { code: 'INR', locale: 'en-IN' };
 export const PERIODS = [
   { id: 'monthly', label: '1 Month', unit: 'for 1 month', months: 1 },
-  { id: 'quarter', label: '3 Months', unit: 'for 3 months', months: 3 },
   { id: 'lifetime', label: 'Lifetime', unit: 'one-time payment', months: null, best: true },
 ];
 
@@ -62,8 +61,6 @@ export const trackById = Object.fromEntries(tracks.map(t => [t.id, t]));
 export const entryLessonIds = tracks.map(t => t.modules.find(m => m.id !== 'must-know')?.lessons[0].id).filter(Boolean);
 
 export const formatPrice = (amount, currency = 'INR') => formatMoney(amount, currency);
-// How much cheaper three months is than paying monthly for three months, as a whole percentage (negative when it costs more).
-export const quarterSaving = prices => Math.round((1 - prices.quarter / (prices.monthly * 3)) * 100);
 
 // Lab access. One lab is free for everyone; the rest need a plan whose track
 // includes that lab. `plans` is the list of track ids the learner has bought.

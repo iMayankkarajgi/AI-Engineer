@@ -9,6 +9,7 @@ import { VIZ } from './course/vizNames';
 import { BRAND, PROGRAM, SITE_URL } from './brand';
 import { legalPages } from './course/legal';
 import { isFreeModule } from './course/access';
+import { posts } from './course/blog';
 
 export const clip = (text, max = 158) => {
   const t = String(text || '').replace(/\*\*|\*|`/g, '').replace(/\s+/g, ' ').trim();
@@ -45,9 +46,10 @@ const STATIC_PAGES = {
     description: `Compare the three ${PROGRAM} tracks and their monthly, three-month and lifetime prices. Each track includes its lessons, quizzes and interactive labs.`,
     ld: tracks.map(courseLd),
   }),
-  '/guide': () => ({
-    title: 'Course Guide: What AI Engineering Is and How to Learn It',
-    description: `What AI engineering is, who the ${PROGRAM} is for, what you will learn in ${MODULES} modules, the prerequisites, and how to study each lesson.`,
+  '/blog': () => ({
+    title: 'AI Engineering Blog: Guides on AI, Machine Learning and Deep Learning',
+    description: 'Plain-language guides on AI engineering, machine learning and deep learning: how to become an AI engineer, what to learn, RAG, agents, LLMs and interviews.',
+    ld: [{ '@type': 'Blog', '@id': `${SITE_URL}/blog#blog`, name: `${BRAND} Blog`, url: `${SITE_URL}/blog`, publisher: { '@id': ORG['@id'] }, blogPost: posts.map(p => ({ '@type': 'BlogPosting', headline: p.title, url: `${SITE_URL}/blog/${p.slug}`, datePublished: p.date })) }],
   }),
   '/lab': () => ({
     title: `Interactive AI and Machine Learning Labs: ${LABS} Hands-On Simulations`,
@@ -86,7 +88,7 @@ const STATIC_PAGES = {
 };
 
 // Paths that search engines should index, in sitemap order.
-export const seoRoutes = () => [...Object.keys(STATIC_PAGES), ...modules.map(m => `/module/${m.id}`), ...allLessons.map(l => `/lesson/${l.id}`)];
+export const seoRoutes = () => [...Object.keys(STATIC_PAGES), ...posts.map(p => `/blog/${p.slug}`), ...modules.map(m => `/module/${m.id}`), ...allLessons.map(l => `/lesson/${l.id}`)];
 
 export function seoFor(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/';
@@ -111,6 +113,17 @@ export function seoFor(pathname) {
         educationalLevel: 'Beginner', isAccessibleForFree: isFreeModule(m.id), timeRequired: `PT${lessonMinutes[l.id] || 25}M`, teaches: l.covers || [], provider: ORG,
         isPartOf: { '@type': 'Course', name: PROGRAM, url: `${SITE_URL}/curriculum`, description: STATIC_PAGES['/']().description, provider: ORG },
       }],
+    };
+  }
+  if (!page && kind === 'blog') {
+    const post = posts.find(x => x.slug === id);
+    if (post) page = {
+      title: post.title, description: post.description, type: 'article',
+      ld: [crumbs([['Blog', '/blog'], [post.title, path]]), {
+        '@type': 'BlogPosting', headline: post.title, description: post.description, url: SITE_URL + path, mainEntityOfPage: SITE_URL + path,
+        datePublished: post.date, dateModified: post.date, inLanguage: 'en', keywords: (post.keywords || []).join(', '), image: `${SITE_URL}/og-v3.png`,
+        author: { '@id': ORG['@id'] }, publisher: ORG,
+      }, ...(post.faqs?.length ? [{ '@type': 'FAQPage', mainEntity: post.faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : [])],
     };
   }
   if (!page) return { path, title: PRIVATE.includes(path) ? BRAND : `Page not found | ${BRAND}`, description: '', robots: 'noindex, follow', ld: [], type: 'website' };

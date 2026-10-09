@@ -7,7 +7,8 @@
 .track-option.selected::before { opacity: 1; }
 .track-option-top { display: flex; align-items: center; gap: 10px; }
 .track-option-tag { color: var(--ink-3); font: 500 .72rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.track-badge { margin-left: auto; padding: 4px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: .7rem; font-weight: 650; letter-spacing: .03em; white-space: nowrap; }
+.track-badge { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); font: 600 .68rem var(--mono); letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+.track-badge svg { width: 11px; height: 11px; fill: currentColor; flex: none; }
 .track-option strong { font-size: 1.3rem; font-weight: 650; letter-spacing: -.015em; text-wrap: balance; }
 .track-option-blurb { color: var(--ink-2); font-size: .92rem; line-height: 1.55; }
 .track-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-3); font-size: .84rem; }
@@ -49,7 +50,7 @@
 /* Cards share row tracks, so prices and buttons line up across the three plans. */
 .plan { position: relative; display: grid; grid-row: span 7; grid-template-rows: subgrid; gap: 14px; padding: 26px; }
 .plan.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
-.plan > .track-badge { position: absolute; top: -12px; right: 22px; }
+.plan > .track-badge { position: absolute; top: -13px; right: 22px; background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
 .plan-head { display: flex; align-items: center; gap: 12px; }
 .plan-head h2 { font-size: 1.25rem; margin: 0; text-wrap: balance; }
 .plan-head small { margin-bottom: 2px; }

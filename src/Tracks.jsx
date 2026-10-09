@@ -30,7 +30,7 @@ export function TrackPicker({ value, onChange }) {
   return <div className="track-picker" role="radiogroup" aria-label="Choose a track">{tracks.map((t, i) => {
     const n = done(t, completed);
     return <button key={t.id} role="radio" aria-checked={value === t.id} className={'track-option' + (value === t.id ? ' selected' : '')} style={{ '--track': t.accent }} onClick={() => onChange(t.id)}>
-      <span className="track-option-top"><span className="course-icon">{t.icon}</span><span className="track-option-tag">Track {i + 1}</span>{t.featured && <span className="track-badge">Most Complete</span>}</span>
+      <span className="track-option-top"><span className="course-icon">{t.icon}</span><span className="track-option-tag">Track {i + 1}</span>{t.featured && <span className="track-badge"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6l1.9 4 4.4.6-3.2 3 .8 4.3L8 11.4l-3.9 2.1.8-4.3-3.2-3 4.4-.6z"/></svg>Recommended</span>}</span>
       <strong>{t.name}</strong>
       <span className="track-option-blurb">{t.blurb}</span>
       <span className="track-stats"><span><b>{t.modules.length}</b> modules</span><span><b>{t.lessons.length}</b> lessons</span><span><b>{t.labs.length}</b> labs</span></span>
@@ -44,7 +44,7 @@ export function TrackPicker({ value, onChange }) {
 export function TrackShowcase() {
   const { currency } = useApp();
   return <div className="track-showcase">{tracks.map((t, i) => <Link key={t.id} to={`/curriculum?track=${t.id}`} className={'track-option' + (t.featured ? ' selected' : '')} style={{ '--track': t.accent }}>
-    <span className="track-option-top"><span className="course-icon">{t.icon}</span><span className="track-option-tag">Track {i + 1}</span>{t.featured && <span className="track-badge">Most Complete</span>}</span>
+    <span className="track-option-top"><span className="course-icon">{t.icon}</span><span className="track-option-tag">Track {i + 1}</span>{t.featured && <span className="track-badge"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6l1.9 4 4.4.6-3.2 3 .8 4.3L8 11.4l-3.9 2.1.8-4.3-3.2-3 4.4-.6z"/></svg>Recommended</span>}</span>
     <strong>{t.name}</strong>
     <span className="track-option-blurb">{t.blurb}</span>
     <span className="track-stats"><span><b>{t.modules.length}</b> modules</span><span><b>{t.lessons.length}</b> lessons</span><span><b>{t.labs.length}</b> labs</span></span>
@@ -129,7 +129,7 @@ export function Pricing() {
     <div className="plan-grid">{tracks.map((t, i) => {
       const prices = t.allPrices[currency], price = prices[period], saving = quarterSaving(prices);
       return <section key={t.id} className={'plan card' + (t.featured ? ' featured' : '') + (period === 'lifetime' ? ' best' : '')} style={{ '--track': t.accent }} aria-label={t.name}>
-        {t.featured && <span className="track-badge">Most Complete</span>}
+        {t.featured && <span className="track-badge"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6l1.9 4 4.4.6-3.2 3 .8 4.3L8 11.4l-3.9 2.1.8-4.3-3.2-3 4.4-.6z"/></svg>Recommended</span>}
         <div className="plan-head"><span className="course-icon">{t.icon}</span><div><small>Track {i + 1}</small><h2>{t.name}</h2></div></div>
         <p className="plan-blurb">{t.blurb}</p>
         <div className="plan-price"><strong>{formatPrice(price, currency)}</strong><span>{p.unit}</span></div>

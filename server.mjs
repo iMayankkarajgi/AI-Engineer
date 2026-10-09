@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS progress (user_id TEXT NOT NULL, lesson_id TEXT NOT N
 
 const app = express();
 app.disable('x-powered-by');
-app.use((_, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); res.set('Referrer-Policy', 'strict-origin-when-cross-origin'); next(); });
+// The same security headers as production (vercel.json), so local tests run under them.
+const siteHeaders = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8')).headers.find(h => h.source === '/(.*)').headers;
+const localCsp = v => process.env.CSP_EXTRA_CONNECT ? v.replace('connect-src ', `connect-src ${process.env.CSP_EXTRA_CONNECT} `).replace('upgrade-insecure-requests', '').replace(/;\s*$/, '') : v;
+app.use((_, res, next) => { for (const h of siteHeaders) if (h.key !== 'Strict-Transport-Security') res.set(h.key, h.key === 'Content-Security-Policy' ? localCsp(h.value) : h.value); next(); });
 // The payment webhook checks a signature over the exact bytes it was sent.
 app.use(express.json({ limit: '64kb', verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 const originGuard = (req, res, next) => {

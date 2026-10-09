@@ -14,7 +14,8 @@ const load = file => vite.ssrLoadModule(file);
 const { seoFor, seoRoutes, ldJson, clip } = await load('/src/seo.js');
 const { modules, allLessons, lessonById, moduleOf } = await load('/src/course/curriculum.js');
 const { tracks, PERIODS, formatPrice } = await load('/src/course/tracks.js');
-const { guide, glossary, faqs } = await load('/src/course/reference.js');
+const { glossary, faqs } = await load('/src/course/reference.js');
+const { posts } = await load('/src/course/blog.js');
 const { resources } = await load('/src/course/resources.js');
 const { VIZ } = await load('/src/course/vizNames.js');
 const { lessonMinutes } = await load('/src/course/lessonMinutes.js');
@@ -33,7 +34,7 @@ const a = (href, text) => `<a href="${href}">${esc(text)}</a>`;
 const list = (items, tag = 'ul') => items.length ? `<${tag}>${items.map(i => `<li>${i}</li>`).join('')}</${tag}>` : '';
 const say = v => typeof v === 'string' ? rich(v) : v && typeof v === 'object' ? [v.title || v.label || v.term, v.text || v.body || v.desc || v.def || v.detail].filter(Boolean).map((t, i) => i ? rich(t) : `<strong>${rich(t)}</strong>`).join(': ') : '';
 
-const NAV = [['/curriculum', 'Curriculum'], ['/guide', 'Course guide'], ['/lab', 'Lab'], ['/pricing', 'Pricing'], ['/practice', 'Practice'], ['/glossary', 'Glossary'], ['/faq', 'FAQ'], ['/news', 'Live news'], ['/resources', 'Resources']];
+const NAV = [['/curriculum', 'Curriculum'], ['/lab', 'Lab'], ['/pricing', 'Pricing'], ['/practice', 'Practice'], ['/glossary', 'Glossary'], ['/faq', 'FAQ'], ['/blog', 'Blog'], ['/news', 'Live news'], ['/resources', 'Resources']];
 const frame = main => `<div class="prerender"><header><a href="/"><strong>${BRAND}</strong></a><nav aria-label="Main navigation">${NAV.map(([h, t]) => a(h, t)).join('')}</nav></header><main>${main}</main><footer><p>${esc(BRAND)}: the ${esc(PROGRAM)}. ${esc(TAGLINE)}</p></footer></div>`;
 const trackLine = t => `${t.modules.length} modules · ${t.lessons.length} lessons · ${t.labs.length} interactive labs · from ${esc(formatPrice(t.prices.monthly))} per month`;
 const trackCards = () => tracks.map(t => `<h3>${a(`/curriculum?track=${t.id}`, t.name)}</h3><p>${esc(t.blurb)}</p><p>${trackLine(t)}</p>`).join('');
@@ -64,7 +65,7 @@ const PAGES = {
   '/refund': () => legal('refund'),
   '/': () => `<p>${esc(PROGRAM)} · 3 tracks · ${allLessons.length} lessons</p><h1>See the system. Then go inside.</h1>
     <p>Learn AI engineering, machine learning and deep learning, from the first data point to the LLM systems behind every answer.</p>
-    <p>${a('/curriculum', 'Explore the curriculum')} · ${a('/guide', 'Read the course guide')} · ${a(`/lesson/${allLessons[0].id}`, `Start lesson ${allLessons[0].num}`)}</p>
+    <p>${a('/curriculum', 'Explore the curriculum')} · ${a('/ai-engineer-roadmap', 'See the AI engineer roadmap')} · ${a('/blog', 'Read the blog')} · ${a(`/lesson/${allLessons[0].id}`, `Start lesson ${allLessons[0].num}`)}</p>
     <h2>Three tracks: choose your learning track</h2>${trackCards()}<p>${a('/pricing', 'Compare plans and pricing')}</p>
     <h2>${modules.length} modules, from foundations to production AI</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)} (${m.lessons.length} lessons). ${esc(m.intro[0])}`), 'ol')}`,
   '/curriculum': () => `<p>${esc(PROGRAM)} · Curriculum</p><h1>Choose your learning track</h1>
@@ -73,13 +74,8 @@ const PAGES = {
   '/pricing': () => `<p>Pricing</p><h1>Pick the track that fits your goal</h1><p>Three tracks, each with its lessons, quizzes and hands-on labs. Pay monthly, for three months, or once for lifetime access.</p>
     ${tracks.map(t => `<h2>${esc(t.name)}</h2><p>${esc(t.blurb)}</p>${list([...PERIODS.map(p => `${esc(p.label)}: ${esc(formatPrice(t.prices[p.id]))} in India, ${esc(formatPrice(t.allPrices.USD[p.id], 'USD'))} elsewhere, ${esc(p.unit)}`), `${t.modules.length} modules, ${t.lessons.length} lessons`, `${t.labs.length} interactive labs`, ...t.extras.map(esc)])}`).join('')}
     <h2>What each track covers</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `${m.number}. ${m.title}`)}: ${tracks.filter(t => t.moduleIds.includes(m.id)).map(t => esc(t.short)).join(', ')}`))}`,
-  '/guide': () => `<p>Course guide</p><h1>Everything you need before lesson one</h1><p>${esc(guide.about.lead)}</p>
-    <h2>${esc(guide.about.title)}</h2>${guide.about.body.map(p => `<p>${esc(p)}</p>`).join('')}${list(guide.about.points.map(([t, d]) => `<strong>${esc(t)}</strong>: ${esc(d)}`))}
-    <h2>${esc(guide.whatIs.title)}</h2><p>${esc(guide.whatIs.lead)}</p>${guide.whatIs.body.map(p => `<p>${esc(p)}</p>`).join('')}<p>AI engineering = ${guide.whatIs.equation.map(esc).join(' + ')}</p>
-    <h2>${esc(guide.audience.title)}</h2>${list(guide.audience.items.map(([x, y]) => `<strong>${esc(x)}</strong> ${esc(y)}`))}
-    <h2>What will we learn?</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)}: ${m.lessons.slice(0, 6).map(l => esc(l.title)).join(' · ')}`))}
-    <h2>${esc(guide.prerequisites.title)}</h2>${list(guide.prerequisites.items.map(([t, d]) => `<strong>${esc(t)}</strong>: ${esc(d)}`))}
-    <h2>${esc(guide.howTo.title)}</h2>${list(guide.howTo.items.map(esc), 'ol')}`,
+  '/blog': () => `<p>Blog</p><h1>AI engineering, explained simply</h1><p>Guides on AI engineering, machine learning and deep learning: what the terms mean, what to learn, and in what order.</p>
+    ${[...posts].sort((x, y) => y.date.localeCompare(x.date)).map(p => `<h2>${a(`/blog/${p.slug}`, p.title)}</h2><p>${esc(p.description)}</p>`).join('')}`,
   '/lab': () => `<p>Interactive lab</p><h1>Play with every idea</h1><p>${Object.keys(VIZ).length} hands-on simulations from across the course. Each one links to the lesson that explains it.</p>
     ${list(Object.entries(VIZ).map(([n, d]) => `<strong>${esc(n.replace(/-/g, ' '))}</strong>: ${esc(d)}`))}`,
   '/practice': () => `<p>Practice</p><h1>Python practice playground</h1><p>${esc(seoFor('/practice').description)}</p>`,
@@ -90,6 +86,15 @@ const PAGES = {
   '/resources': () => `<p>Resources</p><h1>Papers, documentation and standards</h1><p>The original sources and reference manuals behind the course, gathered in one place.</p>
     ${resources.map(g => `<h2>${esc(g.group)}</h2><p>${esc(g.note)}</p>${list(g.items.map(r => `<a href="${esc(r.url)}" rel="noreferrer">${esc(r.title)}</a>${r.by ? ` (${esc(r.by)})` : ''}: ${esc(r.about)}`))}`).join('')}`,
 };
+
+function blogPage(p) {
+  const others = posts.filter(x => x.slug !== p.slug).slice(0, 4);
+  return `${crumbs([['/blog', 'Blog']])}<article><h1>${esc(p.title)}</h1><p>By ${esc(BRAND)} · <time datetime="${p.date}">${p.date}</time> · ${p.minutes} min read</p>${p.intro.map(t => `<p>${esc(t)}</p>`).join('')}
+    ${p.sections.map(s => `<h2>${esc(s.h)}</h2>${(s.body || []).map(t => `<p>${esc(t)}</p>`).join('')}${list((s.list || []).map(esc))}${list((s.steps || []).map(esc), 'ol')}${s.table ? `<table><thead><tr>${s.table.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.table.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : ''}`).join('')}
+    ${p.faqs?.length ? `<h2>Frequently asked questions</h2>${p.faqs.map(([q, ans]) => `<h3>${esc(q)}</h3><p>${esc(ans)}</p>`).join('')}` : ''}</article>
+    <h2>Learn it properly: the ${esc(PROGRAM)}</h2>${list([...(p.links || []).map(([h, t]) => a(h, t)), a('/curriculum', 'See the curriculum'), a('/pricing', 'Plans and pricing')])}
+    <h2>More articles</h2>${list(others.map(x => a(`/blog/${x.slug}`, x.title)))}`;
+}
 
 function modulePage(m) {
   const i = modules.indexOf(m), prev = modules[i - 1], next = modules[i + 1];
@@ -104,13 +109,20 @@ async function lessonPage(l) {
   return { summary: body.summary, html: `${crumbs([['/curriculum', 'Curriculum'], [`/module/${m.id}`, `Module ${m.number}: ${m.title}`]])}
     <p>Lesson ${l.num} · ${lessonMinutes[l.id]} min${lessonVideos[l.id] ? ' · video lesson' : ''}</p><h1>${esc(l.title)}</h1>${body.hook ? `<p>${rich(body.hook)}</p>` : ''}${body.summary ? `<p><strong>In short:</strong> ${rich(body.summary)}</p>` : ''}
     ${isFreeModule(m.id)
-      ? `${(body.sections || []).map(s => `<h2>${rich(s.title)}</h2>${(s.blocks || []).map(block).join('')}`).join('')}${body.takeaways?.length ? `<h2>Key takeaways</h2>${list(body.takeaways.map(say))}` : ''}${body.terms?.length ? `<h2>Key terms</h2>${list(body.terms.map(say))}` : ''}`
+      // The free lesson: an outline only. Its text is sent once the visitor signs in.
+      ? `${l.covers?.length ? `<h2>What you will learn</h2>${list(l.covers.map(esc))}` : ''}<h2>In this lesson</h2>${list((body.sections || []).map(s => rich(s.title)), 'ol')}<p>This lesson is free. ${a('/account', 'Sign in or create a free account')} to open it with its video and quiz.</p>`
       // Paid lessons: an outline only. The full text is sent to learners whose plan includes it.
-      : `${l.covers?.length ? `<h2>What you will learn</h2>${list(l.covers.map(esc))}` : ''}<h2>In this lesson</h2>${list((body.sections || []).map(s => rich(s.title)), 'ol')}<p>This lesson is part of the ${tracksWithModule(m.id).map(t => esc(trackById[t].name)).join(' and ')} ${tracksWithModule(m.id).length > 1 ? 'tracks' : 'track'}. ${a('/pricing', 'See plans and pricing')} to open the full lesson, its video, labs and quiz, or ${a(`/lesson/${allLessons[0].id}`, 'try the free lesson')} first.</p>`}
+      : `${l.covers?.length ? `<h2>What you will learn</h2>${list(l.covers.map(esc))}` : ''}<h2>In this lesson</h2>${list((body.sections || []).map(s => rich(s.title)), 'ol')}<p>This lesson is part of the ${tracksWithModule(m.id).map(t => esc(trackById[t].name)).join(' and ')} ${tracksWithModule(m.id).length > 1 ? 'tracks' : 'track'}. ${a('/pricing', 'See plans and pricing')} to open the full lesson, its video, labs and quiz, or ${a(`/lesson/${allLessons[0].id}`, 'try the free lesson')} first (free account needed).</p>`}
     <p>${[prev && a(`/lesson/${prev.id}`, `← ${prev.num} ${prev.title}`), next && a(`/lesson/${next.id}`, `${next.num} ${next.title} →`)].filter(Boolean).join(' · ')}</p>` };
 }
 
 const shell = fs.readFileSync('dist/index.html', 'utf8');
+{ // The page's one inline script is allowed by its hash in the Content-Security-Policy (vercel.json).
+  const { createHash } = await import('node:crypto');
+  const inline = [...shell.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => 'sha256-' + createHash('sha256').update(m[1]).digest('base64'));
+  const policy = JSON.parse(fs.readFileSync('vercel.json', 'utf8')).headers.flatMap(h => h.headers).find(h => h.key === 'Content-Security-Policy').value;
+  for (const h of inline) if (!policy.includes(h)) throw new Error(`vercel.json: the Content-Security-Policy is missing the inline script hash '${h}'`);
+}
 const MARK = /<!--seo-->[\s\S]*?<!--\/seo-->/;
 if (!MARK.test(shell) || !shell.includes('<div id="root"></div>')) throw new Error('dist/index.html is missing the seo markers or the root element');
 function head(seo) {
@@ -130,6 +142,7 @@ for (const route of routes) {
   const seo = seoFor(route), [, kind, id] = route.split('/');
   let main;
   if (kind === 'module') main = modulePage(modules.find(m => m.id === id));
+  else if (kind === 'blog' && id) main = blogPage(posts.find(p => p.slug === id));
   else if (kind === 'lesson') { const page = await lessonPage(lessonById[id]); main = page.html; if (page.summary) seo.description = clip(page.summary); }
   else main = PAGES[route]();
   const html = shell.replace(MARK, head(seo)).replace('<div id="root"></div>', `<div id="root">${frame(main.replace(/\n\s+/g, '\n'))}</div>`);
@@ -139,6 +152,6 @@ for (const route of routes) {
 }
 
 const today = new Date().toISOString().slice(0, 10);
-const priority = r => r === '/' ? '1.0' : r.startsWith('/lesson/') ? '0.7' : r.startsWith('/module/') ? '0.8' : '0.9';
+const priority = r => r === '/' ? '1.0' : r.startsWith('/lesson/') ? '0.7' : r.startsWith('/module/') ? '0.8' : r.startsWith('/blog/') ? '0.8' : '0.9';
 fs.writeFileSync('dist/sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${routes.map(r => `  <url><loc>${SITE_URL}${r === '/' ? '/' : r}</loc><lastmod>${today}</lastmod><priority>${priority(r)}</priority></url>`).join('\n')}\n</urlset>\n`);
 console.log(`prerendered ${routes.length} pages (${(bytes / 1e6).toFixed(1)} MB), sitemap.xml and app.html`);

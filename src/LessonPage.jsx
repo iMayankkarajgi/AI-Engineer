@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { lessonById, lessonIds, moduleOf } from './course/curriculum';
 import { Block, Rich } from './LessonBlocks';
-import { useApp, PASS_MARK, ACCOUNTS, rememberAfterLogin } from './app';
+import { useApp, PASS_MARK, ACCOUNTS, CLOUD, rememberAfterLogin } from './app';
 import { trackById } from './course/tracks';
-import { tracksWithModule } from './course/access';
+import { tracksWithModule, isFreeModule } from './course/access';
 import { NotFound } from './pages';
 import { setDescription } from './seo';
 import LessonVideo from './LessonVideo';
@@ -33,9 +33,10 @@ function useLessonBody(id) {
     } else (async () => {
       try {
         const token = await accessToken();
+        if (!token) return done({ locked: true, reason: 'signin' });
         const r = await fetch(`/api/lesson?id=${encodeURIComponent(id)}`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
         const d = await r.json();
-        done(r.ok ? d : d.locked ? { locked: true } : null);
+        done(r.ok ? d : d.locked ? { locked: true, reason: d.reason } : null);
       } catch { done(null); }
     })();
     return () => { live = false; };
@@ -159,10 +160,23 @@ function Quiz({ id, quiz, nextId }) {
   </div>;
 }
 
-// Shown instead of a lesson the learner's plan does not include.
+// Shown instead of a lesson the learner's plan does not include, and to
+// visitors who have not signed in (every lesson needs an account, the free one too).
 function Locked({ lesson, mod }) {
   const { user } = useApp(), nav = useNavigate();
   const names = tracksWithModule(mod.id).map(t => trackById[t].name);
+  const signIn = signup => { rememberAfterLogin(`/lesson/${lesson.id}`); nav(signup ? '/account?mode=signup' : '/account'); };
+  if (!user && isFreeModule(mod.id)) return <main className="page container narrow locked-page signin-wall" style={{ '--track': mod.accent }}>
+    <div className="lock-icon" aria-hidden="true">🔒</div>
+    <div className="eyebrow">Module {mod.number} · Lesson {lesson.num} · Free</div>
+    <h1>{lesson.title}</h1>
+    <p className="dek">This lesson is <b>free</b>. Sign in or create a free account to open it with its video and quiz. No payment is needed.</p>
+    {lesson.covers?.length > 0 && <div className="card"><h3>What you’ll learn here</h3><ul className="check-list">{lesson.covers.map(c => <li key={c}>{c}</li>)}</ul></div>}
+    <div className="locked-actions">
+      <button className="button primary" onClick={() => signIn(false)}>Sign In To Start →</button>
+      <button className="button ghost" onClick={() => signIn(true)}>Create A Free Account</button>
+    </div>
+  </main>;
   return <main className="page container narrow locked-page" style={{ '--track': mod.accent }}>
     <div className="lock-icon" aria-hidden="true">🔒</div>
     <div className="eyebrow">Module {mod.number} · Lesson {lesson.num}</div>
@@ -171,7 +185,7 @@ function Locked({ lesson, mod }) {
     {lesson.covers?.length > 0 && <div className="card"><h3>What you’ll learn here</h3><ul className="check-list">{lesson.covers.map(c => <li key={c}>{c}</li>)}</ul></div>}
     <div className="locked-actions">
       <Link className="button primary" to="/pricing">See Plans And Pricing →</Link>
-      {!user && ACCOUNTS && <button className="button ghost" onClick={() => { rememberAfterLogin(`/lesson/${lesson.id}`); nav('/account'); }}>Sign In</button>}
+      {!user && ACCOUNTS && <button className="button ghost" onClick={() => signIn(false)}>Sign In</button>}
       <Link className="button ghost" to={`/lesson/${lessonIds[0]}`}>Try The Free Lesson</Link>
     </div>
   </main>;
@@ -182,12 +196,12 @@ export default function LessonPage() {
   const meta = lessonById[id], mod = moduleOf(id);
   const body = useLessonBody(id);
   useEffect(() => { if (body?.summary) setDescription(body.summary); }, [body]);
-  const { isUnlocked, completed, visitLesson, ready } = useApp();
+  const { isUnlocked, completed, visitLesson, ready, user } = useApp();
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
   useEffect(() => { if (lessonById[id]) visitLesson(id); }, [id]);
   if (!meta || !mod) return <NotFound/>;
   if (!ready) return <main className="page container narrow"><div className="eyebrow">Loading…</div></main>;
-  if (!isUnlocked(id) || body?.locked) return <Locked lesson={meta} mod={mod}/>;
+  if ((CLOUD && !user) || !isUnlocked(id) || body?.locked) return <Locked lesson={meta} mod={mod}/>;
   const at = lessonIds.indexOf(id), prevId = lessonIds[at - 1], nextId = lessonIds[at + 1];
   const passed = completed.includes(id);
 

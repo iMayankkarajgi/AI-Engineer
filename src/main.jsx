@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './theme';
 import { AppProvider, STATIC, useApp, takeAfterLogin } from './app';
-import { Header, Footer, Curriculum, Module, Guide, Glossary, Faq, Dashboard, Account, NotFound, Lab, Resources } from './pages';
+import { Header, Footer, Curriculum, Module, Glossary, Faq, Dashboard, Account, NotFound, Lab, Resources } from './pages';
 import Exam from './Exam';
 import LessonPage from './LessonPage';
 import Profile from './Profile';
@@ -11,6 +11,7 @@ import LessonPicker from './LessonPicker';
 import Legal from './Legal';
 import Roadmap from './Roadmap';
 import { Pricing } from './Tracks';
+import { BlogIndex, BlogPost } from './Blog';
 import './tokens.css';
 import './site.css';
 import './lesson.css';
@@ -73,7 +74,9 @@ function App() {
         <Route path="/roadmap" element={<Navigate to="/curriculum" replace/>}/>
         <Route path="/module/:id" element={<Module/>}/>
         <Route path="/lesson/:id" element={<LessonPage/>}/>
-        <Route path="/guide" element={<Guide/>}/>
+        <Route path="/guide" element={<Navigate to="/blog" replace/>}/>
+        <Route path="/blog" element={<BlogIndex/>}/>
+        <Route path="/blog/:slug" element={<BlogPost/>}/>
         <Route path="/lab" element={<Lab/>}/>
         <Route path="/pricing" element={<Pricing/>}/>
         <Route path="/practice" element={<Practice/>}/>

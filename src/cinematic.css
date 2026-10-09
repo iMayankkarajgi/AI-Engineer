@@ -161,7 +161,8 @@
   .track-words p { display: none; }
   .spotlight-visual { height: 340px; }
   .cinematic-ending { min-height: 620px; padding: 50px 6vw; }
-  .cinematic-ending h2 { font-size: 60px; }
+  .cinematic-ending h2 { font-size: clamp(34px, 12.4vw, 60px); }
+  .cinematic-ending > .cinematic-reveal { max-width: 100%; }
   .ending-halo { width: 300px; height: 300px; }
   .cinematic-footer { display: block; }
   .cinematic-footer > div:nth-child(2) { margin: 22px 0; }

@@ -31,7 +31,8 @@ const SYNC_FAILED = 'Could not reach the database. Your latest changes are kept 
 // Where the browser lands after Google sends the learner back.
 const AFTER_LOGIN = 'atlas-after-login';
 export const rememberAfterLogin = to => { try { sessionStorage.setItem(AFTER_LOGIN, to); } catch {} };
-export const takeAfterLogin = () => { try { const to = sessionStorage.getItem(AFTER_LOGIN); sessionStorage.removeItem(AFTER_LOGIN); return to; } catch { return null; } };
+// Only a path on this site is accepted, so a planted value can never send the learner elsewhere.
+export const takeAfterLogin = () => { try { const to = sessionStorage.getItem(AFTER_LOGIN); sessionStorage.removeItem(AFTER_LOGIN); return typeof to === 'string' && /^\/(?![\/\\])/.test(to) ? to : null; } catch { return null; } };
 
 const toUser = (u, p) => ({
   id: u.id,
@@ -156,9 +157,9 @@ export function AppProvider({ children }) {
   // A lesson is open when its module is free or the learner's plan includes it.
   // Without Supabase there are no plans, so everything is open.
   const isUnlocked = id => !CLOUD || canOpenModule(moduleOf(id)?.id, plans);
-  // The certificate needs a pass in every lesson the learner's plan includes
-  // (every lesson, when there is no plan) and a pass in the final exam.
-  const certLessons = plans.length ? lessonIds.filter(isUnlocked) : lessonIds;
+  // The certificate (part of the Complete track) needs a pass in every lesson
+  // quiz and a pass in the final exam.
+  const certLessons = lessonIds;
   const certLessonsLeft = certLessons.filter(id => !completed.includes(id)).length;
   const nextLesson = lessonIds.find(id => !completed.includes(id) && isUnlocked(id)) || lessonIds.find(id => !completed.includes(id)) || lessonIds[lessonIds.length - 1];
   const visitLesson = id => { if (known(id)) { setLastLesson(id); write('atlas-last-lesson', id); } };

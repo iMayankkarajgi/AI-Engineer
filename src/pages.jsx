@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { modules, allLessons, lessonById } from './course/curriculum';
-import { guide, glossary, faqs } from './course/reference';
-import { useApp, ACCOUNTS, CLOUD, PASS_MARK, takeAfterLogin } from './app';
+import { glossary, faqs } from './course/reference';
+import { useApp, ACCOUNTS, CLOUD, PASS_MARK, takeAfterLogin, rememberAfterLogin } from './app';
 import { Avatar, GoogleMark, SignOutButton } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
@@ -36,12 +36,12 @@ export function Header() {
     <nav className={menu ? 'menu-open' : ''} aria-label="Main navigation">
       <button className="nav-picker" onClick={() => { close(); setPickerOpen(true); }}>All lessons</button>
       <NavLink onClick={close} to="/curriculum">Curriculum</NavLink>
-      <NavLink onClick={close} to="/guide">Course guide</NavLink>
       <NavLink onClick={close} to="/lab">Lab</NavLink>
       <NavLink onClick={close} to="/pricing">Pricing</NavLink>
       <NavLink onClick={close} to="/practice">Practice</NavLink>
       <NavLink onClick={close} to="/glossary">Glossary</NavLink>
       <NavLink onClick={close} to="/faq">FAQ</NavLink>
+      <NavLink onClick={close} to="/blog">Blog</NavLink>
       <NavLink onClick={close} to="/news">Live news</NavLink>
       <NavLink onClick={close} to="/resources">Resources</NavLink>
       <NavLink onClick={close} to="/dashboard">My learning</NavLink>
@@ -62,7 +62,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>The {PROGRAM}: understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/ai-engineer-roadmap">AI engineer roadmap</Link><Link to="/guide">Course guide</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/ai-engineer-roadmap">AI engineer roadmap</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/blog">Blog</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
     <small>Lessons and interactives © {new Date().getFullYear()} {BRAND}. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }
@@ -204,28 +204,6 @@ export function Module() {
   </main>;
 }
 
-export function Guide() {
-  const g = guide;
-  const toc = [['about', g.about.title], ['what-is', g.whatIs.title], ['audience', g.audience.title], ['learn', 'What will we learn?'], ['prerequisites', g.prerequisites.title], ['how-to', g.howTo.title], ['glance', 'Curriculum at a glance'], ['path', 'Learning path']];
-  return <main className="page container guide-page">
-    <PageIntro eyebrow="Course guide" title="Everything you need before lesson one">{g.about.lead}</PageIntro>
-    <nav className="guide-toc" aria-label="Guide sections">{toc.map(([id, t], i) => <a key={id} href={`#${id}`} onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); }}><span>{String(i + 1).padStart(2, '0')}</span>{t}</a>)}</nav>
-    <section id="about" className="guide-section"><h2>{g.about.title}</h2>{g.about.body.map((p, i) => <p key={i}>{p}</p>)}
-      <div className="guide-points">{g.about.points.map(([t, d]) => <div key={t} className="card"><strong>{t}</strong><p>{d}</p></div>)}</div></section>
-    <section id="what-is" className="guide-section"><h2>{g.whatIs.title}</h2><p className="lead">{g.whatIs.lead}</p>{g.whatIs.body.map((p, i) => <p key={i}>{p}</p>)}
-      <div className="equation"><span className="eq-label">AI engineering =</span>{g.whatIs.equation.map((e, i) => <React.Fragment key={e}>{i > 0 && <span className="eq-plus">+</span>}<span className="eq-term" style={{ '--d': `${i * 200}ms` }}>{e}</span></React.Fragment>)}</div></section>
-    <section id="audience" className="guide-section"><h2>{g.audience.title}</h2><ul className="audience">{g.audience.items.map(([a, b]) => <li key={a}><strong>{a}</strong> {b}</li>)}</ul></section>
-    <section id="learn" className="guide-section"><h2>What will we learn?</h2>
-      <div className="learn-grid">{modules.map(m => <Link key={m.id} to={`/module/${m.id}`} style={{ '--track': m.accent }}><span className="course-icon">{m.icon}</span><div><small>Module {m.number}</small><strong>{m.short}</strong><p>{m.lessons.map(l => l.title.replace(/^(What (is|are) |How (does|do|to) )/, '').replace(/\?.*$/, '')).slice(0, 6).join(' · ')}{m.lessons.length > 6 ? ' …' : ''}</p></div></Link>)}</div></section>
-    <section id="prerequisites" className="guide-section"><h2>{g.prerequisites.title}</h2><div className="guide-points">{g.prerequisites.items.map(([t, d]) => <div key={t} className="card"><strong>{t}</strong><p>{d}</p></div>)}</div></section>
-    <section id="how-to" className="guide-section"><h2>{g.howTo.title}</h2><ol className="b-list how-to">{g.howTo.items.map(t => <li key={t}>{t}</li>)}</ol></section>
-    <section id="glance" className="guide-section"><h2>Curriculum at a glance</h2><div className="b-table"><table><thead><tr><th>Module</th><th>Topic</th><th>Lessons</th></tr></thead>
-      <tbody>{modules.map(m => <tr key={m.id}><td>{m.number}</td><td><Link to={`/module/${m.id}`}>{m.title}</Link></td><td>{m.lessons.length}</td></tr>)}</tbody></table></div></section>
-    <section id="path" className="guide-section"><h2>Learning path</h2><LearningPath/></section>
-    <div className="guide-cta"><Link className="button primary" to={`/lesson/${allLessons[0].id}`}>Start Lesson {allLessons[0].num} →</Link></div>
-  </main>;
-}
-
 export function Glossary() {
   const [query, setQuery] = useState('');
   const entries = glossary.filter(e => (e.term + ' ' + e.def).toLowerCase().includes(query.toLowerCase())).sort((a, b) => a.term.localeCompare(b.term));
@@ -273,7 +251,7 @@ export function Dashboard() {
     <ul className="dashboard-tracks">{modules.map(m => {
       const done = modDone(m, completed);
       return <li key={m.id} style={{ '--track': m.accent }}><Link to={`/module/${m.id}`}>
-        <span className="course-icon">{m.icon}</span><strong>{m.number}. {m.short}</strong>
+        <span className="module-num" aria-hidden="true">{String(m.number).padStart(2, '0')}</span><strong><span className="sr-only">Module {m.number}: </span>{m.short}</strong>
         <span className="meter"><span style={{ width: `${(done / m.lessons.length) * 100}%` }}/></span>
         <small>{done} / {m.lessons.length}</small>
       </Link></li>;
@@ -361,7 +339,9 @@ export function Lab() {
   const { user, plans } = useApp();
   const [filter, setFilter] = useState(''), [open, setOpen] = useState(null);
   const [params] = useSearchParams();
-  const can = n => labUnlocked(n, plans);
+  // Every lab needs an account, the free one included.
+  const guest = CLOUD && !user;
+  const can = n => !guest && labUnlocked(n, plans);
   const unlockedCount = Object.keys(VIZ).filter(can).length;
   const [group, setGroup] = useState(() => ['ml', 'ai'].includes(params.get('track')) ? params.get('track') : 'all');
   const usedIn = vizUsage;
@@ -374,18 +354,18 @@ export function Lab() {
   useEffect(() => { const n = decodeURIComponent(location.hash.slice(1)); if (VIZ[n]) setOpen(n); }, []);
   return <main className="page container">
     <PageIntro eyebrow="Interactive lab" title="Play with every idea">{all.length} hands-on simulations from across the course. Pick a card to open it, then drag, step and break things; each one links to the lesson that explains it.</PageIntro>
-    {unlockedCount < all.length && <div className="card lab-plan"><div><small>Lab access</small><h3>{unlockedCount} of {all.length} labs open</h3><p>{plans.length ? 'Your plan covers the labs in its track. Upgrade to the Complete track to open every lab.' : 'The Temperature lab is free to try. The others open when you buy a plan that includes them.'}</p></div><Link className="button primary" to="/pricing">See Plans →</Link></div>}
+    {unlockedCount < all.length && <div className="card lab-plan"><div><small>Lab access</small><h3>{unlockedCount} of {all.length} labs open</h3><p>{plans.length ? 'Your plan covers the labs in its track. Upgrade to the Complete track to open every lab.' : guest ? 'Sign in with a free account to try the Temperature lab. The others open when you buy a plan that includes them.' : 'The Temperature lab is free to try. The others open when you buy a plan that includes them.'}</p></div>{guest ? <Link className="button primary" to="/account" onClick={() => rememberAfterLogin('/lab')}>Sign In →</Link> : <Link className="button primary" to="/pricing">See Plans →</Link>}</div>}
     <label className="search-box"><span aria-hidden="true">⌕</span><input placeholder="Find an interactive…" value={filter} onChange={e => setFilter(e.target.value)} aria-label="Filter interactives"/><small>{names.length} shown</small></label>
     <div className="chips lab-chips" role="group" aria-label="Filter labs by track">{groups.map(([id, name, n]) => <button key={id} className={group === id ? 'active' : ''} aria-pressed={group === id} onClick={() => setGroup(id)}>{name} <span>{n}</span></button>)}</div>
     {names.length === 0 && <p className="lab-empty">No lab matches your search in this group.</p>}
     <ul className="lab-grid">{names.map(n => {
       const lessons = lessonsFor(n);
       const ok = can(n);
-      return <li key={n}><button className={'lab-card' + (ok ? '' : ' locked')} id={n} onClick={() => setOpen(n)} aria-haspopup="dialog">
-        <span className="lab-card-top"><span className="lab-card-icon" style={{ '--h': (all.indexOf(n) * 47) % 360, '--delay': `${(all.indexOf(n) % 7) * -0.5}s` }}><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">{labTrack(n) === 'ml' ? 'ML / DL' : 'AI'} · Lesson {lessonById[lessons[0]].num}</span>}</span>
+      return <li key={n}><button className={'lab-card' + (ok ? '' : ' locked')} id={n} onClick={() => setOpen(n)} aria-haspopup="dialog" style={{ '--h': (all.indexOf(n) * 47) % 360, '--delay': `${(all.indexOf(n) % 9) * -1.1}s` }}>
+        <span className="lab-card-top"><span className="lab-card-icon"><LabIcon name={n}/></span><span className="lab-card-index">{String(all.indexOf(n) + 1).padStart(2, '0')}</span>{lessons[0] && <span className="lab-card-lesson">{labTrack(n) === 'ml' ? 'ML / DL' : 'AI'} · Lesson {lessonById[lessons[0]].num}</span>}</span>
         <strong>{label(n)}</strong>
         <span className="lab-card-desc">{VIZ[n]}</span>
-        <span className="lab-card-open">{ok ? <>{FREE_LABS.includes(n) && !plans.length && <span className="lab-free">Free</span>}Open Interactive <span aria-hidden="true">→</span></> : <>🔒 Unlock With A Plan</>}</span>
+        <span className="lab-card-open">{ok ? <>{FREE_LABS.includes(n) && !plans.length && <span className="lab-free">Free</span>}Open Interactive <span aria-hidden="true">→</span></> : guest && FREE_LABS.includes(n) ? <><span className="lab-free">Free</span>🔒 Sign In To Open</> : <>🔒 Unlock With A Plan</>}</span>
       </button></li>;
     })}</ul>
     <Modal open={!!open} onClose={() => setOpen(null)} label={open ? label(open) : 'Interactive'} className="modal-wide lab-modal">
@@ -393,7 +373,12 @@ export function Lab() {
         <div className="eyebrow">Interactive {String(all.indexOf(open) + 1).padStart(2, '0')} of {all.length}</div>
         <h2><span className="lab-card-icon" style={{ '--h': (all.indexOf(open) * 47) % 360 }}><LabIcon name={open}/></span>{label(open)}</h2>
         <p className="lab-modal-desc">{VIZ[open]}</p>
-        {can(open) ? <Viz name={open}/> : <div className="lab-locked">
+        {can(open) ? <Viz name={open}/> : guest && FREE_LABS.includes(open) ? <div className="lab-locked">
+          <div className="lock-icon" aria-hidden="true">🔒</div>
+          <h3>This lab is free with an account</h3>
+          <p>Sign in or create a free account to open it. No payment is needed.</p>
+          <div className="cert-actions"><Link className="button primary" to="/account" onClick={() => rememberAfterLogin('/lab#' + open)}>Sign In</Link><Link className="button ghost" to="/account?mode=signup" onClick={() => rememberAfterLogin('/lab#' + open)}>Create A Free Account</Link></div>
+        </div> : <div className="lab-locked">
           <div className="lock-icon" aria-hidden="true">🔒</div>
           <h3>This lab is part of a paid plan</h3>
           <p>It opens with the <b>{trackById[labTrack(open)].name}</b> track or the <b>{trackById.complete.name}</b> track.{!user && ' If you already have a plan, sign in to use it.'}</p>

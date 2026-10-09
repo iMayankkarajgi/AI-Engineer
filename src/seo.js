@@ -32,8 +32,8 @@ const crumbs = items => ({ '@type': 'BreadcrumbList', itemListElement: items.map
 
 const STATIC_PAGES = {
   '/': () => ({
-    title: `${PROGRAM}: Become an AI Engineer | ML, Deep Learning & LLM Course`,
-    description: `Become an AI engineer with a hands-on course: ${LESSONS} video lessons on machine learning, deep learning, LLMs, RAG and AI agents. Three tracks, labs, quizzes, certificate.`,
+    title: `${PROGRAM}: Machine Learning, Deep Learning & Generative AI Course`,
+    description: `Learn machine learning, deep learning and generative AI in one hands-on course: ${LESSONS} video lessons on LLMs, RAG and AI agents. Three tracks, labs, quizzes, certificate.`,
     ld: [ORG, { '@type': 'WebSite', '@id': `${SITE_URL}/#website`, name: BRAND, alternateName: PROGRAM, url: SITE_URL, publisher: { '@id': ORG['@id'] } }, ...tracks.map(courseLd)],
   }),
   '/curriculum': () => ({
@@ -121,7 +121,7 @@ export function seoFor(pathname) {
       title: post.title, description: post.description, type: 'article',
       ld: [crumbs([['Blog', '/blog'], [post.title, path]]), {
         '@type': 'BlogPosting', headline: post.title, description: post.description, url: SITE_URL + path, mainEntityOfPage: SITE_URL + path,
-        datePublished: post.date, dateModified: post.date, inLanguage: 'en', keywords: (post.keywords || []).join(', '), image: `${SITE_URL}/og-v3.png`,
+        datePublished: post.date, dateModified: post.date, inLanguage: 'en', keywords: (post.keywords || []).join(', '), image: `${SITE_URL}/og-v4.png`,
         author: { '@id': ORG['@id'] }, publisher: ORG,
       }, ...(post.faqs?.length ? [{ '@type': 'FAQPage', mainEntity: post.faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : [])],
     };

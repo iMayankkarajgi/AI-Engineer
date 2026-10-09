@@ -9,6 +9,8 @@ import { createHmac, randomBytes } from 'node:crypto';
 const PORT = Number(process.env.MOCK_DODO_PORT || 54400);
 const SECRET = process.env.DODO_WEBHOOK_SECRET || 'whsec_' + Buffer.from('local-test-signing-key').toString('base64');
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://127.0.0.1:3010/api/dodo-webhook';
+// What a session is charged: the product's fixed price in the billing currency if it has one, else its base price.
+const charge = (product, s) => { const r = product.localized?.find(x => x.currency === s.billing_currency); return r ? { amount: r.amount, currency: r.currency } : { amount: product.price, currency: product.currency }; };
 const products = new Map(), sessions = new Map(), payments = new Map(), sent = [];
 const id = p => `${p}_${randomBytes(8).toString('hex')}`;
 const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
@@ -38,7 +40,7 @@ http.createServer(async (req, res) => {
       const s = sessions.get(path.split('/')[2]); if (!s) return json(res, 404, { message: 'no such session' });
       if (req.method === 'POST') {
         const product = products.get(s.product_cart[0].product_id);
-        const p = { payment_id: id('pay'), business_id: 'bus_mock', status: 'succeeded', total_amount: product.price, currency: product.currency, customer: { customer_id: id('cus'), ...s.customer }, metadata: s.metadata || {}, product_cart: s.product_cart, subscription_id: null, refunds: [], created_at: new Date().toISOString(), checkout_session_id: s.session_id };
+        const p = { payment_id: id('pay'), business_id: 'bus_mock', status: 'succeeded', total_amount: charge(product, s).amount, currency: charge(product, s).currency, customer: { customer_id: id('cus'), ...s.customer }, metadata: s.metadata || {}, product_cart: s.product_cart, subscription_id: null, refunds: [], created_at: new Date().toISOString(), checkout_session_id: s.session_id };
         payments.set(p.payment_id, p);
         await deliver('payment.succeeded', { payload_type: 'Payment', ...p });
         const back = new URL(s.return_url); back.searchParams.set('payment_id', p.payment_id); back.searchParams.set('status', 'succeeded');
@@ -46,16 +48,30 @@ http.createServer(async (req, res) => {
       }
       const product = products.get(s.product_cart[0].product_id);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mock checkout</title><body style="font:16px system-ui;max-width:420px;margin:60px auto;padding:0 16px"><h1>Mock checkout</h1><p id="product">${product.name}</p><p id="amount"><b>${(product.price / 100).toFixed(2)} ${product.currency}</b></p><p>${s.customer.email}</p><form method="post"><button id="pay" style="padding:12px 20px;font:inherit">Pay (test)</button></form></body>`);
+      return res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mock checkout</title><body style="font:16px system-ui;max-width:420px;margin:60px auto;padding:0 16px"><h1>Mock checkout</h1><p id="product">${product.name}</p><p id="amount"><b>${(charge(product, s).amount / 100).toFixed(2)} ${charge(product, s).currency}</b></p><p>${s.customer.email}</p><form method="post"><button id="pay" style="padding:12px 20px;font:inherit">Pay (test)</button></form></body>`);
     }
     if ((req.headers.authorization || '') !== 'Bearer mock-dodo-key') return json(res, 401, { message: 'Unauthorized' });
     if (path === '/products' && req.method === 'GET') return json(res, 200, { items: [...products.values()] });
     if (path === '/products' && req.method === 'POST') {
       const b = await read(req);
       if (!b.name || !b.tax_category || b.price?.type !== 'one_time_price' || !Number.isInteger(b.price.price) || !b.price.currency) return json(res, 422, { message: 'invalid product' });
-      const p = { product_id: id('pdt'), business_id: 'bus_mock', name: b.name, description: b.description || null, price: b.price.price, currency: b.price.currency, is_recurring: false, tax_category: b.tax_category, metadata: b.metadata || {}, created_at: new Date().toISOString() };
+      const p = { product_id: id('pdt'), business_id: 'bus_mock', name: b.name, description: b.description || null, price: b.price.price, currency: b.price.currency, tax_inclusive: b.price.tax_inclusive ?? null, pricing_mode: b.pricing_mode || null, localized: [], is_recurring: false, tax_category: b.tax_category, metadata: b.metadata || {}, created_at: new Date().toISOString() };
       products.set(p.product_id, p); return json(res, 200, p);
     }
+    // Localized prices: fixed amounts in other currencies on the same product.
+    const lp = path.match(/^\/products\/([^/]+)\/localized-prices(?:\/([^/]+))?$/);
+    if (lp) {
+      const product = products.get(lp[1]); if (!product) return json(res, 404, { message: 'product not found' });
+      if (req.method === 'GET') return json(res, 200, { items: product.localized });
+      if (req.method === 'DELETE') { product.localized = product.localized.filter(r => r.id !== lp[2]); return json(res, 200, {}); }
+      if (req.method === 'POST') {
+        const b = await read(req);
+        if (product.pricing_mode !== 'by_currency' || !b.currency || !Number.isInteger(b.amount) || b.amount <= 0 || b.country_code) return json(res, 422, { message: 'invalid localized price' });
+        if (product.localized.some(r => r.currency === b.currency)) return json(res, 409, { message: 'Active rule already exists for this currency/country' });
+        const rule = { id: id('lp'), product_id: product.product_id, mode: 'by_currency', currency: b.currency, amount: b.amount, country_code: null }; product.localized.push(rule); return json(res, 200, rule);
+      }
+    }
+    if (path.startsWith('/products/') && req.method === 'DELETE') { const pid = path.split('/')[2]; return products.delete(pid) ? json(res, 200, {}) : json(res, 404, { message: 'not found' }); }
     if (path === '/checkouts' && req.method === 'POST') {
       const b = await read(req);
       if (!Array.isArray(b.product_cart) || !products.has(b.product_cart[0]?.product_id) || !b.customer?.email) return json(res, 422, { message: 'invalid checkout' });

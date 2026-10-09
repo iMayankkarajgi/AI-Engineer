@@ -19,7 +19,9 @@ export default async function handler(req, res) {
   const currency = currencyForCountry(countryOf(req));
   try {
     const session = await dodo('/checkouts', { method: 'POST', body: {
-      product_cart: [{ product_id: await productId(track, period, currency), quantity: 1 }],
+      product_cart: [{ product_id: await productId(track, period), quantity: 1 }],
+      // The currency to charge: the product's rupee price for India, its dollar price everywhere else.
+      billing_currency: currency,
       customer: { email: user.email, name: (user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0]).slice(0, 80) },
       metadata: { user_id: user.id, track, period, currency },
       return_url: `${SITE}/pricing?checkout=done`,

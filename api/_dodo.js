@@ -48,43 +48,77 @@ export async function dodo(path, { method = 'GET', body } = {}) {
   return data;
 }
 
-// One Dodo product per track, plan length and currency. They are created the
-// first time they are needed and found again by name afterwards.
-const productName = (track, period, currency) => `AI Engineering Bootcamp: ${TRACK_NAMES[track]} (${PERIOD_NAMES[period]}, ${currency})`;
+// One Dodo product per track and plan length (six in all). Each product has a
+// base price in US dollars and a fixed "localized" price in Indian rupees, so a
+// buyer billed in INR pays the rupee price and everyone else pays dollars. Both
+// amounts already include taxes. Products are created the first time they are
+// needed and found again by name afterwards.
+const BASE = 'USD', LOCAL = ['INR'];
+const productName = (track, period) => `${TRACK_NAMES[track]}: ${PERIOD_NAMES[period]}`;
+const rulesOf = async id => { const d = await dodo(`/products/${id}/localized-prices`); return Array.isArray(d) ? d : d?.items || []; };
 let products = null;
-export async function productId(track, period, currency) {
-  const name = productName(track, period, currency), price = PRICES[track][currency][period] * 100;
-  if (!products) {
-    products = new Map();
-    for (let page = 0; page < 10; page++) {
-      const items = (await dodo(`/products?page_size=100&page_number=${page}&recurring=false`))?.items || [];
-      for (const p of items) if (p.name && p.price != null) products.set(`${p.name}|${p.price}`, p.product_id);
-      if (items.length < 100) break;
-    }
+const ready = new Map();
+async function allProducts() {
+  const items = [];
+  for (let page = 0; page < 10; page++) {
+    const got = (await dodo(`/products?page_size=100&page_number=${page}&recurring=false`))?.items || [];
+    items.push(...got);
+    if (got.length < 100) break;
   }
-  const key = `${name}|${price}`;
-  if (!products.has(key)) {
-    const made = await dodo('/products', { method: 'POST', body: {
-      name, tax_category: 'edtech',
+  return items;
+}
+export function productId(track, period) {
+  const key = `${track}|${period}`;
+  // One attempt at a time per plan, so two buyers arriving together cannot create the product twice.
+  if (!ready.has(key)) ready.set(key, makeProduct(track, period).catch(err => { ready.delete(key); throw err; }));
+  return ready.get(key);
+}
+async function makeProduct(track, period) {
+  const name = productName(track, period), price = PRICES[track][BASE][period] * 100;
+  const load = () => allProducts().then(items => new Map(items.filter(p => p.name && p.price != null).map(p => [`${p.name}|${p.price}|${p.currency}`, p.product_id])));
+  if (!products) products = load();
+  let known = await products, id = known.get(`${name}|${price}|${BASE}`);
+  // Not in the remembered list: read the list again before creating, in case another server made it meanwhile.
+  if (!id) { products = load(); known = await products; id = known.get(`${name}|${price}|${BASE}`); }
+  if (!id) {
+    id = (await dodo('/products', { method: 'POST', body: {
+      name, tax_category: 'edtech', pricing_mode: 'by_currency',
       description: `${PERIOD_NAMES[period]} access to the ${TRACK_NAMES[track]} track of the AI Engineering Bootcamp at modernaiengineering.com.`,
       // tax_inclusive: the listed amount already contains GST or other taxes, so the buyer pays exactly it.
-      price: { type: 'one_time_price', price, currency, discount: 0, purchasing_power_parity: false, tax_inclusive: true },
-      metadata: { track, period, currency },
-    } });
-    products.set(key, made.product_id);
+      price: { type: 'one_time_price', price, currency: BASE, discount: 0, purchasing_power_parity: false, tax_inclusive: true },
+      metadata: { track, period },
+    } })).product_id;
+    known.set(`${name}|${price}|${BASE}`, id);
   }
-  return products.get(key);
+  // The rupee price on the same product. Replace it if the amount has changed.
+  const rules = await rulesOf(id);
+  for (const currency of LOCAL) {
+    const amount = PRICES[track][currency][period] * 100, have = rules.find(r => r.currency === currency && !r.country_code);
+    if (have && have.amount === amount) continue;
+    if (have) await dodo(`/products/${id}/localized-prices/${have.id}`, { method: 'DELETE' });
+    await dodo(`/products/${id}/localized-prices`, { method: 'POST', body: { currency, amount } });
+  }
+  return id;
 }
-export const resetProductCache = () => { products = null; };
-// Makes sure every plan on sale has its product in Dodo (creating any that are
-// missing) and lists them. Safe to run again: existing products are reused.
+export const resetProductCache = () => { products = null; ready.clear(); };
+// Makes sure all six plans have their product in Dodo (creating any that are
+// missing), archives the older one-product-per-currency entries, and lists the
+// result. Safe to run again: existing products are reused.
 export async function ensureProducts() {
   const out = [];
-  for (const track of Object.keys(PRICES)) for (const period of PERIOD_IDS) for (const currency of Object.keys(PRICES[track])) {
-    try { out.push({ plan: `${TRACK_NAMES[track]}, ${PERIOD_NAMES[period]}`, currency, price: PRICES[track][currency][period], tax_included: true, product_id: await productId(track, period, currency) }); }
-    catch (err) { out.push({ plan: `${TRACK_NAMES[track]}, ${PERIOD_NAMES[period]}`, currency, price: PRICES[track][currency][period], error: String(err.message).slice(0, 200) }); }
+  for (const track of Object.keys(PRICES)) for (const period of PERIOD_IDS) {
+    const row = { product: productName(track, period), usd: PRICES[track].USD[period], inr: PRICES[track].INR[period], tax_included: true };
+    try { row.product_id = await productId(track, period); row.localized = (await rulesOf(row.product_id)).map(r => `${r.currency} ${r.amount / 100}`); }
+    catch (err) { row.error = String(err.message).slice(0, 220); }
+    out.push(row);
   }
-  return out;
+  const archived = [];
+  try {
+    for (const p of await allProducts()) if (/^AI Engineering Bootcamp: .+ \((1 Month|3 Months|Lifetime), (INR|USD)\)$/.test(p.name || '')) {
+      try { await dodo(`/products/${p.product_id}`, { method: 'DELETE' }); archived.push(p.name); } catch (err) { archived.push(`${p.name}: not archived (${String(err.message).slice(0, 80)})`); }
+    }
+  } catch (err) { archived.push(`could not list products: ${String(err.message).slice(0, 120)}`); }
+  return { plans: out, archived_old_products: archived };
 }
 
 // Who is asking: the Supabase account behind the access token, or null.

@@ -23,5 +23,6 @@ export default async function handler(req, res) {
   }
   const body = lessons[id];
   if (!body) return res.status(404).json({ error: 'This lesson is not available yet.' });
-  res.status(200).json({ ...body, video: lessonVideos[id] || null });
+  // The quiz goes out without its answers; api/quiz.js marks it.
+  res.status(200).json({ ...body, quiz: (body.quiz || []).map(q => ({ q: q.q, options: q.options })), video: lessonVideos[id] || null });
 }

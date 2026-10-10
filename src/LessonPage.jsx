@@ -108,19 +108,35 @@ function shuffled(n, seed) {
 }
 
 function Quiz({ id, quiz, nextId }) {
-  const { recordScore, scores, completed } = useApp();
+  const { recordScore, scores, completed, accessToken } = useApp();
   const [attempt, setAttempt] = useState(0);
   const [picks, setPicks] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  // The answers arrive only after the quiz is submitted: the server marks it and
+  // replies with what was right. (Builds without accounts carry the answers and mark here.)
+  const local = quiz[0]?.answer !== undefined;
+  const [marked, setMarked] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const key = local ? quiz : marked?.results;
   // Options are always shuffled (stable per lesson and attempt), so the stored
   // answer position never gives the answer away.
   const seed = useMemo(() => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 100003, 7), [id]);
   const orders = useMemo(() => quiz.map((q, i) => shuffled(q.options.length, seed + attempt * 7919 + i * 131)), [attempt, quiz, seed]);
-  const score = quiz.reduce((s, q, i) => s + (picks[i] === q.answer ? 1 : 0), 0);
+  const score = local ? quiz.reduce((s, q, i) => s + (picks[i] === q.answer ? 1 : 0), 0) : marked?.score ?? 0;
   const passed = submitted && score >= PASS_MARK;
   const answered = Object.keys(picks).length;
-  const submit = () => { setSubmitted(true); recordScore(id, score); setTimeout(() => document.getElementById('quiz-result')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
-  const retry = () => { setPicks({}); setSubmitted(false); setAttempt(a => a + 1); document.getElementById('quiz')?.scrollIntoView({ behavior: 'smooth' }); };
+  const show = () => setTimeout(() => document.getElementById('quiz-result')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  const submit = async () => {
+    if (local) { setSubmitted(true); recordScore(id, score); return show(); }
+    setBusy(true); setError('');
+    try {
+      const r = await fetch('/api/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await accessToken()}` }, body: JSON.stringify({ id, picks: quiz.map((_, i) => picks[i] ?? null) }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Could not mark the quiz. Please try again.');
+      setMarked(d); setSubmitted(true); recordScore(id, d.score, d); show();
+    } catch (err) { setError(err.message === 'Failed to fetch' ? 'Could not reach the server. Check your connection and try again.' : err.message); }
+    finally { setBusy(false); }
+  };
+  const retry = () => { setPicks({}); setSubmitted(false); setMarked(null); setError(''); setAttempt(a => a + 1); document.getElementById('quiz')?.scrollIntoView({ behavior: 'smooth' }); };
   const already = completed.includes(id);
   return <div className="quiz">
     <div className="quiz-intro">
@@ -128,22 +144,22 @@ function Quiz({ id, quiz, nextId }) {
       {(scores[id] !== undefined || already) && <span className={'quiz-badge' + (already ? ' ok' : '')}>{already ? '✓ Passed' : 'Not passed yet'}{scores[id] !== undefined ? ` · best ${scores[id]}/${quiz.length}` : ''}</span>}
     </div>
     <ol className="quiz-list">{quiz.map((q, qi) => {
-      const pick = picks[qi], right = pick === q.answer;
+      const pick = picks[qi], answer = submitted ? key?.[qi]?.answer : undefined, right = pick === answer;
       return <li key={qi} className={'quiz-q' + (submitted ? (right ? ' right' : ' wrong') : '')}>
         <p className="quiz-question"><span className="quiz-num">Q{qi + 1}</span><Rich text={q.q}/></p>
         <div className="quiz-options" role="radiogroup" aria-label={`Question ${qi + 1}`}>{orders[qi].map((oi, pos) => {
           const cls = pick === oi ? 'selected' : '';
-          const mark = submitted ? (oi === q.answer ? ' correct' : pick === oi ? ' incorrect' : ' faded') : '';
-          return <button key={oi} role="radio" aria-checked={pick === oi} className={cls + mark} disabled={submitted} onClick={() => setPicks(p => ({ ...p, [qi]: oi }))}>
+          const mark = submitted ? (oi === answer ? ' correct' : pick === oi ? ' incorrect' : ' faded') : '';
+          return <button key={oi} role="radio" aria-checked={pick === oi} className={cls + mark} disabled={submitted || busy} onClick={() => setPicks(p => ({ ...p, [qi]: oi }))}>
             <span className="quiz-letter">{String.fromCharCode(65 + pos)}</span><span><Rich text={q.options[oi]}/></span>
-            {submitted && oi === q.answer && <span className="quiz-tick" aria-label="correct answer">✓</span>}
+            {submitted && oi === answer && <span className="quiz-tick" aria-label="correct answer">✓</span>}
           </button>;
         })}</div>
-        {submitted && <div className="quiz-explain"><strong>{right ? 'Correct.' : pick === undefined ? 'Not answered.' : 'Not quite.'}</strong> <Rich text={q.explain}/></div>}
+        {submitted && <div className="quiz-explain"><strong>{right ? 'Correct.' : pick === undefined ? 'Not answered.' : 'Not quite.'}</strong> <Rich text={key?.[qi]?.explain || ''}/></div>}
       </li>;
     })}</ol>
     {!submitted
-      ? <div className="quiz-submit"><span>{answered} of {quiz.length} answered</span><button className="button primary" disabled={answered < quiz.length} onClick={submit}>Submit Answers</button></div>
+      ? <div className="quiz-submit"><span role={error ? 'alert' : undefined} className={error ? 'quiz-error' : ''}>{error || `${answered} of ${quiz.length} answered`}</span><button className="button primary" disabled={answered < quiz.length || busy} onClick={submit}>{busy ? 'Marking…' : 'Submit Answers'}</button></div>
       : <div id="quiz-result" className={'quiz-result ' + (passed ? 'pass' : 'fail')} role="status">
           <div className="quiz-score"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.9" className="track"/><circle cx="18" cy="18" r="15.9" className="fill" style={{ strokeDasharray: `${(score / quiz.length) * 100} 100` }}/></svg><b>{score}/{quiz.length}</b></div>
           <div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { modules, allLessons } from './course/curriculum';
 import { CLOUD } from './app';
-import { examQuestions } from './course/exam';
+import { EXAM_TOTAL } from './course/examMeta';
 import { supabase } from './supabase';
 import Modal from './Modal';
 import LogoMark from './LogoMark';
@@ -44,7 +44,7 @@ export default function Certificate({ user, exam, open, onClose }) {
           </svg>
           <div><strong>{id}</strong><small>Certificate ID</small></div>
         </div>
-        <div className="cert-note">Final examination score: {exam} out of {examQuestions.length}. Issued by {BRAND} · modernaiengineering.com</div>
+        <div className="cert-note">Final examination score: {exam} out of {EXAM_TOTAL}. Issued by {BRAND} · modernaiengineering.com</div>
       </div>
     </div></div>
     <p className="cert-hint">Swipe sideways to see the whole certificate.</p>

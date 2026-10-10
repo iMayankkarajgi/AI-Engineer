@@ -7,7 +7,7 @@ import { Avatar, GoogleMark, SignOutButton } from './Profile';
 import Modal from './Modal';
 import LabIcon from './labIcons';
 import { resources } from './course/resources';
-import { EXAM_PASS, examQuestions } from './course/exam';
+import { EXAM_PASS, EXAM_TOTAL } from './course/examMeta';
 import { TrackPicker, useTrack } from './Tracks';
 import { tracks, trackById, labTrack, labUnlocked, FREE_LABS } from './course/tracks';
 import { ThemeToggle, useTheme } from './theme';
@@ -244,7 +244,7 @@ export function Dashboard() {
       <div className="card"><small>Continue learning · Module {nextMod.number}</small><h3>{next.num} {next.title}</h3><div className="card-actions"><Link className="button primary" to={`/lesson/${nextLesson}`}>Open Lesson →</Link><button className="button ghost" onClick={() => setPickerOpen(true)}>Browse All Lessons</button></div></div>
     </div>
     <div className="card exam-card">
-      <div><small>Final exam</small><h3>{exam !== null && exam >= EXAM_PASS ? `Passed with ${exam} / ${examQuestions.length}` : exam !== null ? `Best score ${exam} / ${examQuestions.length}` : 'Ready when you are'}</h3><p>{examQuestions.length} mixed questions, open at any time. The certificate needs {EXAM_PASS} or more here and a pass ({PASS_MARK}/5) in every lesson quiz{certLessonsLeft ? ` (${certLessonsLeft} to go)` : ''}.</p></div>
+      <div><small>Final exam</small><h3>{exam !== null && exam >= EXAM_PASS ? `Passed with ${exam} / ${EXAM_TOTAL}` : exam !== null ? `Best score ${exam} / ${EXAM_TOTAL}` : 'Ready when you are'}</h3><p>{EXAM_TOTAL} mixed questions, open at any time. The certificate needs {EXAM_PASS} or more here and a pass ({PASS_MARK}/5) in every lesson quiz{certLessonsLeft ? ` (${certLessonsLeft} to go)` : ''}.</p></div>
       <Link className="button primary" to="/exam">{exam !== null && exam >= EXAM_PASS ? 'Retake The Exam' : 'Take The Final Exam'} →</Link>
     </div>
     <h2 className="section-title">Your modules</h2>

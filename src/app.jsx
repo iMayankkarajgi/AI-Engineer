@@ -2,8 +2,9 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { lessonIds, moduleOf } from './course/curriculum';
 import { canOpenModule } from './course/access';
 import { supabase } from './supabase';
+import { forgetLabs } from './viz';
 import { entryLessonIds } from './course/tracks';
-import { EXAM_ID, EXAM_PASS } from './course/exam';
+import { EXAM_ID, EXAM_PASS } from './course/examMeta';
 
 // Account session and lesson progress. A lesson counts as passed once its quiz
 // is passed (4 of 5). Passing is never needed to open another lesson: a lesson
@@ -47,8 +48,9 @@ const toUser = (u, p) => ({
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authUser, setAuthUser] = useState(null);
-  const [completed, setCompleted] = useState(() => read('atlas-progress-v2', []).filter(known));
-  const [scores, setScores] = useState(() => read('atlas-scores-v2', {}));
+  // With accounts in the cloud, progress is whatever the database says; nothing is taken from this browser.
+  const [completed, setCompleted] = useState(() => CLOUD ? [] : read('atlas-progress-v2', []).filter(known));
+  const [scores, setScores] = useState(() => CLOUD ? {} : read('atlas-scores-v2', {}));
   const [ready, setReady] = useState(!ACCOUNTS);
   const [syncError, setSyncError] = useState('');
   // The learner's plans (rows of the entitlements table). A timed plan stops
@@ -60,7 +62,7 @@ export function AppProvider({ children }) {
   const plans = useMemo(() => planRows.filter(p => !p.expires_at || new Date(p.expires_at).getTime() > clock).map(p => p.track), [planRows, clock]);
   const planExpiry = useMemo(() => Object.fromEntries(planRows.map(p => [p.track, p.expires_at || null])), [planRows]);
   // Best final-exam score so far, or null when it has not been taken.
-  const [exam, setExam] = useState(() => read('atlas-exam-v1', null));
+  const [exam, setExam] = useState(() => CLOUD ? null : read('atlas-exam-v1', null));
   // The lesson the learner opened most recently (kept in this browser), so Continue can resume it.
   const [lastLesson, setLastLesson] = useState(() => { const id = read('atlas-last-lesson', null); return known(id) ? id : null; });
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -95,7 +97,6 @@ export function AppProvider({ children }) {
     if (!authUser) { setUser(null); setPlanRows([]); return; }
     let live = true;
     (async () => {
-      const guestDone = read('atlas-progress-v2', []).filter(known), guestScores = read('atlas-scores-v2', {});
       const [profileRes, rowsRes, plansRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('lesson_progress').select('lesson_id,best_score,passed').eq('user_id', authUser.id),
@@ -109,26 +110,13 @@ export function AppProvider({ children }) {
         profile = (await supabase.from('profiles').upsert({ id: authUser.id, email: authUser.email, full_name: seed.name.slice(0, 80), avatar_url: seed.avatar }).select().maybeSingle()).data;
       }
       const remote = Object.fromEntries((rowsRes.data || []).map(r => [r.lesson_id, r]));
-      const push = [...new Set([...guestDone, ...Object.keys(guestScores)])].filter(known).map(id => ({
-        user_id: authUser.id, lesson_id: id,
-        best_score: Math.max(Number(guestScores[id]) || (guestDone.includes(id) ? PASS_MARK : 0), remote[id]?.best_score ?? 0),
-        passed: guestDone.includes(id) || !!remote[id]?.passed,
-        updated_at: new Date().toISOString(),
-      })).filter(r => !remote[r.lesson_id] || r.best_score > remote[r.lesson_id].best_score || r.passed !== remote[r.lesson_id].passed);
-      const pushRes = push.length ? await supabase.from('lesson_progress').upsert(push) : {};
-      if (!live) return;
-      const merged = { ...remote, ...Object.fromEntries(push.map(r => [r.lesson_id, r])) };
-      setCompleted(Object.values(merged).filter(r => r.passed).map(r => r.lesson_id).filter(known));
-      setScores(Object.fromEntries(Object.values(merged).filter(r => known(r.lesson_id)).map(r => [r.lesson_id, r.best_score])));
-      // The exam result is stored beside lesson progress, under its own id.
-      const localExam = read('atlas-exam-v1', null), remoteExam = remote[EXAM_ID]?.best_score ?? null;
-      const bestExam = localExam === null ? remoteExam : Math.max(localExam, remoteExam ?? 0);
-      const examRes = bestExam !== null && bestExam !== remoteExam ? await supabase.from('lesson_progress').upsert({ user_id: authUser.id, lesson_id: EXAM_ID, best_score: bestExam, passed: bestExam >= EXAM_PASS, updated_at: new Date().toISOString() }) : {};
-      if (!live) return;
-      setExam(bestExam);
-      const failed = profileRes.error || rowsRes.error || pushRes.error || examRes.error;
+      // Scores are written by the server when a quiz or the exam is marked; here they are only read.
+      setCompleted(Object.values(remote).filter(r => r.passed).map(r => r.lesson_id).filter(known));
+      setScores(Object.fromEntries(Object.values(remote).filter(r => known(r.lesson_id)).map(r => [r.lesson_id, r.best_score])));
+      setExam(remote[EXAM_ID]?.best_score ?? null);
+      const failed = profileRes.error || rowsRes.error;
       setSyncError(failed ? SYNC_FAILED : '');
-      if (!failed) { try { localStorage.removeItem('atlas-progress-v2'); } catch {} }
+      if (!failed) { try { for (const k of ['atlas-progress-v2', 'atlas-scores-v2', 'atlas-exam-v1']) localStorage.removeItem(k); } catch {} }
       setPlanRows(plansRes.data || []);
       setUser(toUser(authUser, profile));
       setReady(true);
@@ -136,24 +124,21 @@ export function AppProvider({ children }) {
     return () => { live = false; };
   }, [authId]);
 
-  useEffect(() => { if (!user) write('atlas-progress-v2', completed); }, [completed, user]);
-  useEffect(() => { write('atlas-scores-v2', scores); }, [scores]);
-  useEffect(() => { write('atlas-exam-v1', exam); }, [exam]);
+  useEffect(() => { if (!user && !CLOUD) write('atlas-progress-v2', completed); }, [completed, user]);
+  useEffect(() => { if (!CLOUD) write('atlas-scores-v2', scores); }, [scores]);
+  useEffect(() => { if (!CLOUD) write('atlas-exam-v1', exam); }, [exam]);
+  // A new sign-in or a changed plan gives locked labs a fresh try.
+  useEffect(() => { forgetLabs(); }, [user?.id, plans.join(',')]);
 
   const complete = async id => { setCompleted(v => [...new Set([...v, id])]); if (user && !CLOUD) { try { await fetch(`/api/progress/${id}`, { method: 'PUT' }); } catch {} } };
-  const recordScore = (id, score) => {
-    const best = Math.max(score, scores[id] ?? 0), passed = score >= PASS_MARK || completed.includes(id);
-    setScores(s => ({ ...s, [id]: Math.max(score, s[id] ?? 0) }));
-    if (score >= PASS_MARK) complete(id);
-    if (CLOUD && user) supabase.from('lesson_progress').upsert({ user_id: user.id, lesson_id: id, best_score: best, passed, updated_at: new Date().toISOString() })
-      .then(({ error }) => setSyncError(error ? SYNC_FAILED : ''));
+  // With accounts in the cloud the server marks quizzes and the exam and stores
+  // the result (api/quiz.js, api/exam.js); these only bring the page up to date.
+  // Without Supabase (local and single-file builds) the score is kept in this browser.
+  const recordScore = (id, score, saved) => {
+    setScores(s => ({ ...s, [id]: saved ? saved.best : Math.max(score, s[id] ?? 0) }));
+    if (saved ? saved.lessonPassed : score >= PASS_MARK) complete(id);
   };
-  const recordExam = score => {
-    const best = Math.max(score, exam ?? 0);
-    setExam(best);
-    if (CLOUD && user) supabase.from('lesson_progress').upsert({ user_id: user.id, lesson_id: EXAM_ID, best_score: best, passed: best >= EXAM_PASS, updated_at: new Date().toISOString() })
-      .then(({ error }) => setSyncError(error ? SYNC_FAILED : ''));
-  };
+  const recordExam = (score, saved) => setExam(saved ? saved.best : Math.max(score, exam ?? 0));
   // A lesson is open when its module is free or the learner's plan includes it.
   // Without Supabase there are no plans, so everything is open.
   const isUnlocked = id => !CLOUD || canOpenModule(moduleOf(id)?.id, plans);

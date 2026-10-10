@@ -9,6 +9,9 @@ import geoHandler from './api/geo.js';
 import checkoutHandler from './api/checkout.js';
 import webhookHandler from './api/dodo-webhook.js';
 import lessonHandler from './api/lesson.js';
+import quizHandler from './api/quiz.js';
+import examHandler from './api/exam.js';
+import labHandler from './api/lab.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -40,6 +43,9 @@ app.get('/api/health', (_, res) => res.json({ ok: true }));
 app.get('/api/news', newsHandler);
 app.get('/api/geo', geoHandler);
 app.get('/api/lesson', lessonHandler);
+app.all('/api/quiz', quizHandler);
+app.all('/api/exam', examHandler);
+app.get('/api/lab', labHandler);
 app.all('/api/checkout', checkoutHandler);
 app.all('/api/dodo-webhook', webhookHandler);
 

@@ -205,3 +205,5 @@
 .lesson-video-play svg { margin-left: 4px; }
 .lesson-video-poster:hover .lesson-video-play { transform: translate(-50%, -50%) scale(1.08); }
 .lesson-video figcaption { margin-top: 8px; color: var(--ink-3); font-size: .82rem; }
+
+.quiz-error { color: var(--bad); font-weight: 600; }

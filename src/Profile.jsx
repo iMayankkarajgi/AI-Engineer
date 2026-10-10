@@ -4,7 +4,7 @@ import { modules, allLessons, lessonById } from './course/curriculum';
 import { useApp, ACCOUNTS, CLOUD, PASS_MARK } from './app';
 import Certificate from './Certificate';
 import Modal from './Modal';
-import { EXAM_PASS, examQuestions } from './course/exam';
+import { EXAM_PASS, EXAM_TOTAL } from './course/examMeta';
 import { trackById } from './course/tracks';
 
 const initials = name => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
@@ -111,9 +111,9 @@ export default function Profile() {
 
     <section className="card profile-cert">
       <div><small>Course certificate</small><h3>{finished ? 'You completed the course.' : 'Certificate Of Completion'}</h3>
-        <p>{finished ? `Your certificate is ready, with your name on it. Final exam: ${exam} / ${examQuestions.length}.`
-          : !lessonsDone ? `Two things earn it: a pass (${PASS_MARK} of 5) in each of your ${certLessons.length} lesson quizzes (${certLessonsLeft} to go), and ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam${examPassed ? ` (done: ${exam})` : exam !== null ? ` (best so far: ${exam})` : ''}.`
-          : `All lessons passed. Score ${EXAM_PASS} or more in the ${examQuestions.length}-question final exam to unlock it${exam !== null ? ` (best so far: ${exam})` : ''}.`}</p></div>
+        <p>{finished ? `Your certificate is ready, with your name on it. Final exam: ${exam} / ${EXAM_TOTAL}.`
+          : !lessonsDone ? `Two things earn it: a pass (${PASS_MARK} of 5) in each of your ${certLessons.length} lesson quizzes (${certLessonsLeft} to go), and ${EXAM_PASS} or more in the ${EXAM_TOTAL}-question final exam${examPassed ? ` (done: ${exam})` : exam !== null ? ` (best so far: ${exam})` : ''}.`
+          : `All lessons passed. Score ${EXAM_PASS} or more in the ${EXAM_TOTAL}-question final exam to unlock it${exam !== null ? ` (best so far: ${exam})` : ''}.`}</p></div>
       {finished ? <button className="button primary" onClick={() => setCert(true)}>View Certificate</button>
         : !examPassed ? <Link className="button primary" to="/exam">Take The Final Exam →</Link>
         : <Link className="button primary" to={`/lesson/${certLessons.find(id => !completed.includes(id))}`}>Continue The Quizzes →</Link>}

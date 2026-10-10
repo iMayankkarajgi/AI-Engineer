@@ -1,8 +1,8 @@
-import { modules, lessonById } from './curriculum';
-import { vizUsage } from './vizUsage';
-import { VIZ } from './vizNames';
-import { PRICES, formatMoney } from './prices';
-import { ML_MODULES, CAREER_MODULES, trackHasModule } from './access';
+import { modules, lessonById } from './curriculum.js';
+import { vizUsage } from './vizUsage.js';
+import { VIZ } from './vizNames.js';
+import { PRICES, formatMoney } from './prices.js';
+import { ML_MODULES, CAREER_MODULES, trackHasModule } from './access.js';
 
 // The course is sold as three tracks. A track is a set of modules plus the Lab
 // interactives those modules use. The Starter Kit opens every track.

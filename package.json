@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"node server.mjs --port 3001\" \"vite --host 127.0.0.1\"",
-    "build": "node scripts/build-lesson-minutes.mjs && node scripts/build-lesson-index.mjs && vite build && node scripts/prerender.mjs",
+    "build": "node scripts/build-lesson-minutes.mjs && node scripts/build-lesson-index.mjs && vite build && node scripts/protect-labs.mjs && node scripts/prerender.mjs",
     "start": "node server.mjs",
     "build:static": "node scripts/build-static.mjs",
     "validate": "node scripts/validate-lessons.mjs",

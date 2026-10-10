@@ -1,8 +1,7 @@
 // Final exam: 50 questions mixed across every module. These are written for
 // the exam and are not reused from the lesson quizzes. `answer` is the index
 // of the correct option; options are shuffled when shown.
-export const EXAM_ID = 'final-exam';
-export const EXAM_PASS = 45;
+// This file is loaded by the server only (api/exam.js). Pages use ./examMeta.js.
 
 export const examQuestions = [
   // Foundations and machine learning

@@ -7,6 +7,7 @@ const STATIC = process.env.VITE_STATIC === '1';
 export default defineConfig({
   plugins: [react()],
   base: STATIC ? './' : '/',
-  build: STATIC ? { outDir: 'dist-static' } : {},
+  // The manifest tells scripts/protect-labs.mjs which built file holds each lab.
+  build: STATIC ? { outDir: 'dist-static' } : { manifest: true },
   server: { proxy: { '/api': 'http://127.0.0.1:3001' } },
 });

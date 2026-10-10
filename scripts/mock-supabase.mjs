@@ -107,7 +107,7 @@ async function rest(req, res, url) {
   const filters = [...url.searchParams].filter(([k, v]) => !['select', 'on_conflict', 'columns'].includes(k) && v.startsWith('eq.'));
   const visible = () => rows.filter(r => uid && r[owner] === uid && filters.every(([k, v]) => String(r[k]) === v.slice(3)));
   if (req.method === 'GET') return reply(200, visible());
-  if (!uid || name === 'entitlements' || name === 'payments') return send(res, uid ? 403 : 401, { code: '42501', message: 'new row violates row-level security policy' });
+  if (!uid || name === 'entitlements' || name === 'payments' || name === 'lesson_progress') return send(res, uid ? 403 : 401, { code: '42501', message: 'new row violates row-level security policy' });
   const body = await readBody(req), wants = (req.headers.prefer || '').includes('return=representation');
   if (req.method === 'POST') {
     const out = [];

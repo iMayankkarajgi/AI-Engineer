@@ -36,12 +36,11 @@ create policy "profiles: update own" on public.profiles for update using (auth.u
 
 drop policy if exists "progress: read own" on public.lesson_progress;
 create policy "progress: read own" on public.lesson_progress for select using (auth.uid() = user_id);
+-- Learners can read their progress but not write it: quiz and exam scores are
+-- saved by the server after it marks them (api/quiz.js, api/exam.js).
 drop policy if exists "progress: insert own" on public.lesson_progress;
-create policy "progress: insert own" on public.lesson_progress for insert with check (auth.uid() = user_id);
 drop policy if exists "progress: update own" on public.lesson_progress;
-create policy "progress: update own" on public.lesson_progress for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "progress: delete own" on public.lesson_progress;
-create policy "progress: delete own" on public.lesson_progress for delete using (auth.uid() = user_id);
 
 -- Create the profile automatically on sign-up, filled from the Google account
 -- (name and picture) when there is one.

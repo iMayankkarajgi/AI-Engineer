@@ -4,13 +4,39 @@ import { VIZ } from '../course/vizNames';
 // Interactive widgets. Each lives in ./widgets/<name>.jsx with a default
 // export and is loaded on demand. Shared building blocks are exported below;
 // see widgets/temperature.jsx for the reference pattern.
+import { supabase } from '../supabase';
+// The labs' styles are part of the site's stylesheet, so a lab looks right however its code arrives.
+import './widgets/widgets-w1.css';
+import './widgets/widgets-w2.css';
+import './widgets/widgets-w3.css';
+
 const loaders = import.meta.glob('./widgets/*.jsx');
 const cache = {};
+// With accounts in the cloud, a lab's code is not in the site's public files.
+// It is fetched from /api/lab, which checks the learner's plan first, and then
+// run from memory. Its one import (the site's main script) is pointed back at
+// the real file so the lab shares the page's React.
+const SERVED = import.meta.env.PROD && import.meta.env.VITE_STATIC !== '1' && !!supabase;
+async function fromServer(name, bundled) {
+  const token = (await supabase.auth.getSession()).data.session?.access_token || '';
+  const r = await fetch(`/api/lab?name=${encodeURIComponent(name)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    if (d.bundled && bundled) return bundled();   // this build keeps its labs in the bundle
+    return { default: () => <div className="viz viz-missing"><strong>{d.locked ? '🔒 This interactive is locked' : 'This interactive could not load'}</strong><p>{d.reason === 'signin' ? 'Sign in to open it.' : d.locked ? 'It opens with a plan that includes this lesson or lab.' : 'Please try again in a moment.'}</p></div> };
+  }
+  const base = new URL(import.meta.env.BASE_URL + 'assets/', location.origin).href;
+  const code = (await r.text()).replace(/(from\s*|import\s*\(?\s*)(["'])\.\//g, (_, pre, q) => pre + q + base);
+  const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  try { return await import(/* @vite-ignore */ url); } finally { URL.revokeObjectURL(url); }
+}
 function lazyWidget(name) {
   const load = loaders[`./widgets/${name}.jsx`];
   if (!load) return null;
-  return cache[name] ||= React.lazy(load);
+  return cache[name] ||= React.lazy(SERVED ? () => fromServer(name, load) : load);
 }
+// A learner who signs in, or whose plan changes, gets a fresh try at labs that were locked.
+export const forgetLabs = () => { for (const k of Object.keys(cache)) delete cache[k]; };
 
 class Boundary extends React.Component {
   state = { failed: false };

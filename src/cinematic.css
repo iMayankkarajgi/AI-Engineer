@@ -209,3 +209,4 @@
 .promo-video { width: min(100%, 980px); margin: 0 auto; }
 .promo-video .lesson-video { margin: 0; }
 .promo-video figcaption { text-align: center; color: var(--scene-ink-2); font: 500 .68rem var(--mono); letter-spacing: .12em; text-transform: uppercase; margin-top: 14px; }
+.promo-label { text-align: center; margin-bottom: 22px; text-wrap: balance; line-height: 1.7; }

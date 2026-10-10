@@ -12,6 +12,8 @@ import Legal from './Legal';
 import Roadmap from './Roadmap';
 import { Pricing } from './Tracks';
 import { BlogIndex, BlogPost } from './Blog';
+import Landing from './Landing';
+import { landingPages } from './course/landing';
 import './tokens.css';
 import './site.css';
 import './lesson.css';
@@ -75,6 +77,7 @@ function App() {
         <Route path="/module/:id" element={<Module/>}/>
         <Route path="/lesson/:id" element={<LessonPage/>}/>
         <Route path="/guide" element={<Navigate to="/blog" replace/>}/>
+        {landingPages.map(p => <Route key={p.path} path={p.path} element={<Landing path={p.path}/>}/>)}
         <Route path="/blog" element={<BlogIndex/>}/>
         <Route path="/blog/:slug" element={<BlogPost/>}/>
         <Route path="/lab" element={<Lab/>}/>

@@ -1277,4 +1277,1392 @@ export const posts = [
       ['/lab', 'Try the free Temperature lab'],
     ],
   },
+  {
+    slug: 'generative-ai-course-for-beginners',
+    title: 'Generative AI Course for Beginners: What to Learn, in Order',
+    description: "A generative AI course for beginners should follow a clear order. See the topics to learn, from how LLMs work to RAG, agents and evaluation, step by step.",
+    date: '2026-10-10',
+    minutes: 8,
+    keywords: ['generative ai course', 'generative ai for beginners', 'learn generative ai', 'generative ai roadmap', 'generative ai syllabus', 'gen ai course', 'how to learn generative ai'],
+    intro: [
+      "A good generative AI course for beginners teaches six things in order: what generative AI is, how a large language model produces text, how to prompt it, how to give it your own data with RAG, how to let it act through agents, and how to test and run what you built. Each step makes the next one easier.",
+      "This guide explains that order, says what you should be able to do after each step, and helps you tell a course for people who use AI tools from a course for people who build with them.",
+    ],
+    sections: [
+      {
+        h: 'What is generative AI, and what does a course on it teach?',
+        body: [
+          "Generative AI is the part of AI that creates new content: text, images, audio, video or code. A chat assistant that writes an email is generative AI. So is a tool that draws a picture from a description.",
+          "Courses with this name come in two kinds. The first kind teaches you to use the tools well: how to write prompts, where the tools help at work, where they go wrong. The second kind teaches you to build products with the models. That means calling a model from code, connecting it to data, and checking the quality of its answers.",
+          "Both are useful, but they are different courses. Before you start one, decide which you need. The rest of this article is about the second kind, the one for people who want to build.",
+        ],
+      },
+      {
+        h: 'What do you need before you learn generative AI?',
+        body: [
+          "For a building course you need basic Python: variables, functions, loops, lists, dictionaries and calling an API. You also need school-level math. You should be comfortable with a graph, an average and a simple probability.",
+          "You do not need a degree in machine learning. But a short pass through the basics helps a great deal. If you know what training means, what a loss is and what overfitting looks like, the rest of the course stops feeling like magic.",
+          "If you have never programmed, learn Python first. A few weeks of practice is enough to follow most lessons.",
+        ],
+      },
+      {
+        h: 'What to learn in generative AI, in order',
+        body: [
+          "This is the order that works for most beginners. Do not skip ahead to agents because they sound exciting. Agents are built from every step before them.",
+        ],
+        steps: [
+          "The vocabulary. Learn what LLM, token, prompt, context window, RAG, agent and fine-tuning mean, at the level of one sentence each.",
+          "Foundations. Learn how a model learns from data and what a neural network is. Keep it short and focused.",
+          "How an LLM works. Tokens, embeddings, attention and the Transformer. Then how text is produced one token at a time, and what temperature does.",
+          "Prompting. Clear instructions, examples, output formats, breaking a task into steps.",
+          "RAG. Chunking documents, embeddings, vector search, reranking, and answering with sources.",
+          "Agents. Function calling, the agent loop, memory, and standards such as MCP.",
+          "Fine-tuning. What it changes, how LoRA makes it affordable, and when you do not need it.",
+          "Evaluation and safety. Test sets, model-graded checks, guardrails and prompt injection.",
+          "Serving. Response time, cost, caching, quantization and system design.",
+        ],
+      },
+      {
+        h: 'Do you need machine learning before generative AI?',
+        body: [
+          "You need a little. You can call a model through an API on your first day with no theory at all, and that is a fine way to stay motivated. The trouble comes later. When the answers are wrong, you have to work out whether the fault lies in the prompt, the retrieved text, the sampling settings or the model.",
+          "That reasoning rests on a few ideas from machine learning and deep learning. Training, loss, overfitting, gradient descent and the shape of a neural network are the main ones. A beginner can cover them in a few focused weeks. After that, tokens, embeddings and attention are much easier to follow.",
+          "Other kinds of generative model, such as diffusion models for images, are worth a look as well. You will mostly build with LLMs, but it helps to know that text generation is not the only method.",
+        ],
+      },
+      {
+        h: 'What should a generative AI syllabus include?',
+        body: [
+          "Use this table to check a syllabus. A course that stops after the third row teaches you to make a demo. The later rows are what turn a demo into a product.",
+        ],
+        table: {
+          head: ['Topic', 'What you should be able to do afterwards'],
+          rows: [
+            ['How LLMs work', 'Explain tokens, embeddings, attention and next-token prediction in your own words.'],
+            ['Generation settings', 'Choose temperature and sampling settings for a task and explain the effect.'],
+            ['Prompting', 'Write a prompt with instructions, examples and a fixed output format, and test it.'],
+            ['RAG', 'Build a question-answering tool over documents that shows its sources.'],
+            ['Agents', 'Write an agent loop with a few tools, a step limit and a log.'],
+            ['Fine-tuning', 'Say when fine-tuning is the right choice and describe how LoRA works.'],
+            ['Evaluation', 'Build a test set and measure whether a change made answers better.'],
+            ['Safety', 'Add guardrails and limit the damage of prompt injection.'],
+            ['Serving', 'Reason about cost and response time, and name ways to reduce both.'],
+          ],
+        },
+      },
+      {
+        h: 'What should you build while you learn?',
+        body: [
+          "Build one small thing after each step. Small projects that you understand fully teach more than a large one copied from a tutorial.",
+        ],
+        list: [
+          "A script that sends a prompt to a model and prints the answer. Then change the temperature and compare the results.",
+          "A summariser that always returns the same structure, such as a title, three points and one open question.",
+          "A question-answering tool over a folder of your own documents, with the source shown for each answer.",
+          "A list of twenty test questions for that tool, with the answers you expect. Run it after every change.",
+          "An agent with two tools, for example search and a calculator, that stops after a fixed number of steps.",
+        ],
+      },
+      {
+        h: 'How long does it take to learn generative AI?',
+        body: [
+          "It depends on your starting point and the hours you can give. Someone who already programs and studies for an hour or two a day can cover the core ideas in a few months. Someone new to programming needs longer, because programming takes practice of its own.",
+          "Treat promises of mastery in a few days with care. You can learn to call an API in an afternoon. Learning to build something reliable takes longer, and most of that time goes into testing and fixing.",
+          "A better measure than hours is this: can you explain why your system gave a wrong answer, and do you know what to change?",
+        ],
+      },
+      {
+        h: 'How the AI Engineering Bootcamp teaches generative AI',
+        body: [
+          "The AI Engineering Bootcamp on this site has 149 video lessons in 19 modules. It follows the order above. Modules 2 and 3 cover machine learning and neural networks. Module 4 opens with a lesson on what generative AI is, then goes inside the Transformer. Later modules cover generation, prompting, RAG, agents, inference, evaluation and safety.",
+          "There are three tracks. The Generative AI Engineering track covers LLMs and the systems around them. The ML and Deep Learning track covers the foundations. The Complete AI Engineer track includes both, and adds the certificate of completion.",
+          "The first lesson is free with a free account. It explains six words you will meet in every later module: LLM, RAG, MCP, agent, fine-tuning and quantization.",
+        ],
+      },
+    ],
+    faqs: [
+      ['Can a beginner learn generative AI?', 'Yes. With basic Python and school-level math you can start. Learn the topics in order, from how a model works to prompting, RAG and agents, and build something small at each step.'],
+      ['Do I need to know coding to learn generative AI?', 'To use AI tools, no. To build products with them, yes. Python is the usual language, and functions, loops, lists and dictionaries are enough to begin.'],
+      ['What is the difference between a generative AI course and a machine learning course?', 'A machine learning course teaches you to train models on data. A generative AI course teaches you to build with models that already exist, mostly LLMs. The second relies on ideas from the first.'],
+      ['Should I learn RAG or agents first?', 'RAG first. Retrieval is simpler to build and to test, and most agents use retrieval as one of their tools.'],
+    ],
+    links: [
+      ['/lesson/what-is-generative-ai', 'Lesson: Generative AI: Creating Instead of Classifying'],
+      ['/lesson/six-words-of-ai-engineering', 'Free lesson: Six Concepts Every AI Engineer Must Know'],
+      ['/module/transformers', 'Module 4: Transformers and How They Think'],
+      ['/blog/machine-learning-vs-deep-learning-vs-generative-ai', 'Machine learning vs deep learning vs generative AI'],
+      ['/pricing', 'Compare the three tracks'],
+    ],
+  },
+  {
+    slug: 'machine-learning-course-syllabus',
+    title: 'Machine Learning Course for Beginners: The Syllabus to Expect',
+    description: "What a machine learning course for beginners should teach: the full syllabus topic by topic, the math and Python you need, and how to judge a course.",
+    date: '2026-10-08',
+    minutes: 7,
+    keywords: ['machine learning course', 'machine learning course for beginners', 'machine learning syllabus', 'machine learning course syllabus', 'ml course for beginners', 'machine learning topics', 'what is taught in machine learning'],
+    intro: [
+      "A machine learning course for beginners should cover seven areas: what machine learning is, the kinds of learning, regression and classification, loss functions and gradient descent, overfitting and regularization, evaluation metrics, and feature engineering. A good one ends with a first look at neural networks, so you know where the subject goes next.",
+      "This article walks through that syllabus, says why each topic is there, and shows how to check whether a course teaches it properly.",
+    ],
+    sections: [
+      {
+        h: 'What does a machine learning course teach?',
+        body: [
+          "Machine learning is a way to make a computer do a task by showing it examples instead of writing rules. A course teaches you how that works and how to do it well.",
+          "The centre of every beginner course is the same loop. You collect data. You choose a model. You train the model so its predictions get closer to the right answers. You measure it on data it has not seen. Then you improve it. Every topic in the syllabus is one part of this loop or a way to do one part better.",
+          "If you finish a course and can run that loop alone on a new dataset, the course did its job.",
+        ],
+      },
+      {
+        h: 'Machine learning syllabus for beginners, topic by topic',
+        body: [
+          "The names differ from course to course, but a complete beginner syllabus has these parts.",
+        ],
+        table: {
+          head: ['Topic', 'What it covers', 'Why it matters'],
+          rows: [
+            ['Introduction', 'Features, labels, models, parameters, training and prediction.', 'Gives you the words used in every later lesson.'],
+            ['Types of learning', 'Supervised, unsupervised and reinforcement learning.', 'Tells you which approach fits which problem.'],
+            ['Regression', 'Linear regression: predicting a number.', 'The smallest complete example of a model.'],
+            ['Classification', 'Logistic regression: predicting a category.', 'Most real tasks are yes-or-no or pick-one decisions.'],
+            ['Loss and training', 'Loss functions and gradient descent.', 'Explains how a model actually learns.'],
+            ['Generalization', 'Train, validation and test sets, overfitting, regularization.', 'Separates a model that learned from one that memorised.'],
+            ['Evaluation', 'Accuracy, precision, recall and the confusion matrix.', 'Lets you say how good a model is, honestly.'],
+            ['Features', 'Feature engineering, scaling and encoding categories.', 'Better inputs often help more than a fancier model.'],
+          ],
+        },
+      },
+      {
+        h: 'Supervised and unsupervised learning',
+        body: [
+          "Most of a beginner course is about supervised learning. Every training example comes with the right answer, called a label. The model learns to map inputs to labels. Predicting a house price and marking an email as spam are both supervised tasks.",
+          "In unsupervised learning there are no labels. The model looks for structure by itself. The usual first example is clustering, which groups similar items, such as customers with similar buying habits.",
+          "Many courses add a short lesson on reinforcement learning, where an agent tries actions and learns from rewards. At beginner level the aim is only to know that it exists and what kind of problem it suits.",
+          "Some syllabi also list more algorithms: decision trees, random forests, nearest neighbours, support vector machines. These are worth learning. But the number of algorithms is not the measure of a course. Understanding one model deeply teaches you more than seeing ten briefly.",
+        ],
+      },
+      {
+        h: 'Loss functions, gradient descent and overfitting',
+        body: [
+          "These three ideas are the heart of the subject, and a course that rushes them leaves a gap you will feel later.",
+          "A loss function turns the difference between a prediction and the right answer into one number. Lower is better. Different losses punish errors in different ways. L2 loss punishes large errors heavily. L1 loss treats all errors more evenly.",
+          "Gradient descent is how the model lowers the loss. It looks at the slope of the loss, takes a small step downhill, and repeats.",
+          "Overfitting is what happens when a model learns the training examples too closely, including their noise, and then does badly on new data. Regularization is a set of methods that hold the model back from doing this. A course should show you overfitting happening in a real example, not only define it.",
+        ],
+      },
+      {
+        h: 'How much math and Python does a beginner course need?',
+        body: [
+          "Less than many people fear. For Python you need variables, loops, functions, lists and dictionaries. The data libraries can be learned as you go.",
+          "For math you need school level to start: straight lines, slopes, averages and simple probability. Vectors and matrices come in when a model has many features. Derivatives come in with gradient descent.",
+          "A good beginner course teaches each piece of math next to the idea that uses it, with small numbers you can check by hand. Be careful with a course that demands a long math module before the first model. Many learners lose interest before they reach the part they came for.",
+        ],
+      },
+      {
+        h: 'What projects should a machine learning course include?',
+        body: [
+          "Practice is where the ideas settle. Look for small, complete projects more than one large showpiece.",
+        ],
+        list: [
+          "Predict a number from a table of data, such as a price, and report the error on a test set.",
+          "Classify items into two groups and report precision and recall, not only accuracy.",
+          "Overfit a model on purpose, then fix it with regularization and compare the test scores.",
+          "Cluster unlabeled data and describe what each group seems to mean.",
+          "Improve a model by changing the features, without changing the model.",
+        ],
+      },
+      {
+        h: 'How to judge a machine learning course before you start',
+        body: [
+          "Open the lesson list and ask a few questions. Is every lesson listed, with what it covers? Does the course explain why each technique exists, or only how to call it? Is there a check after each lesson, such as a quiz with explanations? Can you try one lesson for free?",
+          "Then look at the order. Regression should come before neural networks. Evaluation should not be left to the final week. A course that starts with deep networks on the first day is skipping the part that makes them understandable.",
+          "Last, check what comes after. Machine learning is the base for deep learning and for generative AI. A course that points clearly to the next step saves you from searching for it later.",
+        ],
+      },
+      {
+        h: 'Where this fits in the AI Engineering Bootcamp',
+        body: [
+          "Module 2 of the AI Engineering Bootcamp, Learning from Data, is the machine learning part of the course. It has nine lessons: machine learning from first principles, supervised and unsupervised learning, linear and logistic regression, feature engineering, precision and recall, L1 and L2 loss, regularization, reinforcement learning and contrastive learning.",
+          "Module 3 continues with neural networks. Both modules are in the ML and Deep Learning track and in the Complete AI Engineer track. Every lesson ends with a five-question quiz, and the practice area lets you test yourself by topic.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What topics are covered in a machine learning course for beginners?', 'The types of learning, linear and logistic regression, loss functions, gradient descent, overfitting and regularization, evaluation metrics such as precision and recall, and feature engineering. Many courses end with an introduction to neural networks.'],
+      ['Is machine learning hard for beginners?', 'The ideas are approachable when taken one at a time and in order. It feels hard when a course skips the basics or teaches many algorithms quickly with no practice.'],
+      ['How long does a beginner machine learning course take?', 'It depends on the course and your pace. The core concepts take a few weeks of steady study for someone who already programs. Being comfortable with new datasets takes longer and comes from practice.'],
+      ['Do I need a machine learning course before a deep learning course?', 'Yes, at least the basics. Deep learning uses the same ideas of loss, training, overfitting and evaluation, so the foundations make it much easier.'],
+    ],
+    links: [
+      ['/module/ml-foundations', 'Module 2: Learning from Data'],
+      ['/lesson/supervised-vs-unsupervised-learning', 'Lesson: Labeled vs Unlabeled: Two Ways Machines Learn'],
+      ['/lesson/l1-and-l2-loss-functions', 'Lesson: L1 vs L2 Loss: Choosing Your Error Penalty'],
+      ['/blog/how-to-learn-machine-learning-from-scratch', 'How to learn machine learning from scratch'],
+      ['/curriculum', 'See the full curriculum'],
+    ],
+  },
+  {
+    slug: 'deep-learning-course-syllabus',
+    title: 'Deep Learning Course: What a Good Syllabus Should Cover',
+    description: "What a deep learning course should cover: neural networks, backpropagation, loss, regularization, RNNs, Transformers and PyTorch, plus how to judge a syllabus.",
+    date: '2026-10-07',
+    minutes: 7,
+    keywords: ['deep learning course', 'deep learning syllabus', 'deep learning course syllabus', 'deep learning course for beginners', 'neural networks course', 'deep learning topics', 'learn deep learning'],
+    intro: [
+      "A good deep learning course covers five blocks: how a neural network is built, how it learns through gradient descent and backpropagation, how to keep training stable, the main architectures from CNNs and RNNs to the Transformer, and a framework such as PyTorch to put it all into code. The best ones also show where deep learning leads next, which today means large language models.",
+      "Below is what each block should contain, what you need before you start, and the signs that separate a deep syllabus from a shallow one.",
+    ],
+    sections: [
+      {
+        h: 'What is a deep learning course?',
+        body: [
+          "Deep learning is machine learning with neural networks that have many layers. A deep learning course teaches how those networks work, how they are trained and which designs suit which kind of data.",
+          "It is a different course from machine learning, though the two are linked. A machine learning course is mostly about models for tables of data and about the general rules of training and evaluation. A deep learning course takes those rules as known and applies them to networks that learn from raw input such as images, sound and text.",
+        ],
+      },
+      {
+        h: 'What should you know before a deep learning course?',
+        body: [
+          "Three things make the course much smoother.",
+        ],
+        list: [
+          "Python. You should be able to write functions and work with lists and arrays without looking everything up.",
+          "Machine learning basics. Training and test data, loss, overfitting and evaluation metrics.",
+          "A little math. Vectors and matrices, the idea of a slope, and basic probability. The chain rule from calculus appears in backpropagation, and a good course explains it when it is needed.",
+        ],
+      },
+      {
+        h: 'Deep learning syllabus: the core topics',
+        body: [
+          "Check a syllabus against this table. The first four rows are the ones you cannot do without.",
+        ],
+        table: {
+          head: ['Block', 'Topics', 'What you can do afterwards'],
+          rows: [
+            ['The neuron and the network', 'Weights, bias, activation functions, layers.', 'Explain what one layer does to its input.'],
+            ['Learning', 'Forward pass, loss, gradient descent, backpropagation.', 'Follow one training step by hand with small numbers.'],
+            ['Loss functions', 'Cross-entropy for classification, squared error for regression.', 'Pick the loss that fits a task.'],
+            ['Stable training', 'Dropout, batch normalization, layer normalization.', 'Explain why a network stopped learning and what to try.'],
+            ['Architectures', 'Feed-forward networks, CNNs, RNNs, Transformers.', 'Match a design to a kind of data.'],
+            ['Frameworks', 'PyTorch or TensorFlow, tensors, automatic differentiation.', 'Build and train a small network in code.'],
+          ],
+        },
+      },
+      {
+        h: 'How deeply should a course teach backpropagation?',
+        body: [
+          "This is the best single test of a deep learning course. Backpropagation is the method a network uses to find out how much each weight contributed to the error. It is the reason training works at all.",
+          "A shallow course says that the framework handles it and moves on. That is true in daily work, because you rarely write backpropagation yourself. But if you have never followed it once, later topics stay vague. You will not see why gradients can vanish in a deep network, why normalization helps, or what fine-tuning really does to a model.",
+          "A good course walks through one small network with real numbers. It does the forward pass, calculates the loss, passes the error backwards with the chain rule, and updates each weight. One worked example is enough. After that you can trust the framework and know what it is doing.",
+        ],
+      },
+      {
+        h: 'CNNs, RNNs and Transformers: which architectures to expect',
+        body: [
+          "A syllabus should cover the main families of network and say what each one is for.",
+          "Convolutional neural networks, or CNNs, were built for images. They slide small filters across a picture, so the same detector is used everywhere.",
+          "Recurrent neural networks, or RNNs, were built for sequences such as text. They read one item at a time and carry a memory forward. Their weak points, slow training and fading memory over long sequences, are the reason the next design exists.",
+          "The Transformer replaced step-by-step reading with attention, where every token can look at every other token directly. It is the base of modern language models and is now used for images too.",
+          "How much time each gets depends on the goal of the course. A course aimed at computer vision spends longer on CNNs. A course that leads to generative AI should treat RNNs briefly and give the Transformer real depth. A syllabus that stops before the Transformer is out of date for most current work.",
+        ],
+      },
+      {
+        h: 'Should a deep learning course teach PyTorch or TensorFlow?',
+        body: [
+          "Either one lets you learn the subject. Both give you tensors, which are arrays of numbers that can run on a GPU, and both calculate gradients for you. PyTorch builds its graph of operations as the code runs, which many learners find easier to read and debug. TensorFlow has a long history in production systems and on mobile devices.",
+          "What matters more is that the course teaches the framework after the concept, not in place of it. You should understand a training loop before a library hides it in one line. If you know what the loop does, moving between frameworks takes days, not months.",
+        ],
+      },
+      {
+        h: 'Signs of a strong deep learning course',
+        body: [
+          "A few checks tell you a lot before you commit your time.",
+        ],
+        list: [
+          "It lists every lesson and what each covers.",
+          "It explains why each technique exists, such as the problem dropout solves.",
+          "It uses small worked examples with numbers you can verify.",
+          "It makes you practise, with labs, code or quizzes after each lesson.",
+          "It reaches the Transformer and connects it to language models.",
+          "It makes no promise of a job or a fixed result by a fixed date.",
+        ],
+      },
+      {
+        h: 'Deep learning in the AI Engineering Bootcamp',
+        body: [
+          "Module 3 of the AI Engineering Bootcamp, Neural Architectures Deep Dive, has ten lessons. They cover the bias in a neuron, gradient descent, backpropagation, cross-entropy loss, dropout, batch and layer normalization, RMSNorm, recurrent neural networks, and how PyTorch and TensorFlow work.",
+          "Module 4 then goes inside the Transformer in fifteen lessons, from tokenization and embeddings to attention and the feed-forward layer. Vision Transformers and image generation models appear later, in the module on multimodal AI.",
+          "These modules are part of the ML and Deep Learning track and of the Complete AI Engineer track. The interactive labs let you change a value and watch the result, which helps with ideas such as attention weights that are hard to picture from text alone.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is covered in a deep learning course?', 'Neural networks, gradient descent, backpropagation, loss functions, dropout and normalization, the main architectures such as CNNs, RNNs and Transformers, and a framework such as PyTorch or TensorFlow.'],
+      ['Can I learn deep learning without machine learning?', 'You can start, but it is harder. Ideas such as loss, overfitting and test sets come from machine learning. A few weeks on those basics first saves time overall.'],
+      ['How much math is needed for deep learning?', 'Vectors, matrices, slopes, the chain rule and basic probability. A good course teaches these alongside the topics that use them, with small worked examples.'],
+      ['Is deep learning still worth learning now that LLMs exist?', 'Yes. An LLM is a deep neural network. Understanding training, attention and normalization is what lets you reason about how language models behave and how to adapt them.'],
+    ],
+    links: [
+      ['/module/deep-learning', 'Module 3: Neural Architectures Deep Dive'],
+      ['/lesson/math-behind-backpropagation', 'Lesson: Backpropagation: How Neural Networks Learn from Mistakes'],
+      ['/lesson/how-does-pytorch-work', 'Lesson: PyTorch Internals: Dynamic Graphs and Autograd'],
+      ['/lesson/dropout-in-neural-networks', 'Lesson: Dropout: Controlled Forgetting as Regularization'],
+      ['/blog/deep-learning-explained-for-beginners', 'Deep learning explained: neural networks to Transformers'],
+    ],
+  },
+  {
+    slug: 'what-is-a-large-language-model',
+    title: 'What Is a Large Language Model (LLM)? Explained Simply',
+    description: "What a large language model (LLM) is, in simple words: what it does, how it is trained, what it can and cannot do, and the main types you will meet.",
+    date: '2026-10-05',
+    minutes: 7,
+    keywords: ['what is a large language model', 'what is an llm', 'llm meaning', 'large language model explained', 'llm explained simply', 'llm vs generative ai', 'types of llm', 'what does llm stand for'],
+    intro: [
+      "A large language model, or LLM, is a computer program that has learned the patterns of language from a very large amount of text. You give it some text, called a prompt, and it continues with the text that is most likely to follow. Chat assistants, coding helpers and many search tools are built on LLMs.",
+      "This article explains what the three words mean, what an LLM can and cannot do, how one is made, and the main types. It stays at a simple level. A separate article on this site goes step by step through the inner workings.",
+    ],
+    sections: [
+      {
+        h: 'What does LLM stand for?',
+        body: [
+          "LLM stands for large language model. Each word tells you something.",
+          "Model means a mathematical system that has learned from examples. It is a neural network: many layers of simple units joined by adjustable numbers called parameters or weights.",
+          "Language means its material is text. It learned from books, articles, websites and code, and it reads and writes text.",
+          "Large refers to size in two ways. The network has a very large number of parameters, and it was trained on a very large amount of text. Size matters because a larger network trained on more text can hold more patterns.",
+        ],
+      },
+      {
+        h: 'What does a large language model actually do?',
+        body: [
+          "It predicts the next piece of text. That is the whole task. Given the words so far, the model works out which piece is likely to come next, adds it, and repeats.",
+          "A simple comparison is the word suggestion on a phone keyboard. An LLM does the same kind of thing, but with a far larger network and far more context. It can take pages of text into account, not only the last few words.",
+          "It may seem strange that prediction alone produces useful answers. The reason is that predicting text well requires a lot. To continue a sentence about history, it helps to know the history. To continue a piece of code, it helps to know how the language works. Training pushes that knowledge into the weights.",
+        ],
+      },
+      {
+        h: 'How is a large language model trained?',
+        body: [
+          "Training happens in stages.",
+        ],
+        steps: [
+          "Pre-training. The model is shown huge amounts of text with the next piece hidden, and asked to predict it. Each wrong guess leads to a small correction of the weights. This stage needs a lot of computing power and is done by a small number of organisations.",
+          "Instruction training. The model is trained further on examples of questions and good answers, so it learns to follow a request instead of only continuing text.",
+          "Alignment. People compare answers, and the model is adjusted towards the ones they prefer, so it becomes more helpful and safer.",
+          "Fine-tuning, when needed. A company can train the model a little more on its own examples for a narrow task.",
+        ],
+      },
+      {
+        h: 'What can an LLM do, and what can it not do?',
+        body: [
+          "An LLM is strong wherever the task can be done by reading and writing text. It is weak wherever the task needs facts it never saw, exact calculation or a guarantee of truth.",
+        ],
+        table: {
+          head: ['Good at', 'Weak at'],
+          rows: [
+            ['Writing, rewriting and summarising text', 'Knowing events after its training data ends'],
+            ['Answering questions on well-covered topics', 'Knowing your private documents, unless you supply them'],
+            ['Explaining and writing code', 'Exact arithmetic with long numbers'],
+            ['Translating between languages', 'Counting letters or characters reliably'],
+            ['Pulling structured data out of messy text', 'Saying when it does not know'],
+            ['Following instructions about tone and format', 'Giving the same answer every time'],
+          ],
+        },
+      },
+      {
+        h: 'Why do LLMs make mistakes?',
+        body: [
+          "An LLM produces text that is likely, and likely is not the same as true. There is no step inside the model that checks a fact against a source. When the model lacks the information, it can still write a fluent answer that is wrong. This is called a hallucination.",
+          "The model also has a knowledge cutoff. Its weights hold only what was in the training text, so newer facts are missing.",
+          "Engineers work around both limits. They give the model source documents to answer from, a method called retrieval-augmented generation or RAG. They give it tools, such as a calculator or a search function. And they test its answers on a fixed set of questions before trusting it in a product.",
+        ],
+      },
+      {
+        h: 'What are the main types of LLM?',
+        body: [
+          "The word covers a family of models. A few distinctions come up often.",
+        ],
+        list: [
+          "Closed and open models. Closed models are reached through an API run by the company that made them. Open models publish their weights, so you can run them on your own hardware.",
+          "Large and small models. Small language models have fewer parameters. They are cheaper and faster, and can run on a laptop or a phone, at some cost in ability.",
+          "Reasoning models. These spend extra steps working through a problem before they give the final answer. They help on hard tasks and cost more time.",
+          "Multimodal models. These accept images or audio as well as text.",
+          "Embedding models. These do not write text. They turn text into vectors that capture meaning, which search systems use.",
+        ],
+      },
+      {
+        h: 'LLM vs generative AI vs AI: how the terms relate',
+        body: [
+          "The three terms sit inside each other. AI is the widest. It covers any system that performs a task we link with intelligence. Generative AI is the part of AI that creates new content, such as text, images or audio. An LLM is one kind of generative AI, the kind that works with text.",
+          "So every LLM is generative AI, but an image generator is generative AI without being an LLM. And a chat product is not the same thing as the model. The product is an application built around an LLM. It adds a conversation history, instructions, tools and safety checks.",
+        ],
+      },
+      {
+        h: 'How to learn more about LLMs',
+        body: [
+          "If you want to use LLMs well, learn three things next: what a token is, what the context window is, and what temperature does. They explain most of the behaviour you see day to day.",
+          "If you want to build with them, go one layer deeper: embeddings, attention and the Transformer. In the AI Engineering Bootcamp, Module 4 covers how the model is built, Module 5 covers how it produces output, and Module 7 covers the different types of language model. The first lesson of the course is free with a free account and introduces LLMs alongside five other core terms.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is an LLM in simple words?', 'It is a program trained on a very large amount of text to predict what comes next. By repeating that prediction it can write answers, summaries, translations and code.'],
+      ['Is ChatGPT an LLM?', 'ChatGPT is a product built on LLMs. The model generates the text. The product around it adds the chat interface, memory of the conversation, tools and safety checks.'],
+      ['What is the difference between an LLM and generative AI?', 'Generative AI is any AI that creates content, including images, audio and video. An LLM is the kind of generative AI that reads and writes text.'],
+      ['Do LLMs learn from my conversations as I chat?', 'The weights of the model do not change while you chat. The model only sees the text placed in its context for that request. Whether a provider uses conversations for later training depends on its policy and your settings.'],
+      ['Why is it called a large language model?', 'Because the network has a very large number of parameters and was trained on a very large amount of text. Both are far beyond earlier language models.'],
+    ],
+    links: [
+      ['/blog/how-llms-work', 'How LLMs work: tokens, embeddings and attention'],
+      ['/lesson/six-words-of-ai-engineering', 'Free lesson: Six Concepts Every AI Engineer Must Know'],
+      ['/module/model-types', 'Module 7: The Language Model Zoo'],
+      ['/lesson/autoregressive-models', 'Lesson: Autoregressive Models: Predicting One Token at a Time'],
+      ['/glossary', 'Look up a term in the glossary'],
+    ],
+  },
+  {
+    slug: 'prompt-engineering-guide',
+    title: 'Prompt Engineering Guide: Techniques That Actually Work',
+    description: "A practical prompt engineering guide: how to write clear prompts, when to use few-shot examples, chain of thought and prompt chaining, and how to test them.",
+    date: '2026-10-09',
+    minutes: 8,
+    keywords: ['prompt engineering', 'prompt engineering guide', 'prompt engineering techniques', 'how to write a good prompt', 'few-shot prompting', 'chain of thought prompting', 'prompt engineering best practices', 'zero-shot vs few-shot'],
+    intro: [
+      "Prompt engineering is the practice of writing the input to a language model so that it gives the output you need. The techniques that work are simple. Say exactly what you want. Give the model the context it lacks. Show examples. Fix the output format. Split hard tasks into steps. Then test the prompt on real inputs instead of trusting one good result.",
+      "This guide explains each technique, when to use it, and what to do when a prompt still fails.",
+    ],
+    sections: [
+      {
+        h: 'What is prompt engineering?',
+        body: [
+          "A model only knows two things when it answers: what it learned in training and what is in the prompt. You cannot change the first in a normal request. Prompt engineering is the work of getting the second one right.",
+          "A helpful way to think about it is that you are briefing a capable new colleague who knows nothing about your project. If you say only that you want a summary of a report, you will get a generic summary. If you say who it is for, how long it should be and what to leave out, you will get something you can use.",
+          "The prompt is also a cost. Every token in it is paid for on every request, and a longer prompt takes longer to process. Good prompts are complete, not long.",
+        ],
+      },
+      {
+        h: 'The parts of a good prompt',
+        body: [
+          "Most strong prompts contain the same parts. Not every prompt needs all of them, but when a result disappoints, one of these is usually missing.",
+        ],
+        table: {
+          head: ['Part', 'What it tells the model'],
+          rows: [
+            ['Role and goal', 'What it is helping with, and for whom.'],
+            ['Context', 'The facts, documents or data it needs for this request.'],
+            ['Task', 'Exactly what to do, in plain words.'],
+            ['Constraints', 'Length, tone, what to include and what to leave out.'],
+            ['Examples', 'One or more samples of a good answer.'],
+            ['Output format', 'The structure of the reply, such as a list, a table or JSON.'],
+          ],
+        },
+      },
+      {
+        h: 'Zero-shot and few-shot prompting',
+        body: [
+          "Zero-shot prompting means you ask for the task with no examples. It works for common tasks the model has seen many times, such as translating or summarising. Start here, because it is the cheapest option.",
+          "Few-shot prompting means you add a few examples of input and output before the real input. The model picks up the pattern and follows it. This is one of the most reliable techniques there is. Use it when you need a particular style, a custom set of categories or a strict format that is hard to describe in words.",
+          "Choose the examples with care. The model copies them closely. If every example is short, the answers will be short. If every example carries the same label, the model will lean towards that label. Use a small, varied set that includes a hard case.",
+        ],
+      },
+      {
+        h: 'Chain-of-thought prompting',
+        body: [
+          "Chain-of-thought prompting asks the model to work through a problem in steps before it gives the final answer. A model writes one token at a time, and each token is based on what came before. If it writes out the steps first, the final answer can build on them. If it must answer at once, it has nothing to build on.",
+          "This helps on tasks with several steps: word problems, comparisons, decisions that depend on more than one rule. It costs extra tokens and extra time, so do not use it for simple lookups.",
+          "Reasoning models do a version of this by themselves before they reply. With those models a plain instruction about the goal often works better than telling them how to think.",
+        ],
+      },
+      {
+        h: 'Prompt chaining: split a hard task into steps',
+        body: [
+          "One long prompt that asks for five things at once often fails at one of them. Prompt chaining breaks the job into separate calls. The output of one call becomes the input of the next.",
+          "Suppose you want a reply to a customer email. The first call pulls out the question and the order number. The second drafts a reply from the right help article. The third checks the draft against your rules. Each prompt is short and has one job.",
+          "The gain is control. You can test each step alone, see which one failed, and fix only that one. The price is more calls, so use chaining when a single prompt is not reliable enough.",
+        ],
+      },
+      {
+        h: 'Prompt engineering best practices',
+        body: [
+          "These habits improve almost any prompt.",
+        ],
+        list: [
+          "Put long documents first and the question after them, and mark where each part begins and ends.",
+          "Say what to do, not only what to avoid. A positive instruction is easier to follow.",
+          "Give the reason for a rule. A model that knows why can apply the rule to cases you did not list.",
+          "Ask for a format you can check by code, such as JSON with named fields.",
+          "Tell the model what to do when it lacks the information. Allow it to say that it does not know.",
+          "Keep the parts of the prompt that never change at the start. Many providers can cache that part, which lowers cost and delay.",
+          "Change one thing at a time, so you know what caused the difference.",
+        ],
+      },
+      {
+        h: 'How do you test a prompt?',
+        body: [
+          "A prompt that works once has not been tested. Models give different outputs on different runs, and real inputs vary more than the one you tried.",
+        ],
+        steps: [
+          "Collect twenty to fifty real inputs, including awkward ones.",
+          "Write down what a good output looks like for each.",
+          "Run the prompt on all of them and read the results.",
+          "Group the failures by cause. Fix the most common cause first.",
+          "Run the whole set again after each change, so a fix for one case does not break another.",
+        ],
+      },
+      {
+        h: 'When is prompt engineering not enough?',
+        body: [
+          "Prompting has limits, and it helps to know them early. If the model lacks facts, such as your company documents, no wording will supply them. You need to retrieve the right text and add it to the context. That is RAG. If the model must take actions or look things up, it needs tools. If you need the same behaviour across a very large number of requests and the prompt cannot hold it, fine-tuning may be the answer.",
+          "This is why the wider term context engineering is now common. It covers everything the model sees: instructions, retrieved documents, tool results and conversation history. In the AI Engineering Bootcamp, Module 9, The Art of Prompting, covers chain of thought, prompt chaining, prompt caching, context engineering and context compaction.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is prompt engineering in simple terms?', 'It is writing the input to an AI model clearly enough that it produces the output you need. It includes instructions, context, examples and the format of the answer.'],
+      ['What is the difference between zero-shot and few-shot prompting?', 'Zero-shot gives the task with no examples. Few-shot adds a few examples of input and output first, so the model can follow the pattern.'],
+      ['Is prompt engineering still worth learning?', 'Yes. Models are better at understanding loose requests than they used to be, but clear instructions, good context and testing still decide the quality of the result in a product.'],
+      ['Does chain-of-thought prompting always help?', 'No. It helps on tasks with several steps. On simple tasks it adds cost and delay for little gain, and reasoning models already work through steps without being told.'],
+    ],
+    links: [
+      ['/module/prompt-context', 'Module 9: The Art of Prompting'],
+      ['/lesson/how-does-chain-of-thought-prompting-work', 'Lesson: Chain-of-Thought Prompting: Making Models Reason Step by Step'],
+      ['/lesson/how-does-prompt-chaining-work', 'Lesson: Prompt Chaining: Decomposing Complex Tasks into Steps'],
+      ['/lesson/how-does-prompt-caching-work', 'Lesson: Prompt Caching: Reusing Computation Across API Calls'],
+      ['/blog/rag-vs-fine-tuning-vs-prompt-engineering', 'RAG vs fine-tuning vs prompt engineering'],
+    ],
+  },
+  {
+    slug: 'what-is-rag-retrieval-augmented-generation',
+    title: 'What Is RAG? Retrieval-Augmented Generation and How It Works',
+    description: "What RAG (retrieval-augmented generation) is and how it works: indexing, retrieval and generation step by step, why RAG fails, and how to improve it.",
+    date: '2026-10-03',
+    minutes: 8,
+    keywords: ['what is rag', 'retrieval augmented generation', 'how does rag work', 'rag explained', 'rag in ai', 'rag pipeline', 'rag architecture', 'rag llm'],
+    intro: [
+      "RAG stands for retrieval-augmented generation. It is a way to make a language model answer from documents you choose, instead of only from what it learned in training. The system first searches your documents for the passages related to the question. It then places those passages in the prompt, and the model writes its answer from them.",
+      "A simple picture is an open-book exam. The model does not have to remember everything. It looks up the right pages first and then answers. This article explains each stage and where it tends to go wrong.",
+    ],
+    sections: [
+      {
+        h: 'What problem does RAG solve?',
+        body: [
+          "A language model has three gaps. It does not know anything after its training data ends. It has never seen your private data, such as contracts, support tickets or internal manuals. And when it lacks a fact, it may still write a confident answer that is wrong.",
+          "Retraining the model each time a document changes is slow and costly. RAG avoids that. The knowledge stays outside the model, in a store you control. To update what the system knows, you update the documents.",
+          "RAG also lets the system show its sources. A user can open the passage an answer came from and check it. For many business uses that matters as much as the answer.",
+        ],
+      },
+      {
+        h: 'How does RAG work, step by step?',
+        body: [
+          "A RAG system has two phases. Indexing happens ahead of time. Retrieval and generation happen each time a question arrives.",
+        ],
+        steps: [
+          "Load the documents and turn them into plain text.",
+          "Split the text into chunks, pieces small enough to search and to fit in a prompt.",
+          "Turn each chunk into an embedding, a vector that captures its meaning, and store it in a vector database.",
+          "When a question arrives, turn the question into an embedding with the same model.",
+          "Find the chunks whose vectors are closest to the question vector.",
+          "Optionally rerank those chunks, so the most relevant ones come first.",
+          "Build a prompt that holds the instructions, the chosen chunks and the question.",
+          "The model writes an answer from that text, with references to the chunks it used.",
+        ],
+      },
+      {
+        h: 'The parts of a RAG pipeline',
+        body: [
+          "Each part has one job, and each can be improved separately.",
+        ],
+        table: {
+          head: ['Part', 'What it does'],
+          rows: [
+            ['Chunker', 'Splits documents into pieces that keep their meaning.'],
+            ['Embedding model', 'Turns text into vectors, so similar meanings sit close together.'],
+            ['Vector database', 'Stores the vectors and finds the nearest ones quickly.'],
+            ['Retriever', 'Runs the search. It may combine vector search with keyword search.'],
+            ['Reranker', 'Scores the retrieved chunks again and puts the best first.'],
+            ['Prompt builder', 'Places instructions, chunks and the question into one prompt.'],
+            ['Generator', 'The language model that writes the answer.'],
+          ],
+        },
+      },
+      {
+        h: 'Why does chunking matter so much?',
+        body: [
+          "Chunking decides what the search can find. If a chunk is too large, it mixes several topics, its embedding becomes vague, and it wastes space in the prompt. If a chunk is too small, it loses the context that gives it meaning. A sentence that says the limit is thirty days is useless without knowing which limit.",
+          "Simple chunking cuts every fixed number of characters, with a small overlap between neighbours. Better chunking follows the structure of the document: headings, paragraphs, list items. Tables and code need special care, because a table cut in half means nothing.",
+          "There is no single correct chunk size. It depends on the documents and the questions. The honest way to choose is to try a few settings and measure which one retrieves the right passages most often.",
+        ],
+      },
+      {
+        h: 'Semantic search, keyword search and hybrid search',
+        body: [
+          "Vector search is also called semantic search. It finds text with a similar meaning even when the words differ. A question about refunds can match a passage about getting money back.",
+          "It has a weakness. Exact terms such as product codes, error numbers and names may not be matched well, because the embedding blurs them. Keyword search is strong exactly there.",
+          "Hybrid search runs both and merges the results. Many production systems use it for that reason. A reranker is often added afterwards. It reads the question together with each candidate chunk and gives a more careful relevance score than the first, fast search can.",
+        ],
+      },
+      {
+        h: 'Why do RAG systems fail?',
+        body: [
+          "When a RAG answer is wrong, find out which stage failed before you change anything.",
+        ],
+        list: [
+          "The answer is not in the documents. No search can find what is not there.",
+          "The right chunk exists but was not retrieved. Look at chunking, the embedding model and the search method.",
+          "The right chunk was retrieved but ranked too low to be included. A reranker helps.",
+          "Too many chunks were included. The useful one is buried, and models can miss details in the middle of a long context.",
+          "The model had the right text and ignored it or misread it. Tighten the instructions and ask it to answer only from the sources.",
+          "The question was vague. Rewriting the question before searching can help.",
+        ],
+      },
+      {
+        h: 'Beyond basic RAG',
+        body: [
+          "Once the basic pipeline works, several extensions deal with harder questions.",
+          "HyDE asks the model to write a made-up answer first and then searches with that text, because an answer often looks more like the target passage than the question does. Agentic RAG lets the model decide when to search, what to search for and whether to search again. GraphRAG builds a graph of the people, things and relations in the documents, which helps with questions that span many of them. Vectorless RAG retrieves without embeddings at all, for example by letting the model walk through the outline of a document.",
+          "Add these only when your tests show a need. Each one brings extra cost and extra parts that can break.",
+        ],
+      },
+      {
+        h: 'How to learn RAG properly',
+        body: [
+          "Build a small system on documents you know well, so you can tell when an answer is wrong. Print the retrieved chunks for every question and read them. Most of what you learn about RAG comes from that habit.",
+          "Module 10 of the AI Engineering Bootcamp, Building RAG Systems, has thirteen lessons. They cover vector databases, approximate nearest neighbour search, semantic and hybrid search, rerankers, chunking, HyDE, caching, agentic RAG, GraphRAG and vectorless RAG.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What does RAG stand for?', 'Retrieval-augmented generation. The system retrieves relevant text, adds it to the prompt, and the model generates an answer from it.'],
+      ['Does RAG train the model on my data?', 'No. The weights of the model do not change. Your documents are searched at question time, and the relevant passages are placed in the prompt.'],
+      ['Does RAG remove hallucinations?', 'It reduces them when the right passages are retrieved, because the model answers from text in front of it. It does not remove them. Poor retrieval or unclear sources still lead to wrong answers.'],
+      ['What is the difference between RAG and fine-tuning?', 'RAG adds knowledge at question time by changing the prompt. Fine-tuning changes the behaviour of the model by training its weights. RAG suits facts that change. Fine-tuning suits style and format.'],
+      ['Is RAG still needed with large context windows?', 'Often, yes. Putting every document into every prompt costs more, takes longer and can hide the important passage. Retrieval keeps the context short and relevant.'],
+    ],
+    links: [
+      ['/module/rag', 'Module 10: Building RAG Systems'],
+      ['/lesson/chunking-strategies-for-rag', 'Lesson: Document Chunking Strategies for RAG'],
+      ['/lesson/how-does-hybrid-search-work', 'Lesson: Hybrid Search: Combining Sparse and Dense Retrieval'],
+      ['/lesson/how-does-a-reranker-work', 'Lesson: Rerankers: Re-Scoring Retrieved Results by Relevance'],
+      ['/blog/vector-databases-and-embeddings-explained', 'Vector databases and embeddings explained'],
+    ],
+  },
+  {
+    slug: 'vector-databases-and-embeddings-explained',
+    title: 'Vector Databases and Embeddings Explained for Beginners',
+    description: "Vector databases and embeddings explained simply: what an embedding is, how similarity search works, what HNSW and ANN mean, and when you need a vector store.",
+    date: '2026-10-01',
+    minutes: 7,
+    keywords: ['vector database', 'what is a vector database', 'embeddings explained', 'what are embeddings', 'vector search', 'similarity search', 'cosine similarity', 'vector database vs traditional database'],
+    intro: [
+      "An embedding is a list of numbers that represents the meaning of a piece of text, an image or another item. A vector database stores many embeddings and can quickly find the ones closest to a given embedding. Together they let software search by meaning instead of by exact words.",
+      "This is the technology under semantic search, recommendations and RAG. The article explains both halves and how they connect, with no heavy math.",
+    ],
+    sections: [
+      {
+        h: 'What is an embedding?',
+        body: [
+          "Computers compare numbers easily and meanings poorly. An embedding closes that gap. An embedding model reads a piece of text and returns a vector, a long list of numbers, often hundreds or thousands of them.",
+          "The numbers are not readable one by one. What matters is position. You can think of each vector as a point in a space with many dimensions. The model was trained so that texts with similar meaning land near each other. A sentence about a cat sleeping on a sofa lands close to a sentence about a kitten resting on a couch, though they share almost no words.",
+          "The same idea works for images, audio and products. Anything a model can turn into a vector can be compared this way.",
+        ],
+      },
+      {
+        h: 'How do you measure similarity between vectors?',
+        body: [
+          "Once items are points in space, similar means close. There are three common ways to measure closeness.",
+        ],
+        table: {
+          head: ['Measure', 'What it compares', 'Typical use'],
+          rows: [
+            ['Cosine similarity', 'The angle between two vectors, ignoring their length.', 'Text embeddings. The usual default.'],
+            ['Dot product', 'Angle and length together.', 'Models trained with it. Equal to cosine when vectors have length one.'],
+            ['Euclidean distance', 'The straight-line distance between two points.', 'Cases where the size of the values carries meaning.'],
+          ],
+        },
+      },
+      {
+        h: 'What is a vector database?',
+        body: [
+          "A vector database is a store built for one main question: which stored vectors are closest to this one? You give it a query vector and a number, say five, and it returns the five nearest items.",
+          "Each record usually holds three things: the vector, the original text or a pointer to it, and metadata such as the source, the date or the author. Metadata lets you filter. You can ask for the nearest chunks that also come from one product manual or from the current year.",
+          "Some vector databases are separate products. Others are an extension to a database you may already use. For a small project, a library that keeps vectors in memory is enough. The idea is the same in each case.",
+        ],
+      },
+      {
+        h: 'How does vector search work at scale?',
+        body: [
+          "The simplest search compares the query with every stored vector and keeps the best. This is exact, and it is fine for a small collection. With millions of vectors it becomes too slow for a live product.",
+          "Large systems use approximate nearest neighbour search, or ANN. It gives up a little accuracy to gain a great deal of speed. Instead of checking everything, it uses an index, a structure built ahead of time that leads the search towards the right region.",
+          "A widely used index is HNSW. It links each vector to some of its neighbours, forming a graph with several layers. The top layer has few points and long links, for big jumps. Lower layers have more points and shorter links, for fine steps. A search starts at the top and moves closer at every layer. Another approach groups vectors into clusters and searches only the nearest clusters.",
+          "Every index has settings that trade speed and memory against recall, which is the share of the true nearest items that the search finds.",
+        ],
+      },
+      {
+        h: 'Vector database vs traditional database',
+        body: [
+          "The two answer different kinds of question, and most products need both.",
+        ],
+        table: {
+          head: ['', 'Traditional database', 'Vector database'],
+          rows: [
+            ['Typical question', 'Which rows match this exact value?', 'Which items are most similar to this one?'],
+            ['Data', 'Tables of numbers, text and dates', 'Vectors with attached metadata'],
+            ['Match type', 'Exact', 'Nearest, ranked by similarity'],
+            ['Index', 'Sorted trees and hash tables', 'Graph or cluster indexes for ANN'],
+            ['Result', 'All rows that match', 'The top few closest items'],
+          ],
+        },
+      },
+      {
+        h: 'How do embeddings and vector databases power RAG?',
+        body: [
+          "RAG is the most common reason people meet this topic. The flow is short.",
+        ],
+        steps: [
+          "Split your documents into chunks.",
+          "Send each chunk through an embedding model and store the vector with the text.",
+          "When a user asks a question, embed the question with the same model.",
+          "Ask the vector database for the nearest chunks.",
+          "Put those chunks into the prompt, so the language model can answer from them.",
+        ],
+      },
+      {
+        h: 'Common mistakes with embeddings and vector search',
+        body: [
+          "These problems account for many poor search results.",
+        ],
+        list: [
+          "Using one embedding model for the documents and a different one for the questions. Vectors from different models cannot be compared.",
+          "Changing the embedding model without embedding every document again.",
+          "Embedding chunks that are too large, so each vector is a blur of several topics.",
+          "Relying on vector search alone for exact terms such as codes and names. Add keyword search.",
+          "Embedding the same text again and again. A cache of embeddings saves time and money.",
+          "Tuning the index for speed without checking how much recall was lost.",
+          "Assuming that near in vector space means correct. Similar text can still be the wrong answer.",
+        ],
+      },
+      {
+        h: 'Do you always need a vector database?',
+        body: [
+          "No. If you have a few hundred or a few thousand chunks, you can keep the vectors in memory and compare the query with all of them. That is exact and fast enough. A dedicated vector database earns its place when the collection is large, when many users search at once, or when you need filtering, updates and backups handled for you.",
+          "It is also worth asking whether vectors are the right tool. Keyword search is hard to beat for exact terms, and some retrieval methods use no embeddings at all.",
+          "In the AI Engineering Bootcamp, the lesson on embeddings sits in Module 4, and Module 10 covers vector databases, ANN search, semantic search, hybrid search and embedding caches. A later lesson shows how images become embeddings too.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is a vector database in simple terms?', 'It is a database that stores lists of numbers called vectors and finds the ones closest to a query vector. Because close vectors mean similar content, it lets you search by meaning.'],
+      ['What is the difference between an embedding and a vector?', 'A vector is any list of numbers. An embedding is a vector produced by a model so that its position reflects the meaning of the item it represents.'],
+      ['Is a vector database required for RAG?', 'No. Small collections can be searched in memory, and some RAG systems use keyword search or other methods. A vector database helps when the collection or the traffic is large.'],
+      ['What is cosine similarity?', 'It is a measure of how closely two vectors point in the same direction. A higher value means the two items are more alike in meaning.'],
+      ['What does HNSW mean?', 'Hierarchical Navigable Small World. It is a graph index that lets a search jump quickly towards the nearest vectors without checking every one.'],
+    ],
+    links: [
+      ['/lesson/what-are-embeddings', 'Lesson: Embeddings: Encoding Meaning as Vectors'],
+      ['/lesson/how-does-a-vector-database-work', 'Lesson: Vector Databases: Storing and Searching Embeddings at Scale'],
+      ['/lesson/how-does-approximate-nearest-neighbor-ann-search-work', 'Lesson: ANN Search: Finding Similar Vectors Without Brute Force'],
+      ['/lesson/how-does-semantic-search-work', 'Lesson: Semantic Search: Finding Meaning, Not Just Keywords'],
+      ['/blog/what-is-rag-retrieval-augmented-generation', 'What is RAG and how does it work?'],
+    ],
+  },
+  {
+    slug: 'fine-tuning-an-llm',
+    title: 'Fine-Tuning an LLM: When to Do It and How It Works (LoRA)',
+    description: "Fine-tuning an LLM explained: what it changes, when it is worth doing, the steps from data to evaluation, and how LoRA and QLoRA make it affordable.",
+    date: '2026-10-06',
+    minutes: 8,
+    keywords: ['fine-tuning an llm', 'how to fine-tune an llm', 'llm fine-tuning', 'what is fine-tuning', 'lora fine-tuning', 'what is lora', 'qlora', 'when to fine-tune a model'],
+    intro: [
+      "Fine-tuning an LLM means taking a model that is already trained and training it a little more on your own examples, so that it behaves the way you need without long instructions. It is worth doing when you need a consistent style, format or narrow skill that prompting cannot hold. It is the wrong tool for adding facts.",
+      "Today most fine-tuning uses LoRA, a method that trains a small set of extra weights and leaves the original model untouched. This article explains when to fine-tune, how the process runs and how LoRA works.",
+    ],
+    sections: [
+      {
+        h: 'What is fine-tuning?',
+        body: [
+          "A pre-trained model has general abilities. It can write, summarise and follow instructions. Fine-tuning continues its training on a smaller set of examples that show one specific behaviour. Each example is a pair: an input and the output you want for it.",
+          "The mechanism is the same as in any training. The model produces an output. A loss function measures how far it is from the target. Backpropagation works out how each weight should change, and the weights move a little. After enough examples the new behaviour is built into the model.",
+          "The key point is that fine-tuning changes the weights. Prompting and RAG change only the input.",
+        ],
+      },
+      {
+        h: 'When should you fine-tune an LLM?',
+        body: [
+          "Try a good prompt first, then retrieval if the model lacks knowledge. Fine-tune when those are not enough and you can name the failure. The table shows the usual cases.",
+        ],
+        table: {
+          head: ['Situation', 'Fine-tune?', 'Reason'],
+          rows: [
+            ['You need a fixed tone or house style', 'Often yes', 'Style is a behaviour, and examples teach it well.'],
+            ['You need a strict output format every time', 'Often yes', 'Training makes the format the default.'],
+            ['You want a small model to do one job well', 'Yes', 'A tuned small model can replace a costly large one for that job.'],
+            ['Your prompt is very long and sent on every request', 'Maybe', 'Tuning can move instructions and examples into the weights.'],
+            ['The model lacks your company facts', 'No', 'Use RAG. Facts in weights are hard to update and to trace.'],
+            ['The facts change every week', 'No', 'You would have to train again each time.'],
+            ['You have only a handful of examples', 'No', 'Put them in the prompt as few-shot examples.'],
+          ],
+        },
+      },
+      {
+        h: 'How does fine-tuning an LLM work, step by step?',
+        body: [
+          "The steps are the same whichever tool you use.",
+        ],
+        steps: [
+          "Define the task and write down how you will judge success.",
+          "Build an evaluation set and measure the base model with your best prompt. This is the baseline you must beat.",
+          "Collect training examples as pairs of input and ideal output. Quality matters more than quantity.",
+          "Hold some examples back. Never test on data the model trained on.",
+          "Choose a base model and a method, usually LoRA.",
+          "Train, and watch the loss on the held-back examples to spot overfitting.",
+          "Compare the tuned model with the baseline on the evaluation set.",
+          "Read real outputs, not only scores. Then deploy and keep monitoring.",
+        ],
+      },
+      {
+        h: 'What is LoRA and why is it used?',
+        body: [
+          "Full fine-tuning updates every weight in the model. For a large model that needs a lot of GPU memory, and the result is a complete new copy of the model for each task.",
+          "LoRA stands for low-rank adaptation. It freezes the original weights and adds two small matrices next to each of the large weight matrices you choose to adapt. Only the small matrices are trained. Multiplied together, they form an update of the same shape as the large matrix, and that update is added to it.",
+          "The idea behind it is that the change a task requires is simple compared with the full model, so it can be captured with far fewer numbers. A setting called the rank controls how many. A higher rank gives the update more capacity and costs more memory.",
+          "The benefits are practical. Training needs much less memory. The result, called an adapter, is a small file. You can keep one base model and swap adapters for different tasks, or merge an adapter into the base weights so it adds no delay at run time.",
+        ],
+      },
+      {
+        h: 'What is QLoRA?',
+        body: [
+          "LoRA cuts the number of weights you train, but the frozen base model still has to sit in memory. QLoRA goes one step further. It loads the base model in a quantized form, which stores each weight with fewer bits, and trains LoRA adapters on top.",
+          "This lowers memory use enough that a model of moderate size can be tuned on a single GPU. The trade is that quantization loses a little precision and training can be slower. If you have the hardware, compare a QLoRA run with a plain LoRA run on your evaluation set.",
+        ],
+      },
+      {
+        h: 'Other ways to adapt a model',
+        body: [
+          "LoRA is the common choice, but it is not the only one.",
+        ],
+        list: [
+          "Prefix tuning trains a short sequence of vectors that is placed before the input, and leaves the model frozen.",
+          "Knowledge distillation trains a small model to copy the outputs of a large one, so the small model can do the task at lower cost.",
+          "Preference tuning trains on pairs of better and worse answers, to move the model towards what people prefer.",
+          "Hosted fine-tuning, where a provider trains a private version of its model on the examples you upload.",
+        ],
+      },
+      {
+        h: 'Common fine-tuning mistakes',
+        body: [
+          "Most failed fine-tuning projects fail for ordinary reasons.",
+        ],
+        list: [
+          "No baseline. Without one you cannot tell whether tuning helped.",
+          "Poor data. The model learns every flaw in the examples, including inconsistent formats.",
+          "Fine-tuning to teach facts. The model may still state them wrongly, and updating them means training again.",
+          "Overfitting. With too many passes over a small dataset, the model repeats the training examples and handles new inputs badly.",
+          "Forgetting. Heavy tuning on a narrow task can weaken general abilities the model had before.",
+          "Mismatched format. The prompt format used in training must match the one used in production.",
+        ],
+      },
+      {
+        h: 'How to learn fine-tuning',
+        body: [
+          "Fine-tuning rests on ideas from deep learning: loss, gradient descent, backpropagation and overfitting. If those are clear, LoRA is a short step. If they are not, start there.",
+          "Module 8 of the AI Engineering Bootcamp, Teaching and Shaping Models, has eleven lessons. They cover fine-tuning, LoRA, prefix tuning, knowledge distillation, continual learning, and the methods used to align models with human preferences, such as RLHF and DPO. Quantization, which QLoRA depends on, has a lesson in the module on serving models.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is fine-tuning in simple terms?', 'It is extra training of an existing model on your own examples, so that it learns a specific behaviour. The weights of the model change as a result.'],
+      ['How much data do I need to fine-tune an LLM?', 'It depends on the task and the model. A narrow format task needs far fewer examples than a broad skill. Start small with clean examples, measure, and add more only if the results call for it.'],
+      ['Is LoRA as good as full fine-tuning?', 'For many tasks it comes close at a fraction of the cost. Full fine-tuning can do better when the task differs a lot from what the model already knows.'],
+      ['Should I fine-tune or use RAG?', 'Use RAG when the model lacks knowledge. Fine-tune when it lacks a behaviour, such as a style or format. Many products use both.'],
+      ['Can I fine-tune a model on my own computer?', 'Small models can be tuned with LoRA or QLoRA on a single GPU with enough memory. Larger models need rented hardware or a hosted fine-tuning service.'],
+    ],
+    links: [
+      ['/lesson/how-does-fine-tuning-work', 'Lesson: Fine-Tuning: Adapting a Pre-Trained Model to Your Task'],
+      ['/lesson/lora-low-rank-adaptation-of-llms', 'Lesson: LoRA: Parameter-Efficient Fine-Tuning via Low-Rank Matrices'],
+      ['/lesson/how-does-model-quantization-work', 'Lesson: Model Quantization: Shrinking Weights Without Breaking Outputs'],
+      ['/module/training-alignment', 'Module 8: Teaching and Shaping Models'],
+      ['/blog/rag-vs-fine-tuning-vs-prompt-engineering', 'RAG vs fine-tuning vs prompt engineering'],
+    ],
+  },
+  {
+    slug: 'transformer-architecture-explained',
+    title: 'Transformer Architecture Explained Step by Step',
+    description: "Transformer architecture explained step by step: tokens, embeddings, positions, self-attention, feed-forward layers, and encoder vs decoder models.",
+    date: '2026-10-04',
+    minutes: 8,
+    keywords: ['transformer architecture', 'transformer architecture explained', 'how do transformers work', 'transformer model explained', 'encoder vs decoder', 'self-attention explained', 'attention is all you need explained', 'transformer neural network'],
+    intro: [
+      "The Transformer is the neural network design behind modern language models. It takes a sequence of tokens, turns each one into a vector, and passes the vectors through a stack of identical blocks. In each block, every token first gathers information from the other tokens through attention, and then a small network processes each token separately. At the top, the model predicts the next token.",
+      "This article follows one piece of text through the whole structure, one stage at a time. You need to know what a vector is. Nothing more.",
+    ],
+    sections: [
+      {
+        h: 'What is a Transformer?',
+        body: [
+          "A Transformer is an architecture, a plan for how the parts of a network are arranged. Research on machine translation introduced it. Earlier models for text, called recurrent neural networks, read one token after another and carried a memory along. That was slow, and information from far back faded.",
+          "The Transformer dropped the step-by-step reading. It looks at all tokens at once and lets each one connect directly to any other. This solved the fading problem and allowed training to run in parallel on GPUs, which made much larger models practical.",
+        ],
+      },
+      {
+        h: 'The Transformer step by step',
+        body: [
+          "Here is the full path, from text in to prediction out, for a model that generates text.",
+        ],
+        steps: [
+          "Tokenization. The text is cut into tokens, and each token is replaced by an ID number.",
+          "Embedding. Each ID is looked up in a table and replaced by a vector.",
+          "Position. Information about the order of the tokens is added, because attention alone has no sense of order.",
+          "Self-attention. Each token looks at the other tokens and pulls in information from the relevant ones.",
+          "Feed-forward network. Each token vector is processed separately by a small two-layer network.",
+          "Residual connections and normalization. Around both sublayers, the input is added back to the output and the values are kept in a steady range.",
+          "Repeat. Steps four to six form one block. The model stacks many blocks.",
+          "Output. The final vector at the last position is turned into a score for every token in the vocabulary, and the scores become probabilities.",
+        ],
+      },
+      {
+        h: 'How does self-attention work?',
+        body: [
+          "Attention is the part that makes a Transformer a Transformer. Each token produces three vectors from its own vector: a query, a key and a value.",
+          "The query says what this token is looking for. The key says what this token offers. The value is the information it will pass on if chosen.",
+          "To update one token, the model compares its query with the key of every token. Each comparison gives a score. A function called softmax turns the scores into weights that add up to one. The token then takes a weighted mix of all the values. Tokens with high weights contribute a lot. Tokens with low weights contribute almost nothing.",
+          "Take the sentence: the animal did not cross the road because it was tired. When the model updates the token it, the query for it matches the key for animal strongly. So the vector for it absorbs information about the animal. The model has worked out what the pronoun refers to.",
+          "Before the softmax, the scores are divided by a fixed number tied to the vector size. This keeps them from growing too large, which would make training unstable. The whole operation is called scaled dot-product attention.",
+        ],
+      },
+      {
+        h: 'Why multi-head attention?',
+        body: [
+          "One round of attention can track one kind of relationship. Language has many at once: which noun a pronoun refers to, which verb belongs to which subject, which adjective describes which thing.",
+          "Multi-head attention runs several attention operations side by side. Each head has its own way of making queries, keys and values, so each can learn to look for something different. Their results are joined and mixed back into one vector per token.",
+        ],
+      },
+      {
+        h: 'What do the feed-forward layer, residuals and normalization do?',
+        body: [
+          "Attention moves information between tokens. The feed-forward network then works on each token alone. It widens the vector, applies an activation function and narrows it again. Much of what the model knows is thought to be stored in these layers.",
+          "A residual connection adds the input of a sublayer to its output. This gives the signal a direct path through a very deep stack, so the gradients used in training can reach the early layers.",
+          "Normalization keeps the numbers in a steady range from layer to layer. The original design used layer normalization. Many newer models use a lighter version called RMSNorm.",
+        ],
+      },
+      {
+        h: 'Encoder vs decoder: what is the difference?',
+        body: [
+          "The original Transformer had two halves. The encoder reads the whole input and builds a rich representation of it. The decoder writes the output one token at a time. In the decoder, a rule called causal masking stops each token from looking at tokens that come after it. A third kind of attention, cross-attention, lets the decoder look at the output of the encoder.",
+          "Later models often keep only one half.",
+        ],
+        table: {
+          head: ['Type', 'How it reads', 'Typical use'],
+          rows: [
+            ['Encoder-only', 'Every token sees the whole input, in both directions.', 'Classification, search, embeddings.'],
+            ['Decoder-only', 'Each token sees only the tokens before it.', 'Text generation. Most chat models are this type.'],
+            ['Encoder-decoder', 'The encoder reads the input, and the decoder writes with cross-attention to it.', 'Translation and other input-to-output tasks.'],
+          ],
+        },
+      },
+      {
+        h: 'How do Transformers know word order?',
+        body: [
+          "Attention treats its input as a set. Without extra information, the dog bit the man and the man bit the dog would look alike. So position has to be supplied.",
+          "The original design added a fixed pattern of numbers to each embedding, different for each position. Many current models use rotary position embedding, or RoPE. It rotates the query and key vectors by an angle that depends on position, so the attention score between two tokens reflects how far apart they are.",
+        ],
+      },
+      {
+        h: 'How to study the Transformer',
+        body: [
+          "Learn it in the order the data flows: tokens, embeddings, positions, attention, feed-forward, output. Work through one small attention example by hand, with vectors of two or three numbers. It takes an hour and removes most of the mystery.",
+          "Module 4 of the AI Engineering Bootcamp, Transformers and How They Think, has fifteen lessons that follow this path. They include separate lessons on the math of queries, keys and values, scaled dot-product attention, causal masking, multi-head attention, cross-attention and RoPE. The labs let you inspect attention weights yourself.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is a Transformer in AI?', 'It is a neural network design that processes all tokens of a sequence together and uses attention to let each token draw on the others. It is the base of modern language models.'],
+      ['What does the phrase attention is all you need mean?', 'It is the title of the research paper that introduced the Transformer. The point was that a model built on attention, with no recurrent layers, was enough for strong results on sequence tasks.'],
+      ['What is the difference between an encoder and a decoder?', 'An encoder reads the full input in both directions and builds a representation of it. A decoder generates output one token at a time and can only look at earlier tokens.'],
+      ['Are GPT models Transformers?', 'Yes. They are decoder-only Transformers. They use causal masking and are trained to predict the next token.'],
+      ['Why did Transformers replace RNNs?', 'They process tokens in parallel, so they train faster on large data, and attention links distant tokens directly, so long-range information does not fade.'],
+    ],
+    links: [
+      ['/lesson/decoding-transformer-architecture', 'Lesson: The Transformer Architecture: Built on Attention'],
+      ['/lesson/math-behind-attention-qkv', 'Lesson: Attention Math: Queries, Keys, and Values Unpacked'],
+      ['/lesson/encoder-vs-decoder-in-transformers', 'Lesson: Encoder vs Decoder: Two Sides of the Transformer'],
+      ['/module/transformers', 'Module 4: Transformers and How They Think'],
+      ['/blog/how-llms-work', 'How LLMs work: tokens, embeddings and attention'],
+    ],
+  },
+  {
+    slug: 'ai-engineer-projects-for-portfolio',
+    title: 'AI Engineer Projects for Your Portfolio: Ideas by Level',
+    description: "AI engineer project ideas for your portfolio, grouped by level: beginner, intermediate and advanced, with what each one teaches and how to present it.",
+    date: '2026-10-02',
+    minutes: 8,
+    keywords: ['ai engineer projects', 'ai projects for portfolio', 'ai engineer portfolio', 'generative ai project ideas', 'llm projects', 'rag project ideas', 'ai agent project ideas', 'ai projects for beginners'],
+    intro: [
+      "A good AI engineering portfolio has a few projects that show the whole job: a model call that returns structured output, a retrieval system over real documents, an agent that uses tools, and an evaluation that proves the thing works. Three or four finished projects you can explain in depth are worth more than a long list of copied tutorials.",
+      "This article gives project ideas at three levels, says what each one teaches, and explains how to present the work so a reader can judge it quickly.",
+    ],
+    sections: [
+      {
+        h: 'What makes a good AI engineer portfolio project?',
+        body: [
+          "A reader of your portfolio wants to know one thing: can this person build an AI feature that works and explain why it works? A project answers that when it has four qualities.",
+        ],
+        list: [
+          "It solves a real, narrow problem. A tool that answers questions about one set of documents beats a general assistant that does everything badly.",
+          "It is measured. There is a test set and a number, before and after your changes.",
+          "It is honest about limits. You say where it fails and what you would do next.",
+          "It can be run. Clear setup steps, or a short recording of it working.",
+        ],
+      },
+      {
+        h: 'Beginner AI projects',
+        body: [
+          "These need basic Python and access to a model through an API. Each one teaches a single idea.",
+        ],
+        list: [
+          "A structured summariser. Take an article and return a title, key points and open questions as JSON. Teaches prompting and output formats.",
+          "A support ticket classifier. Sort messages into your own categories using a few examples in the prompt. Report precision and recall for each category.",
+          "A sampling explorer. Send the same prompt at several temperature settings and compare the outputs side by side. Teaches how generation works.",
+          "A data extractor. Pull names, dates and amounts out of messy text such as receipts or emails, and check the result with code.",
+          "A semantic search tool over your own notes. Embed each note, embed the query, and return the closest matches. Teaches embeddings and similarity.",
+        ],
+      },
+      {
+        h: 'Intermediate AI projects',
+        body: [
+          "These join several parts together, and they are where a portfolio starts to look like real work.",
+        ],
+        list: [
+          "A document question-answering system with sources. Build the full RAG pipeline: chunking, embeddings, vector search and an answer that points to the passages it used.",
+          "Hybrid search with a reranker. Add keyword search and reranking to that system and measure how retrieval changes.",
+          "An evaluation harness. Write a fixed set of questions with expected answers, score each run, and show the results as a table over time.",
+          "A tool-using agent. Give a model three or four tools, write the loop yourself, add a step limit and log every step.",
+          "A natural language to SQL assistant. Turn a question into a query, validate the query before it runs, and allow read-only access.",
+          "A chat interface that streams tokens as they arrive, with a cache for repeated questions.",
+        ],
+      },
+      {
+        h: 'Advanced AI projects',
+        body: [
+          "These show judgment about quality, cost and safety. One of them, done well, is enough.",
+        ],
+        list: [
+          "A fine-tuned small model. Tune a small open model with LoRA for one narrow task and compare it with a large model on quality, speed and cost.",
+          "A local model. Run a quantized model on your own machine and measure the trade between size, speed and answer quality.",
+          "A research agent. Let an agent plan, search, read and write a report with sources, and evaluate it across many steps.",
+          "A model router. Send easy requests to a small model and hard ones to a large one, and report the saving and the quality.",
+          "A guarded assistant. Add input and output checks, test it against prompt injection attempts, and document what got through.",
+          "A voice assistant that listens, thinks and speaks with a short delay. Teaches streaming and system design.",
+        ],
+      },
+      {
+        h: 'Which project teaches which skill?',
+        body: [
+          "Pick projects so that together they cover the main skills. This table helps you check for gaps.",
+        ],
+        table: {
+          head: ['Project', 'Main skill it shows', 'Level'],
+          rows: [
+            ['Structured summariser', 'Prompting and output formats', 'Beginner'],
+            ['Semantic search over notes', 'Embeddings and similarity', 'Beginner'],
+            ['Document question answering', 'RAG from end to end', 'Intermediate'],
+            ['Evaluation harness', 'Measuring quality', 'Intermediate'],
+            ['Tool-using agent', 'Function calling and the agent loop', 'Intermediate'],
+            ['Fine-tuned small model', 'Adapting models and comparing costs', 'Advanced'],
+            ['Guarded assistant', 'Safety and prompt injection', 'Advanced'],
+            ['Model router', 'Cost, speed and system design', 'Advanced'],
+          ],
+        },
+      },
+      {
+        h: 'How to present an AI project',
+        body: [
+          "The write-up matters as much as the code. Many readers will see only the first page. Put these items there, in this order.",
+        ],
+        steps: [
+          "One sentence on the problem and who has it.",
+          "A simple diagram of the parts and how data moves between them.",
+          "The choices you made and one alternative you rejected, with the reason.",
+          "How you evaluated it: the test set, the metric and the results before and after key changes.",
+          "Where it fails. Give two or three real examples.",
+          "The cost and response time of a typical request.",
+          "How to run it, and what you would build next.",
+        ],
+      },
+      {
+        h: 'Mistakes to avoid in AI portfolio projects',
+        body: [
+          "A few habits weaken an otherwise good portfolio.",
+        ],
+        list: [
+          "Copying a tutorial without changing it. Readers have seen the same project many times.",
+          "No evaluation. A demo that worked once proves little.",
+          "Hiding the framework. If a library wrote the agent loop for you, be ready to explain what it does.",
+          "Too many projects, none finished. Depth beats count.",
+          "Committing API keys or private data to a public repository.",
+          "Claiming more than you measured. State what you tested and nothing beyond it.",
+        ],
+      },
+      {
+        h: 'How to choose your next project',
+        body: [
+          "Choose data you know well, so that you can tell when an answer is wrong. Choose a problem small enough to finish in a couple of weeks. Then go one level deeper than a tutorial would. Add the evaluation, or the reranker, or the injection tests.",
+          "A project helps you learn and gives you something concrete to discuss. It does not guarantee an interview or an offer. Those depend on the role and the employer.",
+          "The AI Engineering Bootcamp covers the ideas behind every project in this article, and its 42 interactive labs let you try parts such as temperature, attention and retrieval before you build them. The practice area is a good place to check your understanding first.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What projects should an AI engineer have in a portfolio?', 'At least one retrieval system over real documents, one agent that uses tools, and one evaluation that measures quality. A fine-tuning or local model project is a useful extra.'],
+      ['How many AI projects do I need in a portfolio?', 'There is no fixed number. Three or four finished projects that you can explain in depth are usually more convincing than many shallow ones.'],
+      ['What is a good first AI project for a beginner?', 'A structured summariser or a semantic search tool over your own notes. Both are small, both finish in days, and both teach an idea you will use in every later project.'],
+      ['Do AI portfolio projects need to be deployed?', 'It helps, because a running project is easy to judge. If you cannot host it, give clear setup steps and a short recording that shows it working.'],
+    ],
+    links: [
+      ['/lab', 'Open the interactive labs'],
+      ['/lesson/ai-agent-loop', 'Lesson: The Agent Loop: Observe, Think, Act, Repeat'],
+      ['/lesson/llm-routing', 'Lesson: LLM Routing: Directing Each Query to the Best Model'],
+      ['/blog/llm-evaluation-how-to-test-an-ai-application', 'LLM evaluation: how to test an AI application'],
+      ['/blog/ai-engineer-interview-questions', 'AI engineer interview questions'],
+    ],
+  },
+  {
+    slug: 'llm-evaluation-how-to-test-an-ai-application',
+    title: 'LLM Evaluation: How to Test an AI Application Properly',
+    description: "LLM evaluation explained: how to build a test set, choose metrics, use an LLM as a judge with care, and evaluate RAG systems and agents before launch.",
+    date: '2026-10-08',
+    minutes: 8,
+    keywords: ['llm evaluation', 'how to evaluate an llm', 'llm evals', 'llm testing', 'llm as a judge', 'rag evaluation', 'ai agent evaluation', 'evaluate llm application'],
+    intro: [
+      "LLM evaluation is how you find out whether an AI application is good enough, and whether a change made it better or worse. The core of it is simple. Collect a fixed set of realistic inputs. Decide what a good output looks like for each. Run the system on all of them after every change, and score the results in a consistent way.",
+      "Without this, every decision about a prompt, a model or a retrieval setting is a guess. This article shows how to set evaluation up in small steps.",
+    ],
+    sections: [
+      {
+        h: 'Why is testing an LLM application different?',
+        body: [
+          "Ordinary software is tested with exact checks. A function that adds two numbers either returns the right sum or does not. An LLM application breaks that pattern in three ways.",
+          "First, the output varies. The same input can give different text on different runs. Second, there are many correct answers. Two summaries can use different words and both be good. Third, small changes have wide effects. A prompt edit that fixes one case can quietly break five others.",
+          "So you need tests that judge qualities such as correctness and relevance, not exact strings. And you need to run them across many examples at once, not one at a time by hand.",
+        ],
+      },
+      {
+        h: 'Model evaluation vs application evaluation',
+        body: [
+          "Two different things are both called LLM evaluation.",
+          "Model evaluation compares models on public benchmarks. It answers a general question: how capable is this model on standard tasks? It is useful for making a shortlist.",
+          "Application evaluation tests your whole system on your own task: the prompt, the retrieval, the tools and the model together. A model that leads a benchmark may not be the best for your documents and your users. Only your own test set can tell you. The rest of this article is about this second kind.",
+        ],
+      },
+      {
+        h: 'How to build an evaluation set',
+        body: [
+          "The evaluation set, sometimes called a golden dataset, is the most valuable thing you will build. Start small and grow it.",
+        ],
+        steps: [
+          "Collect thirty to fifty realistic inputs. Use real user questions if you have them.",
+          "Include the hard cases: vague questions, questions with no answer in your data, and inputs that try to misuse the system.",
+          "For each input, write the expected answer or the points a good answer must contain.",
+          "For cases where the system should decline, write that down as the expected behaviour.",
+          "Have someone who knows the subject review the expected answers.",
+          "Add a new case each time you find a failure in real use, so the same mistake cannot come back unnoticed.",
+        ],
+      },
+      {
+        h: 'What should you measure?',
+        body: [
+          "Pick a few measures that match what your users care about. The table lists the common ones.",
+        ],
+        table: {
+          head: ['Measure', 'The question it answers', 'How it is checked'],
+          rows: [
+            ['Correctness', 'Does the answer match the expected answer?', 'Comparison with a reference, by a person or a judge model.'],
+            ['Faithfulness', 'Is every claim supported by the supplied sources?', 'Each claim is checked against the retrieved text.'],
+            ['Relevance', 'Does the answer address the question asked?', 'A judge model or human review.'],
+            ['Completeness', 'Is anything important missing?', 'A checklist of required points.'],
+            ['Format', 'Is the output valid and well structured?', 'A check in code, such as parsing the JSON.'],
+            ['Safety', 'Did it refuse what it should refuse?', 'Rules and test cases written for that purpose.'],
+            ['Cost and speed', 'What does a request cost, and how long does it take?', 'Logged token counts and timings.'],
+          ],
+        },
+      },
+      {
+        h: 'Three ways to score an answer',
+        body: [
+          "There are three kinds of grader, and a healthy setup uses all of them.",
+          "Checks in code are the cheapest and most reliable. Is the output valid JSON? Does it contain the order number? Is it under the length limit? Use them wherever a rule can be written.",
+          "Human review is the most trusted and the slowest. Use it to define what good means, to label a starting set and to audit the automatic graders.",
+          "LLM-as-a-judge sits between the two. A second model reads the input, the output and a rubric, and gives a score. This scales to thousands of cases. But a judge is a model too. It can be inconsistent, it can favour longer answers, and it can be too generous. Give it a narrow question with a clear rubric. Ask for a pass or a fail before you try fine scales. And compare its verdicts with human labels on a sample before you rely on it.",
+        ],
+      },
+      {
+        h: 'How do you evaluate a RAG system?',
+        body: [
+          "Test retrieval and generation separately. If you only score the final answer, you cannot tell which stage failed.",
+          "For retrieval, each test question needs the passages that should be found. Then you can measure recall, the share of the right passages that were retrieved, and precision, the share of retrieved passages that were right. Rank matters as well. A correct passage in tenth place may never reach the prompt.",
+          "For generation, hand the model the right passages and check faithfulness and completeness. A high faithfulness score means the answer stayed within the sources. It does not mean the answer was complete or useful, so measure those separately.",
+        ],
+      },
+      {
+        h: 'How do you evaluate an AI agent?',
+        body: [
+          "An agent takes many steps, so there is more to judge. Look at three levels.",
+        ],
+        list: [
+          "The outcome. Was the task completed? Check the final state, such as the file written or the record updated, not only what the agent said.",
+          "The path. Did it choose sensible tools with correct arguments? How many steps did it take?",
+          "The cost. Tokens, time and the number of tool calls for each task.",
+          "Consistency. Run each task several times. An agent that succeeds on some runs and fails on others is not ready.",
+        ],
+      },
+      {
+        h: 'Evaluation after launch',
+        body: [
+          "Testing does not end at release. Real users send inputs you did not predict. Keep traces of requests: the prompt, the retrieved text, the tool calls and the output. Review a sample on a regular schedule. Watch signals such as user ratings, retries and questions that got no answer. Feed every new failure back into the evaluation set.",
+          "Run the full set again whenever you change the prompt, the model or the retrieval settings. Model providers update their models too, and an update can shift behaviour.",
+          "Module 14 of the AI Engineering Bootcamp, Measuring What Matters, has four lessons: evaluating LLMs, LLM-as-a-judge, evaluating agents and agent observability. The module on securing AI systems adds guardrails and prompt injection.",
+        ],
+      },
+    ],
+    faqs: [
+      ['What is LLM evaluation?', 'It is the process of measuring how well a language model or an application built on one performs. In practice it means running a fixed set of test inputs and scoring the outputs in a consistent way.'],
+      ['What is a golden dataset?', 'It is a set of test inputs paired with trusted expected answers or labels. You run your system against it after each change to see whether quality went up or down.'],
+      ['What is LLM-as-a-judge?', 'It is using a language model to grade the output of another model against a rubric. It scales well, but its verdicts should be checked against human labels on a sample.'],
+      ['How many test cases do I need to evaluate an LLM application?', 'Start with thirty to fifty realistic cases that cover normal use and hard cases. Add more over time, especially from failures you see in real use.'],
+      ['What is the difference between evals and benchmarks?', 'A benchmark is a public test used to compare models in general. Evals for an application are your own tests, built from your own task and data.'],
+    ],
+    links: [
+      ['/module/evaluation', 'Module 14: Measuring What Matters'],
+      ['/lesson/llm-evaluation', 'Lesson: Evaluating LLMs: Metrics, Benchmarks, and Methods'],
+      ['/lesson/llm-as-a-judge', 'Lesson: LLM-as-Judge: Automating Evaluation with Another Model'],
+      ['/lesson/ai-agent-evaluation', 'Lesson: Evaluating AI Agents: Metrics and Methods That Work'],
+      ['/lesson/precision-vs-recall', 'Lesson: Precision and Recall: Picking the Right Metric'],
+    ],
+  },
+  {
+    slug: 'ai-engineer-vs-software-engineer',
+    title: 'AI Engineer vs Software Engineer: How to Move into AI',
+    description: "AI engineer vs software engineer: how the two roles differ, which skills carry over, what you must add, and a step-by-step plan to move from software to AI.",
+    date: '2026-10-05',
+    minutes: 8,
+    keywords: ['ai engineer vs software engineer', 'software engineer to ai engineer', 'how to become an ai engineer from software engineer', 'transition to ai engineering', 'ai engineer for developers', 'software developer to ai engineer', 'switch to ai engineering'],
+    intro: [
+      "An AI engineer is a software engineer who builds products around AI models, mostly large language models. The two roles share most of their skills: writing code, designing systems, testing and shipping. What the AI engineer adds is an understanding of how models behave, and the craft of making an unpredictable part reliable through prompting, retrieval, agents and evaluation.",
+      "That makes the move from software to AI a matter of adding a layer, not starting again. This article compares the roles and lays out a plan for the move.",
+    ],
+    sections: [
+      {
+        h: 'AI engineer vs software engineer: what is the difference?',
+        body: [
+          "The table shows the centre of each role. Many real jobs sit somewhere between the columns.",
+        ],
+        table: {
+          head: ['', 'Software engineer', 'AI engineer'],
+          rows: [
+            ['Builds', 'Applications, services and infrastructure', 'Features and products built around AI models'],
+            ['Behaviour of the core logic', 'The same input gives the same output', 'The same input can give different outputs'],
+            ['How correctness is checked', 'Unit and integration tests with exact results', 'Evaluation sets, scoring and review of samples'],
+            ['Typical debugging', 'Read the stack trace, find the faulty line', 'Read the trace of prompts, retrieved text and tool calls'],
+            ['Main cost drivers', 'Compute, storage and network', 'Tokens, model choice and GPU time'],
+            ['Extra risks', 'Bugs and outages', 'Wrong answers stated with confidence, prompt injection'],
+          ],
+        },
+      },
+      {
+        h: 'Which software skills carry over to AI engineering?',
+        body: [
+          "Most of them. An AI product is still a software product, and the model is one part inside it.",
+        ],
+        list: [
+          "API design, error handling, retries and timeouts. Model calls fail and slow down like any other network call.",
+          "Data work. Parsing files, cleaning text and handling JSON are daily tasks in retrieval systems.",
+          "Testing habits. The instinct to check every change is exactly what evaluation needs.",
+          "System design. Caching, queues, rate limits and streaming all appear in AI systems.",
+          "Observability. Logs and traces matter even more when the core part is not predictable.",
+          "Security thinking. Treating outside input as untrusted is the basis of defending against prompt injection.",
+        ],
+      },
+      {
+        h: 'What does a software engineer need to learn for AI?',
+        body: [
+          "The gap is in two layers. The first is the model layer: what is going on inside the thing you are calling. The second is the application layer: the patterns for building around it.",
+        ],
+        list: [
+          "Machine learning basics: how a model learns, loss, overfitting, precision and recall.",
+          "Neural networks: gradient descent and backpropagation, at the level of one worked example.",
+          "How LLMs work: tokens, embeddings, attention, the context window and sampling.",
+          "Prompting and context engineering.",
+          "RAG: chunking, embeddings, vector search, hybrid search and reranking.",
+          "Agents: function calling, the agent loop, memory and MCP.",
+          "Evaluation: test sets, judge models and tracing.",
+          "Serving: the KV cache, batching, quantization and routing between models.",
+        ],
+      },
+      {
+        h: 'The biggest change: working with outputs that are not exact',
+        body: [
+          "Experienced developers often find the tools easy and the change of mindset harder. In ordinary code, a bug has a cause you can find and remove. In an AI system, a wrong answer may appear in one run out of twenty, with no line of code at fault.",
+          "The working method changes to match. You stop asking whether the output is correct and start asking how often it is correct, on which kinds of input. You measure before and after every change. You design for failure: what the product does when the model is wrong, slow or unsure.",
+          "Developers who accept this early progress quickly. Those who keep expecting exact behaviour tend to stay stuck adjusting prompts by feel.",
+        ],
+      },
+      {
+        h: 'How to move from software engineer to AI engineer, step by step',
+        body: [
+          "This order keeps you building from the first week while you fill in the theory.",
+        ],
+        steps: [
+          "Call a model from code. Build one small feature, such as turning free text into structured data.",
+          "Learn how the model works: tokens, embeddings, attention and sampling. Your first project will start to make sense.",
+          "Go back for the foundations: machine learning basics and how neural networks train.",
+          "Build a RAG system over documents you know, and print what it retrieves.",
+          "Write an evaluation set for it and track the score across changes.",
+          "Build an agent with a few tools, and write the loop yourself before you use a framework.",
+          "Learn the production side: cost, response time, caching, guardrails and prompt injection.",
+          "Bring it to your current job. Propose one small AI feature, measure it and ship it.",
+        ],
+      },
+      {
+        h: 'Do you need to go back to math?',
+        body: [
+          "Not to the extent many developers fear. For building products you need vectors, matrix multiplication, the idea of a slope and basic probability. That is enough to follow embeddings, attention and training.",
+          "You do not need to derive every formula. It is worth following one worked example of backpropagation and one of attention with small numbers. After that the formulas in documentation stop being a wall.",
+          "Research roles and jobs that train large models from scratch ask for more. If that is your aim, plan for deeper study of linear algebra, calculus and statistics.",
+        ],
+      },
+      {
+        h: 'How to get AI experience while in a software job',
+        body: [
+          "The easiest route into the role is often through the job you already have.",
+        ],
+        list: [
+          "Look for a task in your team that is mostly reading and writing text, such as triaging tickets or searching internal documents.",
+          "Build a small internal tool for it and measure whether it helps.",
+          "Volunteer for the evaluation work on any AI feature your company is building. Few people ask for it, and it teaches the most.",
+          "Write down what you built, what you measured and what failed. That record is your portfolio.",
+        ],
+      },
+      {
+        h: 'A learning path for developers',
+        body: [
+          "The AI Engineering Bootcamp is arranged for this kind of move. The ML and Deep Learning track covers the model layer. The Generative AI Engineering track covers the application layer. The Complete AI Engineer track covers both in order and includes the certificate of completion.",
+          "A developer can move quickly through the lessons on transport protocols and system design, and spend more time on the Transformer, RAG, agents and evaluation. The first lesson is free with a free account.",
+          "No course can promise a new role. What it can do is give you the knowledge in a sensible order, so the projects you build rest on understanding.",
+        ],
+      },
+    ],
+    faqs: [
+      ['Is an AI engineer a software engineer?', 'In most companies, yes. An AI engineer writes and ships software. The difference is that the software is built around AI models, which adds skills such as prompting, retrieval and evaluation.'],
+      ['Can a software engineer become an AI engineer?', 'Yes, and it is a common route. Software engineers already have the engineering half of the job. They need to add an understanding of models and the patterns for building with them.'],
+      ['How long does it take to move from software engineer to AI engineer?', 'It depends on your background and your hours. A working developer who studies steadily can cover the core concepts in a few months. Confidence comes from building and measuring real projects on top of that.'],
+      ['Do I need a machine learning degree to become an AI engineer?', 'The skills can be learned without one. Employers differ in what they ask for, so read the requirements of the roles you want.'],
+      ['Should I learn machine learning or LLMs first as a developer?', 'Start by building something small with an LLM to stay motivated, then go back and learn the machine learning and deep learning basics. They make debugging far easier.'],
+    ],
+    links: [
+      ['/ai-engineer-roadmap', 'AI engineer roadmap: what to learn, in order'],
+      ['/lesson/system-design', 'Lesson: System Design Fundamentals for AI Engineers'],
+      ['/blog/ai-engineer-vs-ml-engineer-vs-data-scientist', 'AI engineer vs ML engineer vs data scientist'],
+      ['/blog/ai-engineer-projects-for-portfolio', 'AI engineer projects for your portfolio'],
+      ['/pricing', 'Compare the three tracks'],
+    ],
+  },
 ];

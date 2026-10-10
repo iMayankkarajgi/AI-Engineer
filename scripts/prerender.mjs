@@ -16,6 +16,7 @@ const { modules, allLessons, lessonById, moduleOf } = await load('/src/course/cu
 const { tracks, PERIODS, formatPrice } = await load('/src/course/tracks.js');
 const { glossary, faqs } = await load('/src/course/reference.js');
 const { posts } = await load('/src/course/blog.js');
+const { landingPages } = await load('/src/course/landing.js');
 const { resources } = await load('/src/course/resources.js');
 const { VIZ } = await load('/src/course/vizNames.js');
 const { lessonMinutes } = await load('/src/course/lessonMinutes.js');
@@ -34,7 +35,7 @@ const a = (href, text) => `<a href="${href}">${esc(text)}</a>`;
 const list = (items, tag = 'ul') => items.length ? `<${tag}>${items.map(i => `<li>${i}</li>`).join('')}</${tag}>` : '';
 const say = v => typeof v === 'string' ? rich(v) : v && typeof v === 'object' ? [v.title || v.label || v.term, v.text || v.body || v.desc || v.def || v.detail].filter(Boolean).map((t, i) => i ? rich(t) : `<strong>${rich(t)}</strong>`).join(': ') : '';
 
-const NAV = [['/curriculum', 'Curriculum'], ['/lab', 'Lab'], ['/pricing', 'Pricing'], ['/practice', 'Practice'], ['/glossary', 'Glossary'], ['/faq', 'FAQ'], ['/blog', 'Blog'], ['/news', 'Live news'], ['/resources', 'Resources']];
+const NAV = [['/curriculum', 'Curriculum'], ['/ai-engineering-course', 'AI engineering course'], ['/machine-learning-course', 'Machine learning course'], ['/generative-ai-course', 'Generative AI course'], ['/lab', 'Lab'], ['/pricing', 'Pricing'], ['/practice', 'Practice'], ['/glossary', 'Glossary'], ['/faq', 'FAQ'], ['/blog', 'Blog'], ['/news', 'Live news'], ['/resources', 'Resources']];
 const frame = main => `<div class="prerender"><header><a href="/"><strong>${BRAND}</strong></a><nav aria-label="Main navigation">${NAV.map(([h, t]) => a(h, t)).join('')}</nav></header><main>${main}</main><footer><p>${esc(BRAND)}: the ${esc(PROGRAM)}. ${esc(TAGLINE)}</p></footer></div>`;
 const trackLine = t => `${t.modules.length} modules · ${t.lessons.length} lessons · ${t.labs.length} interactive labs · from ${esc(formatPrice(t.prices.monthly))} per month`;
 const trackCards = () => tracks.map(t => `<h3>${a(`/curriculum?track=${t.id}`, t.name)}</h3><p>${esc(t.blurb)}</p><p>${trackLine(t)}</p>`).join('');
@@ -64,7 +65,9 @@ const PAGES = {
   '/terms': () => legal('terms'),
   '/refund': () => legal('refund'),
   '/': () => `<p>${esc(PROGRAM)} · 3 tracks · ${allLessons.length} lessons</p><h1>See the system. Then go inside.</h1>
-    <p>Learn AI engineering, machine learning and deep learning, from the first data point to the LLM systems behind every answer.</p>
+    <p>Learn AI engineering, machine learning, deep learning and generative AI in one online course, from the first data point to the LLM systems behind every answer. ${allLessons.length} video lessons, interactive labs, a quiz in every lesson, a final exam and a certificate.</p>
+    <h2>Courses</h2>${list(landingPages.map(p => `${a(p.path, p.h1)}: ${esc(p.description)}`))}
+    <h2>What you will learn</h2>${list(['Machine learning: regression, loss functions, gradient descent, regularisation, precision and recall', 'Deep learning: neural networks, backpropagation, normalisation, dropout and Transformers', 'Generative AI and large language models (LLMs): tokens, embeddings, attention and sampling', 'Prompt engineering and context engineering', 'Retrieval-augmented generation (RAG), embeddings and vector databases', 'AI agents: tool calling, memory, MCP and multi-agent systems', 'Fine-tuning: LoRA, quantization, distillation, RLHF', 'LLM inference, serving, evaluation, guardrails and AI system design', 'AI engineer interview preparation'])}
     <p>${a('/curriculum', 'Explore the curriculum')} · ${a('/ai-engineer-roadmap', 'See the AI engineer roadmap')} · ${a('/blog', 'Read the blog')} · ${a(`/lesson/${allLessons[0].id}`, `Start lesson ${allLessons[0].num}`)}</p>
     <h2>Three tracks: choose your learning track</h2>${trackCards()}<p>${a('/pricing', 'Compare plans and pricing')}</p>
     <h2>${modules.length} modules, from foundations to production AI</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)} (${m.lessons.length} lessons). ${esc(m.intro[0])}`), 'ol')}`,
@@ -74,6 +77,18 @@ const PAGES = {
   '/pricing': () => `<p>Pricing</p><h1>Pick the track that fits your goal</h1><p>Three tracks, each with its lessons, quizzes and hands-on labs. Pay for one month, or once for lifetime access. Prices include taxes.</p>
     ${tracks.map(t => `<h2>${esc(t.name)}</h2><p>${esc(t.blurb)}</p>${list([...PERIODS.map(p => `${esc(p.label)}: ${esc(formatPrice(t.prices[p.id]))} in India, ${esc(formatPrice(t.allPrices.USD[p.id], 'USD'))} elsewhere, ${esc(p.unit)}`), `${t.modules.length} modules, ${t.lessons.length} lessons`, `${t.labs.length} interactive labs`, ...t.extras.map(esc)])}`).join('')}
     <h2>What each track covers</h2>${list(modules.map(m => `${a(`/module/${m.id}`, `${m.number}. ${m.title}`)}: ${tracks.filter(t => t.moduleIds.includes(m.id)).map(t => esc(t.short)).join(', ')}`))}`,
+  ...Object.fromEntries(landingPages.map(p => [p.path, () => {
+    const t = trackById[p.track];
+    return `${crumbs([['/curriculum', 'Curriculum']])}<p>${esc(PROGRAM)} · ${esc(p.eyebrow)}</p><h1>${esc(p.h1)}</h1><p>${esc(p.lead)}</p>
+    <p>${t.modules.length} modules · ${t.lessons.length} video lessons · ${t.labs.length} interactive labs · a quiz in every lesson</p>
+    <h2>What you will learn</h2>${list(p.learn.map(esc))}
+    <h2>Who this course is for</h2>${list(p.audience.map(([who, why]) => `<strong>${esc(who)}</strong> ${esc(why)}`))}
+    <h2>Course syllabus: ${t.modules.length} modules</h2>${list(t.modules.map(m => `${a(`/module/${m.id}`, `Module ${m.number}: ${m.title}`)} (${m.lessons.length} lessons). ${esc(m.intro[0])}`), 'ol')}
+    <h2>How the course works</h2>${list(['Every lesson has a video, a written explanation with diagrams, and real code', 'Interactive labs let you change a value and watch the result', 'A 5-question quiz ends each lesson; 4 correct is a pass', 'Run Python in your browser on the Practice page', 'Learn at your own pace and open lessons in any order'])}
+    <h2>Price</h2><p>${esc(t.name)}: ${esc(formatPrice(t.prices.monthly))} for one month or ${esc(formatPrice(t.prices.lifetime))} once for lifetime access in India; ${esc(formatPrice(t.allPrices.USD.monthly, 'USD'))} or ${esc(formatPrice(t.allPrices.USD.lifetime, 'USD'))} elsewhere. Taxes are included. ${a('/pricing', 'Compare plans')}.</p>
+    <h2>Frequently asked questions</h2>${p.faqs.map(([q, ans]) => `<h3>${esc(q)}</h3><p>${esc(ans)}</p>`).join('')}
+    <h2>Other courses</h2>${list([...landingPages.filter(x => x.path !== p.path).map(x => a(x.path, x.h1)), a('/ai-engineer-roadmap', 'AI engineer roadmap'), a('/blog', 'Read the blog')])}`;
+  }])),
   '/blog': () => `<p>Blog</p><h1>AI engineering, explained simply</h1><p>Guides on AI engineering, machine learning and deep learning: what the terms mean, what to learn, and in what order.</p>
     ${[...posts].sort((x, y) => y.date.localeCompare(x.date)).map(p => `<h2>${a(`/blog/${p.slug}`, p.title)}</h2><p>${esc(p.description)}</p>`).join('')}`,
   '/lab': () => `<p>Interactive lab</p><h1>Play with every idea</h1><p>${Object.keys(VIZ).length} hands-on simulations from across the course. Each one links to the lesson that explains it.</p>

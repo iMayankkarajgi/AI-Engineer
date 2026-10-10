@@ -62,7 +62,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-inner">
     <div><Logo/><p>The {PROGRAM}: understand AI engineering from the inside out.</p></div>
-    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/ai-engineer-roadmap">AI engineer roadmap</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/blog">Blog</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
+    <div className="footer-links"><Link to="/curriculum">Curriculum</Link><Link to="/ai-engineering-course">AI engineering course</Link><Link to="/machine-learning-course">Machine learning course</Link><Link to="/generative-ai-course">Generative AI course</Link><Link to="/ai-engineer-roadmap">AI engineer roadmap</Link><Link to="/pricing">Pricing</Link><Link to="/practice">Practice</Link><Link to="/glossary">Glossary</Link><Link to="/faq">FAQ</Link><Link to="/blog">Blog</Link><Link to="/news">Live news</Link><Link to="/resources">Resources</Link><Link to="/dashboard">Your progress</Link>{LEGAL_LINKS.map(([to, t]) => <Link key={to} to={to}>{t}</Link>)}</div>
     <small>Lessons and interactives © {new Date().getFullYear()} {BRAND}. All lesson text, code, and quizzes are original content.</small>
   </div></footer>;
 }

@@ -10,6 +10,7 @@ import { BRAND, PROGRAM, SITE_URL } from './brand';
 import { legalPages } from './course/legal';
 import { isFreeModule } from './course/access';
 import { posts } from './course/blog';
+import { landingPages } from './course/landing';
 
 export const clip = (text, max = 158) => {
   const t = String(text || '').replace(/\*\*|\*|`/g, '').replace(/\s+/g, ' ').trim();
@@ -46,6 +47,10 @@ const STATIC_PAGES = {
     description: `Compare the three ${PROGRAM} tracks and their monthly and lifetime prices. Each track includes its lessons, quizzes and interactive labs.`,
     ld: tracks.map(courseLd),
   }),
+  ...Object.fromEntries(landingPages.map(p => [p.path, () => {
+    const t = tracks.find(x => x.id === p.track);
+    return { title: p.title, description: p.description, ld: [courseLd(t), crumbs([['Curriculum', '/curriculum'], [p.h1, p.path]]), { '@type': 'FAQPage', mainEntity: p.faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] };
+  }])),
   '/blog': () => ({
     title: 'AI Engineering Blog: Guides on AI, Machine Learning and Deep Learning',
     description: 'Plain-language guides on AI engineering, machine learning and deep learning: how to become an AI engineer, what to learn, RAG, agents, LLMs and interviews.',

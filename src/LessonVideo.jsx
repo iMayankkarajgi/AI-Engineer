@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 // lesson pages stay fast. The box keeps a 16:9 shape at every screen width.
 // `videoId` arrives with the lesson itself, so it is only known to learners
 // who can open the lesson.
-export default function LessonVideo({ videoId: id, title }) {
+export default function LessonVideo({ videoId: id, title, caption }) {
   const [playing, setPlaying] = useState(false), [sharp, setSharp] = useState(true);
   useEffect(() => { setPlaying(false); setSharp(true); }, [id]);
   if (!id) return null;
@@ -18,6 +18,6 @@ export default function LessonVideo({ videoId: id, title }) {
             <span className="lesson-video-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span>
           </button>}
     </div>
-    <figcaption>Video lesson · {title}</figcaption>
+    <figcaption>{caption || `Video lesson · ${title}`}</figcaption>
   </figure>;
 }

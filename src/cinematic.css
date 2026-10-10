@@ -204,3 +204,9 @@
   .story-scene.scene-1 .story-title, .story-scene.scene-2 .story-title, .story-scene.scene-3 .story-title { margin: 14px 0 12px; }
   .story-scene.scene-1 p, .story-scene.scene-2 p, .story-scene.scene-3 p { line-height: 1.5; }
 }
+
+/* The promo video on the home page: centred, 16:9 at every width, never wider than the text column allows. */
+.promo-video { width: min(100%, 980px); margin: 80px auto 0; }
+.promo-video .lesson-video { margin: 0; }
+.promo-video figcaption { text-align: center; color: var(--scene-ink-2); font: 500 .68rem var(--mono); letter-spacing: .12em; text-transform: uppercase; margin-top: 14px; }
+@media (max-width: 900px) { .promo-video { margin-top: 48px; } }

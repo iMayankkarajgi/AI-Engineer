@@ -69,7 +69,7 @@ function App() {
     <AfterLogin/>
     <Header/>
     <LessonPicker/>
-    <React.Suspense fallback={<main className="page container"><div className="eyebrow">Loading…</div></main>}>
+    <React.Suspense fallback={<main className="app-loading" aria-busy="true"/>}>
       <Routes>
         <Route path="/" element={<CinematicHome/>}/>
         <Route path="/curriculum" element={<Curriculum/>}/>

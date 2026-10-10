@@ -329,3 +329,8 @@ body:has(dialog.modal[open]) { overflow: hidden; }
 }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* The plain copy is for search engines and for browsers without scripts. Where
+   scripts run, the app replaces it within a moment, so keep it out of sight
+   instead of letting it flash on screen first. */
+@media (scripting: enabled) { .prerender { visibility: hidden; height: 100vh; overflow: hidden; } }
+.app-loading { min-height: 100vh; }
